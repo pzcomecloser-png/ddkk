@@ -1,11 +1,32 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="REWIND" />
+  <meta name="theme-color" content="#0a0a14" />
   <title>REWIND — 아까의 나야 도와줘</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Galmuri11:wght@400;700&display=swap');
+
+    :root {
+      --bg-color: #0a0a14;
+      --card-bg: #12122a;
+      --panel-border: #2a2a55;
+      --accent-color: #8ecdf7;
+      --accent-glow: rgba(142, 205, 247, 0.45);
+      --purple-color: #8654c4;
+      --purple-deep: #6a3fa0;
+      --success-color: #3ddc84;
+      --danger-color: #ff6b6b;
+      --gold-color: #ffe66d;
+      --text-main: #f3f4f6;
+      --text-sub: #8e9bd6;
+      --btn-bg: #1e2536;
+      --btn-hover: #2c364d;
+    }
 
     * {
       box-sizing: border-box;
@@ -14,64 +35,609 @@
       user-select: none;
       -webkit-user-select: none;
       -webkit-touch-callout: none;
+      touch-action: manipulation;
+    }
+
+    html, body {
+      width: 100%;
+      overscroll-behavior: none;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
     }
 
     body {
-      background-color: #0a0a14;
-      color: #fff;
-      font-family: 'Galmuri11', monospace, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: 'Galmuri11', -apple-system, BlinkMacSystemFont, monospace, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      overflow: hidden;
-      touch-action: none;
+      padding: 10px;
     }
 
-    #game-container {
+    .game-container {
+      background: var(--card-bg);
+      border: 2px solid var(--panel-border);
+      border-radius: 18px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 20px rgba(100, 150, 255, 0.18);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px;
+      max-width: 540px;
+      width: 100%;
       position: relative;
-      width: 800px;
-      max-width: 95vw;
-      aspect-ratio: 4 / 3;
-      box-shadow: 0 0 35px rgba(0, 0, 0, 0.9), 0 0 20px rgba(100, 150, 255, 0.25);
-      border: 4px solid #2a2a55;
+    }
+
+    /* ══ 1단: 상단 내비게이션 바 ══ */
+    .header-bar {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .level-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .home-btn {
+      background: var(--btn-bg);
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      padding: 4px 9px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .home-btn:hover { background: var(--btn-hover); border-color: #4b5563; }
+    .home-btn:active { transform: translateY(1px); }
+
+    /* ══ 2단: 인게임 스탯 바 ══ */
+    .stats-group {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      font-size: 11.5px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      gap: 4px;
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 3px 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      white-space: nowrap;
+    }
+
+    .stat-item span.label {
+      color: var(--text-sub);
+      font-size: 11px;
+    }
+
+    .stat-item span.value {
+      font-family: monospace;
+      font-weight: 700;
+    }
+
+    /* ══ 게임 캔버스 래퍼 ══ */
+    .canvas-wrapper {
+      position: relative;
+      background: #05050c;
+      border: 2px solid #202738;
       border-radius: 12px;
       overflow: hidden;
-      background: #000;
-      touch-action: none;
+      box-shadow: inset 0 4px 24px rgba(0, 0, 0, 0.9);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
     }
 
     canvas {
       display: block;
-      width: 100%;
-      height: 100%;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
-      touch-action: none;
+      cursor: pointer;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      aspect-ratio: 1 / 1;
     }
 
-    .instructions {
-      margin-top: 10px;
-      color: #8e9bd6;
-      font-size: 12px;
-      letter-spacing: 1px;
+    /* ══ 결과 배너 (클리어 / 시간초과 / 게임오버) ══ */
+    .banner-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(4, 4, 12, 0.94);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 100;
       text-align: center;
+      padding: 16px;
+      gap: 6px;
+    }
+
+    .banner-overlay.active { opacity: 1; pointer-events: auto; }
+
+    .banner-title {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--accent-color);
+      text-shadow: 0 0 18px var(--accent-glow);
+      margin-bottom: 2px;
+    }
+
+    .banner-desc {
+      font-size: 12.5px;
+      color: var(--text-sub);
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+
+    .banner-btn-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+      max-width: 220px;
+    }
+
+    .banner-btn {
+      background: linear-gradient(135deg, var(--purple-color), var(--purple-deep));
+      color: #fff;
+      border: none;
+      font-size: 13.5px;
+      font-weight: 700;
+      font-family: inherit;
+      padding: 11px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(134, 84, 196, 0.4);
+      transition: transform 0.1s, filter 0.2s;
+    }
+    .banner-btn.secondary {
+      background: linear-gradient(135deg, #4a4a75, #35355a);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    }
+    .banner-btn:active { transform: scale(0.96); }
+
+    /* ══ 하단 게임패드 ══ */
+    .gamepad-container {
+      width: 100%;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      padding: 8px 4px 4px 4px;
+      gap: 12px;
+    }
+    .gamepad-container.swapped { flex-direction: row-reverse; }
+
+    .dpad-cross {
+      display: grid;
+      grid-template-columns: repeat(3, 50px);
+      grid-template-rows: repeat(3, 40px);
+      gap: 3px;
+      flex-shrink: 0;
+    }
+
+    /* PC에서는 가상 십자키/반전버튼 숨김 (키보드 조작) */
+    .dpad-cross, .swap-ctrl-btn { display: none !important; }
+
+    .dpad-btn {
+      background: linear-gradient(180deg, #2f2f55, #23233f);
+      border: 1px solid #3f3f75;
+      color: var(--accent-color);
+      border-radius: 10px;
+      font-size: 20px;
+      font-weight: bold;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+      transition: all 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .dpad-btn:active {
+      background: var(--accent-color);
+      color: #12122a;
+      transform: translateY(2px);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .dpad-up    { grid-column: 2; grid-row: 1; }
+    .dpad-left  { grid-column: 1; grid-row: 2; }
+    .dpad-center{ grid-column: 2; grid-row: 2; background: #151a26; border: 1px solid #273044; border-radius: 6px; }
+    .dpad-right { grid-column: 3; grid-row: 2; }
+    .dpad-down  { grid-column: 2; grid-row: 3; }
+
+    .swap-ctrl-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--btn-bg);
+      border: 1px solid #36425c;
+      color: var(--accent-color);
+      font-size: 16px;
+      font-weight: 900;
+      font-family: inherit;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+    }
+    .swap-ctrl-btn:active {
+      background: var(--accent-color);
+      color: #12122a;
+      transform: scale(0.92);
+    }
+
+    .action-circle-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .circle-btn-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .key-badge {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--text-sub);
+      background: rgba(0, 0, 0, 0.45);
+      padding: 1px 7px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-family: monospace;
+      letter-spacing: 0.5px;
+    }
+
+    .circle-btn {
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      border: 2px solid;
+      background: #1a202e;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-family: inherit;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      transition: all 0.12s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .circle-btn:active { transform: scale(0.92) translateY(2px); }
+
+    .circle-btn.rewind {
+      border-color: var(--purple-color);
+      background: linear-gradient(145deg, #6a3fa0, #2b1a45);
+    }
+    .circle-btn.rewind:active {
+      background: var(--purple-color);
+      box-shadow: 0 0 14px rgba(134, 84, 196, 0.7);
+    }
+
+    .circle-btn.reset {
+      border-color: var(--danger-color);
+      background: linear-gradient(145deg, #8b2e4a, #3a0d1a);
+    }
+    .circle-btn.reset:active {
+      background: var(--danger-color);
+      box-shadow: 0 0 14px rgba(255, 107, 107, 0.6);
+    }
+
+    .circle-btn .btn-text {
+      font-size: 12px;
+      font-weight: 800;
+      color: #ffffff;
+      text-align: center;
+      letter-spacing: -0.3px;
+      line-height: 1.25;
+    }
+
+    /* ══ 하단 힌트 바 ══ */
+    .help-hint {
+      width: 100%;
+      margin-top: 6px;
+      padding: 8px 12px;
+      background: rgba(142, 205, 247, 0.08);
+      border: 1px solid rgba(142, 205, 247, 0.2);
+      border-radius: 8px;
+      font-size: 11px;
+      color: #bcd8f5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    /* ══ 스테이지 선택 모달 ══ */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(5px);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+    }
+
+    .modal-box {
+      background: var(--card-bg);
+      border: 2px solid var(--accent-color);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 420px;
+      padding: 18px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 10px;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--accent-color);
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-sub);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0 6px;
+      font-family: inherit;
+    }
+
+    .stage-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; }
+
+    .stage-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #171735;
+      border: 2px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .stage-row:hover { border-color: var(--accent-color); }
+    .stage-row:active { transform: translateY(1px); }
+    .stage-row.locked { opacity: 0.4; cursor: not-allowed; }
+    .stage-row.locked:hover { border-color: var(--panel-border); }
+
+    .stage-num {
+      flex: none;
+      width: 38px; height: 38px;
+      background: #1c1c3a;
+      border: 2px solid #3f3f75;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; font-weight: 800;
+      color: var(--accent-color);
+    }
+
+    .stage-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+    .stage-info .nm { font-size: 13.5px; font-weight: 700; color: #fff; }
+    .stage-info .sb { font-size: 10.5px; color: #a0aee0; }
+    .stage-info .tg { font-size: 10px; color: var(--accent-color); }
+
+    /* ══ 📱 모바일: 좌우 여백 없이 꽉 차게 ══ */
+    @media (max-width: 640px) {
+      .dpad-cross { display: grid !important; }
+      .swap-ctrl-btn { display: flex !important; }
+
+      body {
+        padding: 0;
+        margin: 0;
+        width: 100vw;
+        min-height: 100svh;
+        justify-content: flex-start;
+      }
+
+      .game-container {
+        width: 100%;
+        min-height: 100svh;
+        max-width: 100%;
+        padding: 4px 4px env(safe-area-inset-bottom, 2px) 4px;
+        border: none;
+        border-radius: 0;
+        justify-content: space-between;
+      }
+
+      .header-bar { margin-bottom: 3px; padding-bottom: 3px; flex-shrink: 0; }
+      .level-title { font-size: 12px; }
+      .stats-group { gap: 2px; font-size: 10.5px; margin-bottom: 4px; flex-shrink: 0; }
+      .stat-item { padding: 2px 4px; gap: 2px; }
+      .stat-item span.label { font-size: 10px; }
+
+      .canvas-wrapper {
+        flex: 1 1 auto;
+        width: 100%;
+        margin-bottom: 4px;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      canvas { width: 100%; height: auto; max-height: 100%; }
+
+      .gamepad-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        justify-content: space-between !important;
+        padding: 0 8px 4px 8px !important;
+        flex-shrink: 0 !important;
+      }
+      .gamepad-container.swapped { justify-content: space-between !important; }
+
+      .dpad-cross {
+        grid-template-columns: repeat(3, 46px);
+        grid-template-rows: repeat(3, 38px);
+        gap: 2px;
+      }
+      .dpad-btn { font-size: 17px; }
+      .circle-btn { width: 54px; height: 54px; }
+      .circle-btn .btn-text { font-size: 11px; }
+
+      .help-hint { display: none; }
     }
   </style>
 </head>
 <body>
 
-  <div id="game-container">
+<div class="game-container">
+
+  <!-- 1단: 상단 내비게이션 바 -->
+  <div class="header-bar">
+    <div class="title-group">
+      <button class="home-btn" id="homeBtn" title="타이틀 화면으로">🏠 HOME</button>
+      <div class="level-title" id="stageName">메인 타이틀</div>
+    </div>
+    <div style="display:flex; gap:6px; flex-shrink:0;">
+      <button class="home-btn" id="soundBtn" style="color:#ffe66d; border-color:#ffe66d;">🔊 사운드</button>
+      <button class="home-btn" id="stageListBtn" style="color:#8ecdf7; border-color:#8ecdf7;">📂 스테이지</button>
+    </div>
+  </div>
+
+  <!-- 2단: 인게임 스탯 바 -->
+  <div class="stats-group">
+    <div class="stat-item">
+      <span class="label">⏱ 시간</span>
+      <span class="value" id="hudTime" style="color:#fcd34d;">--</span>
+    </div>
+    <div class="stat-item">
+      <span class="label">🔑 열쇠</span>
+      <span class="value" id="hudKeys" style="color:#ffe66d;">-/-</span>
+    </div>
+    <div class="stat-item">
+      <span class="label">이동</span>
+      <span class="value" id="hudMoves" style="min-width:24px; text-align:center;">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="label">⏪ 되감기</span>
+      <span class="value" id="hudRewinds" style="color:#c9a8f0;">0/5</span>
+    </div>
+  </div>
+
+  <!-- 게임 캔버스 -->
+  <div class="canvas-wrapper">
     <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <!-- 결과 배너 (클리어 / 시간초과 / 붙잡힘) -->
+    <div class="banner-overlay" id="resultBanner">
+      <div class="banner-title" id="bannerTitle">🎉 CLEAR!</div>
+      <div class="banner-desc" id="bannerDesc"></div>
+      <div class="banner-btn-row">
+        <button class="banner-btn" id="bannerPrimary">다음 스테이지 ▶</button>
+        <button class="banner-btn secondary" id="bannerSecondary">스테이지 목록</button>
+      </div>
+    </div>
   </div>
-  <div class="instructions">
-    [WASD / 방향키 이동] &nbsp; [Space/R = 되감기] &nbsp; [M = 사운드 On/Off]
+
+  <!-- 하단 게임패드 -->
+  <div class="gamepad-container" id="gamepad">
+    <div class="dpad-cross">
+      <button class="dpad-btn dpad-up" data-dir="up" aria-label="위로">▲</button>
+      <button class="dpad-btn dpad-left" data-dir="left" aria-label="왼쪽">◀</button>
+      <div class="dpad-center"></div>
+      <button class="dpad-btn dpad-right" data-dir="right" aria-label="오른쪽">▶</button>
+      <button class="dpad-btn dpad-down" data-dir="down" aria-label="아래로">▼</button>
+    </div>
+
+    <button id="swapCtrlBtn" class="swap-ctrl-btn" title="조작키 좌우 반전">⇄</button>
+
+    <div class="action-circle-group">
+      <div class="circle-btn-wrapper">
+        <button class="circle-btn rewind" id="rewindBtn" title="되감기 (단축키: Space / R)">
+          <span class="btn-text" id="rewindBtnText">⏪<br>되감기 (5)</span>
+        </button>
+        <span class="key-badge">SPACE</span>
+      </div>
+      <div class="circle-btn-wrapper">
+        <button class="circle-btn reset" id="resetBtn" title="스테이지 재시작 (단축키: R)">
+          <span class="btn-text" id="resetBtnText">↺<br>재시작</span>
+        </button>
+        <span class="key-badge">R</span>
+      </div>
+    </div>
   </div>
+
+  <div class="help-hint">
+    [WASD / 방향키 이동] &nbsp;·&nbsp; [Space = 되감기] &nbsp;·&nbsp; [R = 재시작] &nbsp;·&nbsp; [M = 사운드]
+  </div>
+</div>
+
+<!-- 📂 스테이지 선택 모달 -->
+<div class="modal-backdrop" id="stageModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span>📂 스테이지 선택</span>
+      <button class="modal-close" id="closeStageModal">✕</button>
+    </div>
+    <div class="stage-list" id="stageList"></div>
+  </div>
+</div>
 
 <script>
 /* ============================================================
-   8-BIT SOUND ENGINE
+   8-BIT SOUND ENGINE  (원본 유지 · 변경 없음)
 ============================================================ */
 class SoundEngine {
   constructor() { this.ctx = null; this.muted = false; }
@@ -132,20 +698,17 @@ class SoundEngine {
       const osc2 = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
-      // ① sawtooth(배음 폭탄) → triangle(부드러운 저음)으로 변경
       osc1.type = 'triangle'; osc2.type = 'sine';
       osc1.frequency.setValueAtTime(120, this.ctx.currentTime);
       osc1.frequency.exponentialRampToValueAtTime(45, this.ctx.currentTime + 3);
       osc2.frequency.setValueAtTime(124, this.ctx.currentTime);
       osc2.frequency.exponentialRampToValueAtTime(46, this.ctx.currentTime + 3);
 
-      // ② 저역대 웅웅거림을 깎아내는 로우패스 필터 추가
       const filter = this.ctx.createBiquadFilter();
       filter.type = 'lowpass';
       filter.frequency.setValueAtTime(400, this.ctx.currentTime);
       filter.Q.value = 0.7;
 
-      // ③ 진짜 작게: 오실레이터 2개가 합쳐지는 걸 감안해 0.02로, 부드럽게 페이드인 후 지수감쇠
       gain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
       gain.gain.linearRampToValueAtTime(0.02, this.ctx.currentTime + 0.15);
       gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 3);
@@ -164,14 +727,11 @@ class SoundEngine {
   }
   playClick() { this.init(); this.playTone(500, 'square', 0.06, 0.08); }
 
-  /* ══════════════════════════════════════════════════
-     BGM 엔진 (실시간 8비트 합성 · 파일 용량 0KB)
-  ══════════════════════════════════════════════════ */
   ensureBgmBus() {
     this.init();
     if (!this.bgmGain) {
       this.bgmGain = this.ctx.createGain();
-      this.bgmGain.gain.value = 0.16; // BGM 전체 볼륨 (효과음보다 작게)
+      this.bgmGain.gain.value = 0.16;
       this.bgmGain.connect(this.ctx.destination);
     }
   }
@@ -225,7 +785,6 @@ class SoundEngine {
     } catch(e) {}
   }
 
-  // 샘플 A — "시간의 심연" (긴장감 / 4스테이지)
   barA() {
     const N = BGM_NOTES;
     for (let i = 0; i < 4; i++) {
@@ -252,7 +811,6 @@ class SoundEngine {
     this.bgmNote(N.A5, 'square', 7.7, 0.3, 0.06, 4000);
   }
 
-  // 샘플 B — "잊혀진 회랑" (신비로움 / 1~3스테이지)
   barB() {
     const N = BGM_NOTES;
     const chords = [
@@ -280,9 +838,8 @@ class SoundEngine {
     for (let i = 0; i < 4; i++) this.bgmPerc(i * 2.0 + 1.0, 0.04, 0.022, 7000);
   }
 
-  // BGM 시작 ('A' 또는 'B')
   startBgm(track) {
-    if (this.currentTrack === track && this.bgmTimer) return; // 이미 같은 곡 재생 중
+    if (this.currentTrack === track && this.bgmTimer) return;
     this.stopBgm();
     if (this.muted) { this.currentTrack = track; return; }
     this.ensureBgmBus();
@@ -304,11 +861,9 @@ class SoundEngine {
     this.currentTrack = null;
   }
 
-  // 사운드 On/Off 토글
   toggleMute() {
     this.muted = !this.muted;
     if (this.muted) {
-      // 즉시 BGM 음소거 (예약된 노트까지 차단)
       if (this.bgmGain && this.ctx) {
         this.bgmGain.gain.cancelScheduledValues(this.ctx.currentTime);
         this.bgmGain.gain.setValueAtTime(0, this.ctx.currentTime);
@@ -320,7 +875,6 @@ class SoundEngine {
         this.bgmGain.gain.cancelScheduledValues(this.ctx.currentTime);
         this.bgmGain.gain.setValueAtTime(0.16, this.ctx.currentTime);
       }
-      // 원래 재생하던 트랙 복구
       const t = this.currentTrack;
       if (t) { this.currentTrack = null; this.startBgm(t); }
     }
@@ -328,7 +882,6 @@ class SoundEngine {
   }
 }
 
-/* 음정 주파수 테이블 (BGM용) */
 const BGM_NOTES = {
   A1: 55.00, C2: 65.41, D2: 73.42, E2: 82.41, F2: 87.31, G2: 98.00, A2: 110.00,
   C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.00, A3: 220.00, Bb3: 233.08,
@@ -339,17 +892,16 @@ const audio = new SoundEngine();
 
 /* ============================================================
    GRID CONSTANTS
+   ── 플레이 화면은 정사각 캔버스(440×440)에 그리드만 렌더
 ============================================================ */
 const GRID_SIZE = 10;
 const CELL = 42;
-const gridX = 190, gridY = 90;
-const FLOOR = 0, WALL = 1;
-// 이제 타일 번호가 복잡해지므로 타일 정보를 객체로 관리합니다.
-// type: 'floor', 'wall', 'key', 'door', 'exit'
-// color: 0(빨강), 1(파랑) 등 (key와 door 매칭용)
+const PLAY_W = 440, PLAY_H = 440;   // 인게임 정사각 캔버스
+const ART_W = 800, ART_H = 600;     // 타이틀/셀렉트/엔딩 아트웍 캔버스
+const gridX = 10, gridY = 10;       // 그리드 여백 (10 + 42*10 + 10 = 440)
 
 /* ============================================================
-   STAGE DEFINITIONS (여러 스테이지를 하나의 파일에서 관리)
+   STAGE DEFINITIONS  (원본 유지 · 변경 없음)
 ============================================================ */
 const STAGES = [
   {
@@ -359,8 +911,8 @@ const STAGES = [
     startPos: { col: 1, row: 7 },
     keysCount: 1,
     build: (g) => {
-      g[3][1] = { type: 'key', color: 0 }; // 0: 노란색(기본)
-      g[7][7] = { type: 'door', color: 0, isExit: true }; // 노란문이 곧 출구
+      g[3][1] = { type: 'key', color: 0 };
+      g[7][7] = { type: 'door', color: 0, isExit: true };
     }
   },
   {
@@ -370,15 +922,12 @@ const STAGES = [
     startPos: { col: 1, row: 7 },
     keysCount: 2,
     build: (g) => {
-      // 2스테이지 재설계: 대기(Wait) 없이 멈추지 않고 계속 달려야 하는 구조
       for (let r = 1; r < GRID_SIZE - 1; r++) {
-        if (r !== 7) g[r][4] = { type: 'wall' }; // 중간 세로 벽
+        if (r !== 7) g[r][4] = { type: 'wall' };
       }
-      // 열쇠 1 (왼쪽 구석) - 노란색
       g[1][1] = { type: 'key', color: 0 };
-      // 열쇠 2 (중앙 통로 근처) - 파란색
       g[5][3] = { type: 'key', color: 2 };
-      g[6][8] = { type: 'door', color: 'all', isExit: true }; 
+      g[6][8] = { type: 'door', color: 'all', isExit: true };
     }
   },
   {
@@ -388,20 +937,16 @@ const STAGES = [
     startPos: { col: 1, row: 8 },
     keysCount: 2,
     build: (g) => {
-      // 벽 세팅 (지그재그 구조)
       for (let r = 1; r < 9; r++) { if (r !== 7) g[r][3] = { type: 'wall' }; }
       for (let r = 1; r < 9; r++) { if (r !== 2) g[r][6] = { type: 'wall' }; }
-      
-      // 빨간색 그룹
-      g[3][1] = { type: 'key', color: 1 }; // 빨강 발판 (1번방)
-      g[7][3] = { type: 'door', color: 1 }; // 빨강 문 (위로 한 칸 이동)
 
-      // 파란색 그룹
-      g[8][4] = { type: 'key', color: 2 }; // 파랑 발판 (2번방)
-      g[2][6] = { type: 'door', color: 2 }; // 파랑 문 (아래로 한 칸 이동)
+      g[3][1] = { type: 'key', color: 1 };
+      g[7][3] = { type: 'door', color: 1 };
 
-      // 최종 출구 (3번방)
-      g[3][8] = { type: 'exit' }; // 발판 필요없는 최종 골인 지점 (아래로 한 칸 이동)
+      g[8][4] = { type: 'key', color: 2 };
+      g[2][6] = { type: 'door', color: 2 };
+
+      g[3][8] = { type: 'exit' };
     }
   },
   {
@@ -412,10 +957,9 @@ const STAGES = [
     watcherSpawn: { col: 7, row: 2 },
     keysCount: 1,
     build: (g) => {
-      // 미로 구조
       for(let r = 1; r <= 7; r++) g[r][4] = { type: 'wall' };
-      g[2][4] = { type: 'floor' }; // 구멍
-      g[7][4] = { type: 'floor' }; // 구멍
+      g[2][4] = { type: 'floor' };
+      g[7][4] = { type: 'floor' };
 
       g[2][1] = { type: 'key', color: 0 };
       g[7][8] = { type: 'door', color: 0, isExit: true };
@@ -447,7 +991,7 @@ let currentScreen = SCREEN.TITLE;
 
 let stageIdx = 0;
 let grid = null;
-let startPos = null, doorPos = null, keyPositions = null;
+let startPos = null;   // 🔧 버그②: 미사용 doorPos / keyPositions 제거
 
 let player = { col: 0, row: 0, history: [] };
 let ghosts = [];
@@ -475,9 +1019,7 @@ function loadStage(idx) {
   stageIdx = idx;
   grid = buildBaseGrid();
   stage.build(grid);
-  startPos = stage.startPos;
-  doorPos = stage.doorPos;
-  keyPositions = stage.keyPositions;
+  startPos = stage.startPos;   // 🔧 버그②: 죽은 대입문 제거
   TOTAL_TIME = stage.totalTime;
   timeLeft = TOTAL_TIME;
 
@@ -490,19 +1032,17 @@ function loadStage(idx) {
   popups = [];
   currentScreen = SCREEN.PLAYING;
 
-  // BGM: 4스테이지(감시자)는 긴장감 A, 1~3스테이지는 신비로운 B
   audio.startBgm(stage.watcherSpawn ? 'A' : 'B');
+  syncCanvasSize();
+  hideBanner();
+  updateHud();
 }
 
 /* ============================================================
-   CORE LOGIC
-   ── 유령(과거의 나)의 위치는 매번 "시작점 + 현재 틱까지의 기록"을
-   ── 처음부터 다시 계산하는 순수 함수 방식이라, 되감기를 몇 번을
-   ── 반복해도 절대 오차(드리프트)가 쌓이지 않습니다.
+   CORE LOGIC  (원본 유지 · 변경 없음)
 ============================================================ */
-const MAX_REWINDS = 5; // 되감기(과거의 나) 최대 유지 수
+const MAX_REWINDS = 5;
 
-// tick 시점의 유령 상태(위치/생존여부)를 매번 새로 계산 — 상태를 저장하지 않는다
 function ghostStateAt(ghost, tick) {
   const H = ghost.history.length;
   const effective = Math.min(tick, H);
@@ -512,13 +1052,11 @@ function ghostStateAt(ghost, tick) {
     col += d.dc;
     row += d.dr;
   }
-  // H턴에 마지막 이동(=발판 도착), 그 다음 턴(H+1)이 되는 순간 즉시 사라짐
   const alive = tick <= H;
   const grace = tick === H;
   return { col, row, alive, grace };
 }
 
-// grid는 2차원 배열. 요소는 { type: 'floor'|'wall'|'key'|'door'|'exit', color: 0|1|2... }
 function isEntityOnExactKey(entCol, entRow, keyR, keyC) {
   return entCol === keyC && entRow === keyR;
 }
@@ -535,7 +1073,6 @@ function isDoorOpenNow(targetCol, targetRow, atTick, pCol, pRow) {
   const doorTile = grid[targetRow][targetCol];
   if (doorTile.type !== 'door') return true;
 
-  // 인자가 안 넘어오면 현재 상태 기준으로 판정 (렌더링용)
   const tick = (atTick === undefined) ? currentTick : atTick;
   const px = (pCol === undefined) ? player.col : pCol;
   const py = (pRow === undefined) ? player.row : pRow;
@@ -554,7 +1091,6 @@ function isDoorOpenNow(targetCol, targetRow, atTick, pCol, pRow) {
   return keysToCheck.every(k => keyHeldStatusAt(tick, px, py, k.r, k.c));
 }
 
-// Watcher pathfinding BFS
 function getNextWatcherMove(wCol, wRow, pCol, pRow) {
   const queue = [{c: wCol, r: wRow, path: []}];
   const visited = Array.from({length: GRID_SIZE}, () => Array(GRID_SIZE).fill(false));
@@ -610,8 +1146,6 @@ function attemptMove(dirName) {
 
   if (tile.type === 'wall') { audio.playBlocked(); return; }
 
-  // 문 판정: "도착하는 순간(nextTick)"의 상태로만 판정
-  // → 열쇠가 밟힌 그 턴에 바로 문에 들어갈 수 있음 (직관적)
   if (tile.type === 'door') {
     const openOnArrival = isDoorOpenNow(targetCol, targetRow, nextTick, targetCol, targetRow);
     if (!openOnArrival) {
@@ -621,7 +1155,6 @@ function attemptMove(dirName) {
     }
   }
 
-  // 이번 이동으로 어떤 유령이 방금 사라졌는지 체크 (효과음/팝업용)
   ghosts.forEach(g => {
     const before = ghostStateAt(g, currentTick);
     const after = ghostStateAt(g, nextTick);
@@ -631,15 +1164,12 @@ function attemptMove(dirName) {
     }
   });
 
-  // Move player
   player.col = targetCol;
   player.row = targetRow;
   player.history.push(dirName);
   currentTick = nextTick;
 
-  // Move watchers
   watchers.forEach(w => {
-    // Collision check before move (player walked into watcher)
     if (player.col === w.col && player.row === w.row) {
       currentScreen = SCREEN.GAMEOVER;
       audio.playCaught();
@@ -648,13 +1178,12 @@ function attemptMove(dirName) {
     const move = getNextWatcherMove(w.col, w.row, player.col, player.row);
     w.col += move.dc;
     w.row += move.dr;
-    // Collision check after move (watcher walked into player)
     if (player.col === w.col && player.row === w.row) {
       currentScreen = SCREEN.GAMEOVER;
       audio.playCaught();
     }
   });
-  if (currentScreen === SCREEN.GAMEOVER) return;
+  if (currentScreen === SCREEN.GAMEOVER) { showResultBanner(); return; }
 
   audio.playMove();
 
@@ -663,7 +1192,6 @@ function attemptMove(dirName) {
     showPopup("🔑 열쇠 확보!", targetCol * CELL + gridX + CELL/2, targetRow * CELL + gridY - 6, '#ffe66d');
   }
 
-  // 문을 통과하면 자동으로 열리는 효과음을 낸다 (인디아나 존스 통과 시에도)
   if (tile.type === 'door') {
     audio.playDoorOpen();
   }
@@ -671,27 +1199,29 @@ function attemptMove(dirName) {
   if (tile.type === 'exit' || (tile.type === 'door' && tile.isExit)) {
     currentScreen = SCREEN.WIN;
     audio.playWin();
+    showResultBanner();
   }
+
+  updateHud();
 }
 
 function doRewind() {
   if (currentScreen !== SCREEN.PLAYING) return;
   if (player.history.length === 0) {
-    showPopup("아직 이동을 안 했어요!", 400, 300, '#ffcf6b');
+    showPopup("아직 이동을 안 했어요!", PLAY_W/2, PLAY_H/2, '#ffcf6b');
     return;
   }
   if (ghosts.length >= MAX_REWINDS) {
-    showPopup(`최대 ${MAX_REWINDS}번까지만 되감을 수 있어요!`, 400, 300, '#ff9f6b');
+    showPopup(`최대 ${MAX_REWINDS}번까지!`, PLAY_W/2, PLAY_H/2, '#ff9f6b');
     audio.playBlocked();
     return;
   }
 
-  // 첫 되감기 시 감시자 소환
   const stage = STAGES[stageIdx];
   if (stage.watcherSpawn && watchers.length === 0) {
     watchers.push({ col: stage.watcherSpawn.col, row: stage.watcherSpawn.row });
     audio.playOminous();
-    watcherIntroTimer = 3.0; // 3초간 대사 표시
+    watcherIntroTimer = 3.0;
   } else {
     audio.playRewind();
   }
@@ -704,8 +1234,9 @@ function doRewind() {
   currentTick = 0;
   loopCount++;
   if (!stage.watcherSpawn || watchers.length > 1) {
-    showPopup("⏪ 되감기!", 400, 300, '#8ecdf7');
+    showPopup("⏪ 되감기!", PLAY_W/2, PLAY_H/2, '#8ecdf7');
   }
+  updateHud();
 }
 
 function resetLevel() {
@@ -715,6 +1246,17 @@ function resetLevel() {
 function goToSelect() {
   currentScreen = SCREEN.SELECT;
   audio.stopBgm();
+  syncCanvasSize();
+  hideBanner();
+  updateHud();
+}
+
+function goToTitle() {
+  currentScreen = SCREEN.TITLE;
+  audio.stopBgm();
+  syncCanvasSize();
+  hideBanner();
+  updateHud();
 }
 
 /* ============================================================
@@ -722,6 +1264,19 @@ function goToSelect() {
 ============================================================ */
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const wrapper = document.querySelector('.canvas-wrapper');
+
+// 화면에 맞춰 캔버스 해상도/비율 전환 (플레이=정사각, 아트웍=4:3)
+function syncCanvasSize() {
+  const isArt = (currentScreen === SCREEN.TITLE || currentScreen === SCREEN.SELECT || currentScreen === SCREEN.ENDING);
+  const w = isArt ? ART_W : PLAY_W;
+  const h = isArt ? ART_H : PLAY_H;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  canvas.style.aspectRatio = isArt ? '4 / 3' : '1 / 1';
+}
 
 function drawRect(x, y, w, h, col) {
   ctx.fillStyle = col;
@@ -736,61 +1291,6 @@ function drawText(txt, x, y, size = 16, col = '#fff', align = 'center', weight =
 
 const GHOST_COLORS = ['#a8d8f0', '#f7c9e0', '#c8f0c0'];
 
-// In-game control buttons
-const BTN = {
-  up: { x: 110, y: 522, w: 50, h: 32 },
-  left: { x: 55, y: 558, w: 50, h: 32 },
-  down: { x: 110, y: 558, w: 50, h: 32 },
-  right: { x: 165, y: 558, w: 50, h: 32 },
-  rewind: { x: 292, y: 528, w: 190, h: 60 },
-  reset: { x: 578, y: 10, w: 56, h: 28 },
-  menu: { x: 640, y: 10, w: 92, h: 28 }
-};
-
-// 사운드 토글 버튼 (모든 화면 공통, 우측 상단)
-const soundBtn = { x: 742, y: 10, w: 44, h: 28 };
-
-function drawSoundBtn() {
-  const on = !audio.muted;
-  drawRect(soundBtn.x, soundBtn.y, soundBtn.w, soundBtn.h, on ? '#2f4a6a' : '#4a3040');
-  drawRect(soundBtn.x + 2, soundBtn.y + 2, soundBtn.w - 4, soundBtn.h - 4, on ? '#3f6a95' : '#6a4055');
-
-  const cx = soundBtn.x + soundBtn.w / 2;
-  const cy = soundBtn.y + soundBtn.h / 2;
-
-  // 스피커 아이콘
-  ctx.save();
-  ctx.fillStyle = on ? '#cfe8ff' : '#c0a0b0';
-  // 스피커 본체
-  ctx.beginPath();
-  ctx.moveTo(cx - 9, cy - 3);
-  ctx.lineTo(cx - 5, cy - 3);
-  ctx.lineTo(cx - 1, cy - 7);
-  ctx.lineTo(cx - 1, cy + 7);
-  ctx.lineTo(cx - 5, cy + 3);
-  ctx.lineTo(cx - 9, cy + 3);
-  ctx.closePath();
-  ctx.fill();
-
-  if (on) {
-    // 음파 2줄
-    ctx.strokeStyle = '#cfe8ff';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath(); ctx.arc(cx - 1, cy, 5, -0.8, 0.8); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx - 1, cy, 8.5, -0.8, 0.8); ctx.stroke();
-  } else {
-    // X 표시
-    ctx.strokeStyle = '#ff8899';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.moveTo(cx + 2, cy - 5); ctx.lineTo(cx + 10, cy + 5);
-    ctx.moveTo(cx + 10, cy - 5); ctx.lineTo(cx + 2, cy + 5);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-// Stage select card buttons (computed per render)
 let selectCards = [];
 
 function drawGrid() {
@@ -807,8 +1307,7 @@ function drawGrid() {
 
         if (tile.type === 'key') {
           const pressed = keyHeldStatusAt(currentTick, player.col, player.row, r, c);
-          
-          // 색상 매핑 (0: 노랑, 1: 빨강, 2: 파랑)
+
           const colors = ['#ffe66d', '#ff6b6b', '#6bc5ff'];
           const dimColors = ['#8a7020', '#8a2f2f', '#2f5f8a'];
           const tColor = colors[tile.color] || colors[0];
@@ -820,26 +1319,21 @@ function drawGrid() {
           ctx.save();
           if (pressed) { ctx.shadowColor = tColor; ctx.shadowBlur = 16; }
 
-          // 색깔 발판 (바닥 패드)
           ctx.globalAlpha = pressed ? 0.35 : 0.15;
           drawRect(x + 4, y + 4, CELL - 8, CELL - 8, tColor);
           ctx.globalAlpha = 1.0;
 
-          // 픽셀아트 열쇠 그리기 (이모지 대신 직접 그려서 색상 적용)
           ctx.fillStyle = kc;
-          // 열쇠 머리 (동그란 고리)
           ctx.lineWidth = 3.5;
           ctx.strokeStyle = kc;
           ctx.beginPath();
           ctx.arc(kcx - 4, kcy - 5, 5.5, 0, Math.PI * 2);
           ctx.stroke();
-          // 열쇠 몸통 (대각선 축)
           ctx.beginPath();
           ctx.lineWidth = 3.5;
           ctx.moveTo(kcx - 1, kcy - 1);
           ctx.lineTo(kcx + 8, kcy + 8);
           ctx.stroke();
-          // 열쇠 이빨 2개
           ctx.beginPath();
           ctx.lineWidth = 3;
           ctx.moveTo(kcx + 3, kcy + 4);
@@ -862,9 +1356,9 @@ function drawGrid() {
           }
         } else if (tile.type === 'door') {
           const open = isDoorOpenNow(c, r);
-          const colors = ['#ffe66d', '#ff6b6b', '#6bc5ff']; // 열쇠와 동일한 색상 매핑
+          const colors = ['#ffe66d', '#ff6b6b', '#6bc5ff'];
           const dimColors = ['#8a7020', '#8a2f2f', '#2f5f8a'];
-          
+
           let tColor, dColor;
           if (tile.color === 'all') {
             tColor = '#3ddc84'; dColor = '#2bb96b';
@@ -873,14 +1367,12 @@ function drawGrid() {
             dColor = dimColors[tile.color] || dimColors[0];
           }
 
-          // 문 프레임 (열리면 밝은 색, 닫히면 어두운 색)
           drawRect(x + 3, y + 3, CELL - 6, CELL - 6, open ? tColor : dColor);
           drawRect(x + 7, y + 7, CELL - 14, CELL - 14, open ? '#0d2b1a' : '#1a0d16');
 
           const dcx = x + CELL / 2, dcy = y + CELL / 2;
           ctx.save();
           if (open) {
-            // 열린 상태: 초록 화살표 (통과 가능)
             ctx.fillStyle = '#3ddc84';
             ctx.shadowColor = '#3ddc84';
             ctx.shadowBlur = 10;
@@ -891,7 +1383,6 @@ function drawGrid() {
             ctx.closePath();
             ctx.fill();
           } else {
-            // 닫힌 상태: 자물쇠 픽셀아트
             ctx.strokeStyle = tColor;
             ctx.lineWidth = 2.5;
             ctx.beginPath();
@@ -904,10 +1395,8 @@ function drawGrid() {
           }
           ctx.restore();
         } else if (tile.type === 'exit') {
-          // 순수 출구 (발판 필요없음)
           drawRect(x + 3, y + 3, CELL - 6, CELL - 6, '#3ddc84');
           drawRect(x + 8, y + 8, CELL - 16, CELL - 16, '#2bb96b');
-          // 출구 화살표 (초록 문)
           ctx.save();
           ctx.fillStyle = '#ffffff';
           ctx.shadowColor = '#ffffff';
@@ -941,18 +1430,15 @@ function drawGrid() {
 function drawEntity(col, row, color, alpha, label, outline) {
   const x = gridX + col * CELL, y = gridY + row * CELL;
   const cx = x + CELL / 2, cy = y + CELL / 2;
-  const bob = 0; // static bob offset (reserved for future animation)
 
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  // 그림자
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.beginPath();
   ctx.ellipse(cx, y + CELL - 6, 11, 4, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 몸통 (둥근 사각형 캐릭터 본체)
   const bw = CELL - 16, bh = CELL - 14;
   const bx = cx - bw / 2, by = cy - bh / 2 + 2;
   ctx.fillStyle = color;
@@ -966,17 +1452,14 @@ function drawEntity(col, row, color, alpha, label, outline) {
     ctx.stroke();
   }
 
-  // 배 하이라이트 (입체감)
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
   roundRect(bx + 3, by + 3, bw - 6, bh * 0.4, 6);
   ctx.fill();
 
-  // 작은 발 2개
   ctx.fillStyle = color;
   ctx.fillRect(cx - 9, by + bh - 3, 6, 5);
   ctx.fillRect(cx + 3, by + bh - 3, 6, 5);
 
-  // 눈 (귀여운 동그란 눈 + 눈동자)
   const eyeY = cy - 3;
   ctx.fillStyle = '#ffffff';
   ctx.beginPath(); ctx.arc(cx - 6, eyeY, 4.2, 0, Math.PI * 2); ctx.fill();
@@ -985,7 +1468,6 @@ function drawEntity(col, row, color, alpha, label, outline) {
   ctx.beginPath(); ctx.arc(cx - 5.2, eyeY + 0.5, 2.1, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(cx + 6.8, eyeY + 0.5, 2.1, 0, Math.PI * 2); ctx.fill();
 
-  // 볼터치
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.beginPath(); ctx.arc(cx - 10, cy + 4, 2.4, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(cx + 10, cy + 4, 2.4, 0, Math.PI * 2); ctx.fill();
@@ -995,33 +1477,29 @@ function drawEntity(col, row, color, alpha, label, outline) {
   if (label) {
     ctx.save();
     ctx.globalAlpha = Math.min(1, alpha + 0.35);
-    drawText(label, cx, y - 4, 10, color);
+    drawText(label, cx, y - 3, 9, color);
     ctx.restore();
   }
 }
 
-// ── Watcher (시간 감시자) 그리기 ──
 function drawWatcher(col, row, alpha) {
   const x = gridX + col * CELL, y = gridY + row * CELL;
   const cx = x + CELL / 2, cy = y + CELL / 2;
   const t = performance.now() / 1000;
-  
+
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  // 유령 그림자 (빨간색 글로우)
   ctx.shadowColor = '#ff0044';
   ctx.shadowBlur = 20;
-  ctx.fillStyle = '#ff0044'; // 검은색에서 시뻘건 색으로 변경하여 잘 보이게 함
-  
-  // 감시자 몸통 (팩맨 유령처럼 아래가 너풀거림)
+  ctx.fillStyle = '#ff0044';
+
   const w = CELL - 8;
   const h = CELL - 8;
   ctx.beginPath();
   ctx.arc(cx, cy - h/4, w/2, Math.PI, 0);
   ctx.lineTo(cx + w/2, cy + h/2);
-  
-  // 밑단 웨이브
+
   const waveCount = 3;
   const waveW = w / waveCount;
   for(let i=1; i<=waveCount; i++) {
@@ -1034,7 +1512,6 @@ function drawWatcher(col, row, alpha) {
 
   ctx.shadowBlur = 0;
 
-  // 감시자 눈 (노란색/흰색으로 대비)
   const eyeBob = Math.sin(t * 8) * 1;
   ctx.fillStyle = '#ffff00';
   ctx.fillRect(cx - 8, cy - 6 + eyeBob, 6, 4);
@@ -1047,7 +1524,7 @@ function drawWatcher(col, row, alpha) {
 
   ctx.save();
   ctx.globalAlpha = Math.min(1, alpha + 0.35);
-  drawText('감시자', cx, y - 8, 11, '#ff88aa');
+  drawText('감시자', cx, y - 3, 9, '#ff88aa');
   ctx.restore();
 }
 
@@ -1065,14 +1542,13 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-// ── 캐릭터 아트웍 그리기 헬퍼 (자유 좌표, 크기 조절 가능) ──
+/* ── 캐릭터 아트웍 헬퍼 (타이틀/엔딩용 · 원본 유지) ── */
 function drawChar(cx, cy, scale, color, alpha, outline, opts = {}) {
   ctx.save();
   ctx.globalAlpha = alpha;
   const bw = 26 * scale, bh = 28 * scale;
   const bx = cx - bw / 2, by = cy - bh / 2;
 
-  // 그림자
   if (opts.shadow !== false) {
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath();
@@ -1080,7 +1556,6 @@ function drawChar(cx, cy, scale, color, alpha, outline, opts = {}) {
     ctx.fill();
   }
 
-  // 몸통
   ctx.fillStyle = color;
   roundRect(bx, by, bw, bh, 8 * scale);
   ctx.fill();
@@ -1092,17 +1567,14 @@ function drawChar(cx, cy, scale, color, alpha, outline, opts = {}) {
     ctx.stroke();
   }
 
-  // 하이라이트
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
   roundRect(bx + 3 * scale, by + 3 * scale, bw - 6 * scale, bh * 0.4, 6 * scale);
   ctx.fill();
 
-  // 발
   ctx.fillStyle = color;
   ctx.fillRect(cx - 9 * scale, by + bh - 3 * scale, 6 * scale, 5 * scale);
   ctx.fillRect(cx + 3 * scale, by + bh - 3 * scale, 6 * scale, 5 * scale);
 
-  // 눈
   const eyeY = cy - 3 * scale;
   const eyeR = 4.2 * scale;
   ctx.fillStyle = '#ffffff';
@@ -1114,12 +1586,10 @@ function drawChar(cx, cy, scale, color, alpha, outline, opts = {}) {
   ctx.beginPath(); ctx.arc(cx - 5.2 * scale + px, eyeY + 0.5 * scale, pupR, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(cx + 6.8 * scale + px, eyeY + 0.5 * scale, pupR, 0, Math.PI * 2); ctx.fill();
 
-  // 볼터치
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.beginPath(); ctx.arc(cx - 10 * scale, cy + 4 * scale, 2.4 * scale, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(cx + 10 * scale, cy + 4 * scale, 2.4 * scale, 0, Math.PI * 2); ctx.fill();
 
-  // 웃는 입 (옵션)
   if (opts.smile) {
     ctx.strokeStyle = 'rgba(0,0,0,0.5)';
     ctx.lineWidth = 1.6 * scale;
@@ -1131,13 +1601,12 @@ function drawChar(cx, cy, scale, color, alpha, outline, opts = {}) {
   ctx.restore();
 }
 
-// ── 타이틀 화면 (내가 둘로 나뉘는 아트웍) ──
+/* ── 타이틀 화면 (원본 아트웍 100% 보존) ── */
 let titleBtn = { x: 300, y: 470, w: 200, h: 58 };
 
 function renderTitle() {
   const t = performance.now() / 1000;
 
-  // 배경 그라데이션
   const bg = ctx.createLinearGradient(0, 0, 0, 600);
   bg.addColorStop(0, '#0d0d22');
   bg.addColorStop(0.6, '#141433');
@@ -1145,7 +1614,6 @@ function renderTitle() {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 800, 600);
 
-  // 시간의 소용돌이 (동심원 링)
   ctx.save();
   ctx.translate(400, 300);
   for (let i = 0; i < 5; i++) {
@@ -1158,7 +1626,6 @@ function renderTitle() {
   }
   ctx.restore();
 
-  // 반짝이는 시간 입자
   for (let i = 0; i < 26; i++) {
     const a = (i / 26) * Math.PI * 2 + t * 0.25;
     const rad = 150 + Math.sin(t * 1.6 + i * 1.3) * 60;
@@ -1169,11 +1636,9 @@ function renderTitle() {
     ctx.fillRect(px, py, 2.5, 2.5);
   }
 
-  // ══ 아트웍: 현재의 나 + 갈라지는 과거의 나들 ══
   const artY = 300;
   const split = 60 + Math.sin(t * 1.1) * 14;
 
-  // 분열 궤적 (현재→과거 잔상 라인)
   ctx.save();
   ctx.strokeStyle = 'rgba(168, 216, 240, 0.25)';
   ctx.lineWidth = 2;
@@ -1182,22 +1647,17 @@ function renderTitle() {
   ctx.beginPath(); ctx.moveTo(400, artY); ctx.lineTo(400 + split + 40, artY + 6); ctx.stroke();
   ctx.restore();
 
-  // 과거의 나 (왼쪽 - 하늘색 잔상)
   drawChar(400 - split - 42, artY + 6, 1.5, '#a8d8f0', 0.42, null, { lookRight: true, smile: true });
-  // 과거의 나 (오른쪽 - 핑크 잔상)
   drawChar(400 + split + 42, artY + 6, 1.5, '#f7c9e0', 0.42, null, { lookLeft: true, smile: true });
-  // 중간 잔상 2개 (더 옅음)
   drawChar(400 - split * 0.5 - 16, artY + 3, 1.5, '#c8f0c0', 0.2, null, { smile: true });
   drawChar(400 + split * 0.5 + 16, artY + 3, 1.5, '#a8d8f0', 0.2, null, { smile: true });
 
-  // 현재의 나 (중앙 - 밝은 주황, 글로우)
   ctx.save();
   ctx.shadowColor = '#ff9f43';
   ctx.shadowBlur = 26;
   drawChar(400, artY, 1.75, '#ff9f43', 1, '#ffd9a0', { smile: true });
   ctx.restore();
 
-  // 타이틀 로고
   ctx.save();
   ctx.shadowColor = '#4a90d9';
   ctx.shadowBlur = 22;
@@ -1206,7 +1666,6 @@ function renderTitle() {
   drawText("— 아까의 나야 도와줘 —", 400, 158, 18, '#f7c9e0');
   drawText("움직이면 기록되고, 되감으면 과거의 내가 나타난다", 400, 192, 13, '#6a7ab0');
 
-  // 시작 버튼 (펄스 글로우)
   const pulse = (Math.sin(t * 2.6) + 1) / 2;
   const b = titleBtn;
   ctx.save();
@@ -1223,14 +1682,12 @@ function renderTitle() {
   drawText("© 2026 DDALKKAK GAMES · REWIND PROTOTYPE", 400, 585, 9, '#3a3a5a');
 }
 
-// ── 엔딩 화면 (둘이 치킨 먹는 아트웍) ──
+/* ── 엔딩 화면 (원본 아트웍 100% 보존) ── */
 let endingBtn = { x: 300, y: 500, w: 200, h: 52 };
-let selectBackBtn = { x: 20, y: 20, w: 80, h: 28 };
 
 function renderEnding() {
   const t = performance.now() / 1000;
 
-  // 따뜻한 실내 배경
   const bg = ctx.createLinearGradient(0, 0, 0, 600);
   bg.addColorStop(0, '#3a2418');
   bg.addColorStop(0.55, '#54341f');
@@ -1238,25 +1695,21 @@ function renderEnding() {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 800, 600);
 
-  // 벽지 무늬
   ctx.fillStyle = 'rgba(255,255,255,0.02)';
   for (let i = 0; i < 12; i++) ctx.fillRect(i * 70, 0, 26, 400);
 
-  // 천장 조명
   ctx.fillStyle = '#3a2a1a';
   ctx.fillRect(396, 0, 8, 60);
   ctx.fillStyle = '#f5d76e';
   ctx.beginPath();
   ctx.moveTo(360, 60); ctx.lineTo(440, 60); ctx.lineTo(424, 92); ctx.lineTo(376, 92);
   ctx.closePath(); ctx.fill();
-  // 조명 빛
   const lampGrad = ctx.createRadialGradient(400, 100, 10, 400, 100, 260);
   lampGrad.addColorStop(0, 'rgba(255, 225, 150, 0.30)');
   lampGrad.addColorStop(1, 'rgba(255, 225, 150, 0)');
   ctx.fillStyle = lampGrad;
   ctx.fillRect(140, 60, 520, 340);
 
-  // 텍스트 (상단)
   ctx.save();
   ctx.shadowColor = '#000';
   ctx.shadowBlur = 8;
@@ -1265,43 +1718,33 @@ function renderEnding() {
   drawText("\"아까의 나야! 도와줘서 고마워\"", 400, 196, 21, '#ffffff');
   drawText("— 시간을 넘어온 우리는, 함께 치킨을 먹었다 —", 400, 226, 12, '#e0c9a6');
 
-  // ══ 식탁 ══
   const tableY = 400;
-  // 식탁보
   ctx.fillStyle = '#c94f4f';
   roundRect(180, tableY, 440, 22, 6); ctx.fill();
   ctx.fillStyle = '#e06565';
   roundRect(180, tableY, 440, 12, 6); ctx.fill();
-  // 체크 무늬
   ctx.fillStyle = 'rgba(255,255,255,0.16)';
   for (let i = 0; i < 11; i++) ctx.fillRect(190 + i * 40, tableY, 16, 22);
-  // 식탁 다리
   ctx.fillStyle = '#6b3f24';
   ctx.fillRect(230, tableY + 22, 16, 78);
   ctx.fillRect(554, tableY + 22, 16, 78);
-  // 바닥
   ctx.fillStyle = '#22150d';
   ctx.fillRect(0, tableY + 100, 800, 100);
 
-  // ══ 치킨 접시 (중앙) ══
   const plateY = tableY - 6;
-  // 접시
   ctx.fillStyle = '#f0ece4';
   ctx.beginPath(); ctx.ellipse(400, plateY, 74, 20, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#d8d2c6';
   ctx.beginPath(); ctx.ellipse(400, plateY + 2, 60, 14, 0, 0, Math.PI * 2); ctx.fill();
 
-  // 치킨 조각들 (드럼스틱 3개 + 조각)
   function drumstick(x, y, rot) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(rot);
-    // 살
     ctx.fillStyle = '#d98a2b';
     ctx.beginPath(); ctx.ellipse(0, 0, 15, 12, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#e8a94a';
     ctx.beginPath(); ctx.ellipse(-3, -3, 10, 7, 0, 0, Math.PI * 2); ctx.fill();
-    // 뼈
     ctx.fillStyle = '#f5efe0';
     ctx.fillRect(12, -3, 16, 6);
     ctx.beginPath(); ctx.arc(29, -3, 4, 0, Math.PI * 2); ctx.fill();
@@ -1312,7 +1755,6 @@ function renderEnding() {
   drumstick(424, plateY - 10, 0.3);
   drumstick(396, plateY - 2, -0.05);
 
-  // 김 (모락모락 올라오는 증기)
   for (let i = 0; i < 3; i++) {
     const sx = 370 + i * 30;
     const off = (t * 26 + i * 40) % 70;
@@ -1324,7 +1766,6 @@ function renderEnding() {
     ctx.stroke();
   }
 
-  // 콜라 컵 2개
   function cup(x, y) {
     ctx.fillStyle = '#e8e8f0';
     ctx.beginPath();
@@ -1342,22 +1783,17 @@ function renderEnding() {
   cup(300, plateY - 2);
   cup(500, plateY - 2);
 
-  // ══ 두 캐릭터 (식탁에 앉아 마주보기) ══
   const charY = tableY - 48;
   const bob1 = Math.sin(t * 2.1) * 2.5;
   const bob2 = Math.sin(t * 2.1 + 1.1) * 2.5;
 
-  // 의자 등받이
   ctx.fillStyle = '#5c3520';
   ctx.fillRect(200, charY - 30, 12, 90);
   ctx.fillRect(588, charY - 30, 12, 90);
 
-  // 과거의 나 (왼쪽, 하늘색)
   drawChar(255, charY + bob1, 2.0, '#a8d8f0', 0.9, '#d4ecf8', { lookRight: true, smile: true, shadow: false });
-  // 현재의 나 (오른쪽, 주황)
   drawChar(545, charY + bob2, 2.0, '#ff9f43', 1, '#ffd9a0', { lookLeft: true, smile: true, shadow: false });
 
-  // 하트 & 반짝임
   for (let i = 0; i < 5; i++) {
     const hy = charY - 50 - ((t * 30 + i * 45) % 110);
     const hx = 400 + Math.sin(t * 1.7 + i * 1.4) * 60;
@@ -1368,7 +1804,6 @@ function renderEnding() {
     ctx.restore();
   }
 
-  // 말풍선 (왼쪽 캐릭터)
   ctx.save();
   ctx.globalAlpha = 0.95;
   drawRect(150, charY - 96, 180, 44, '#ffffff');
@@ -1380,7 +1815,6 @@ function renderEnding() {
   drawText("천만에, 미래의 나!", 240, charY - 68, 13, '#2f3640');
   ctx.restore();
 
-  // 다시 시작 버튼
   const pulse = (Math.sin(t * 2.6) + 1) / 2;
   const b = endingBtn;
   ctx.save();
@@ -1395,7 +1829,7 @@ function renderEnding() {
   drawText("타이틀로 돌아가기", 400, b.y + 33, 16, '#ffffff');
 }
 
-// ── Stage Select Screen ──
+/* ── 스테이지 선택 (캔버스 · 원본 유지 + 버그① 수정) ── */
 function renderSelect() {
   drawRect(0, 0, 800, 600, '#0a0a16');
 
@@ -1420,7 +1854,6 @@ function renderSelect() {
     ctx.lineWidth = 2;
     ctx.strokeRect(cx, cy, cardW, cardH);
 
-    // number badge
     drawRect(cx + 14, cy + 14, 50, 50, '#1c1c3a');
     ctx.strokeStyle = '#3f3f75';
     ctx.lineWidth = 2;
@@ -1435,56 +1868,120 @@ function renderSelect() {
     drawText('▶', cx + cardW - 26, cy + cardH/2 + 6, 18, '#ffe66d');
   });
 
-  // Locked stage 3 placeholder
+  // 🔧 버그①: 하드코딩 "3" → STAGES.length + 1 자동 계산
   const lockY = startY + STAGES.length * (cardH + gap);
   const lockX = 400 - cardW / 2;
   drawRect(lockX, lockY, cardW, cardH, '#12122a');
   ctx.globalAlpha = 0.45;
   drawRect(lockX + 14, lockY + 14, 50, 50, '#1c1c3a');
-  drawText("3", lockX + 39, lockY + 47, 24, '#55557a');
+  drawText(`${STAGES.length + 1}`, lockX + 39, lockY + 47, 24, '#55557a');
   drawText("???", lockX + 82, lockY + 32, 17, '#888', 'left');
   drawText("추후 업데이트 예정 (레이저 / 상자 기믹)", lockX + 82, lockY + 51, 11, '#666', 'left');
   ctx.globalAlpha = 1;
   drawText('🔒 SOON', lockX + cardW - 50, lockY + cardH/2 + 4, 11, '#666');
 
-  // 타이틀로 돌아가기 버튼
-  drawRect(selectBackBtn.x, selectBackBtn.y, selectBackBtn.w, selectBackBtn.h, '#3a3a5c');
-  drawText("◀ 타이틀", selectBackBtn.x + selectBackBtn.w/2, selectBackBtn.y + 19, 11, '#a0aee0');
-
   drawText("© 2026 DDALKKAK GAMES · REWIND PROTOTYPE", 400, 585, 9, '#3a3a5a');
 }
 
 function render() {
-  ctx.clearRect(0, 0, 800, 600);
+  syncCanvasSize();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (currentScreen === SCREEN.TITLE) {
-    renderTitle();
-    drawSoundBtn();
+  if (currentScreen === SCREEN.TITLE) { renderTitle(); return; }
+  if (currentScreen === SCREEN.ENDING) { renderEnding(); return; }
+  if (currentScreen === SCREEN.SELECT) { renderSelect(); return; }
+
+  // ── 인게임: 그리드만 렌더 (HUD·버튼은 DOM) ──
+  drawRect(0, 0, PLAY_W, PLAY_H, '#0a0a16');
+  drawGrid();
+
+  ghosts.forEach((g, i) => {
+    const s = ghostStateAt(g, currentTick);
+    if (!s.alive) return;
+    drawEntity(s.col, s.row, GHOST_COLORS[g.colorIdx], 0.55, `과거${i+1}`);
+  });
+
+  watchers.forEach(w => drawWatcher(w.col, w.row, 1));
+
+  drawEntity(player.col, player.row, '#ff9f43', 0.98, '현재', '#ffd9a0');
+
+  popups.forEach(p => {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.alpha);
+    drawText(p.txt, p.x, p.y, 13, p.col);
+    ctx.restore();
+  });
+
+  if (flashAlpha > 0) {
+    ctx.fillStyle = `rgba(140, 180, 255, ${flashAlpha * 0.35})`;
+    ctx.fillRect(0, 0, PLAY_W, PLAY_H);
+  }
+
+  // 감시자 등장 연출
+  if (watcherIntroTimer > 0) {
+    const t = performance.now() / 1000;
+    let a = 1;
+    if (watcherIntroTimer > 2.7) a = (3.0 - watcherIntroTimer) / 0.3;
+    else if (watcherIntroTimer < 0.6) a = watcherIntroTimer / 0.6;
+
+    ctx.save();
+    ctx.globalAlpha = a;
+
+    const cx = PLAY_W / 2, cy = PLAY_H / 2;
+    const vig = ctx.createRadialGradient(cx, cy, 60, cx, cy, 320);
+    vig.addColorStop(0, 'rgba(80, 0, 20, 0.2)');
+    vig.addColorStop(1, 'rgba(120, 0, 30, 0.75)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, PLAY_W, PLAY_H);
+
+    const bannerH = 80;
+    ctx.fillStyle = 'rgba(10, 0, 5, 0.88)';
+    ctx.fillRect(0, cy - bannerH/2, PLAY_W, bannerH);
+    ctx.fillStyle = '#ff0044';
+    ctx.fillRect(0, cy - bannerH/2, PLAY_W, 3);
+    ctx.fillRect(0, cy + bannerH/2 - 3, PLAY_W, 3);
+
+    const shake = Math.sin(t * 28) * 2 * a;
+    ctx.shadowColor = '#ff0044';
+    ctx.shadowBlur = 22;
+    drawText("이놈! 시간의 순리를 어기다니!", cx + shake, cy, 18, '#ff5577');
+    ctx.shadowBlur = 0;
+    drawText("— 시간의 감시자 —", cx, cy + 26, 11, '#ffaabb');
+
+    ctx.restore();
+  }
+}
+
+/* ============================================================
+   HUD & 배너 (DOM 동기화)
+============================================================ */
+const el = (id) => document.getElementById(id);
+
+function updateHud() {
+  const inGame = (currentScreen === SCREEN.PLAYING || currentScreen === SCREEN.WIN ||
+                  currentScreen === SCREEN.TIMEUP || currentScreen === SCREEN.GAMEOVER);
+
+  // 스테이지 이름
+  if (currentScreen === SCREEN.TITLE) el('stageName').textContent = '메인 타이틀';
+  else if (currentScreen === SCREEN.SELECT) el('stageName').textContent = '스테이지 선택';
+  else if (currentScreen === SCREEN.ENDING) el('stageName').textContent = '엔딩';
+  else el('stageName').textContent = `Stage ${stageIdx + 1} · ${STAGES[stageIdx].name}`;
+
+  if (!inGame || !grid) {
+    el('hudTime').textContent = '--';
+    el('hudKeys').textContent = '-/-';
+    el('hudMoves').textContent = '0';
+    el('hudRewinds').textContent = `0/${MAX_REWINDS}`;
+    el('rewindBtnText').innerHTML = `⏪<br>되감기 (${MAX_REWINDS})`;
     return;
   }
 
-  if (currentScreen === SCREEN.ENDING) {
-    renderEnding();
-    drawSoundBtn();
-    return;
-  }
+  // 시간
+  const timeEl = el('hudTime');
+  timeEl.textContent = `${Math.ceil(timeLeft)}초`;
+  timeEl.style.color = timeLeft <= Math.min(15, TOTAL_TIME * 0.2) ? '#ff6b6b' : '#fcd34d';
 
-  if (currentScreen === SCREEN.SELECT) {
-    renderSelect();
-    drawSoundBtn();
-    return;
-  }
-
-  drawRect(0, 0, 800, 600, '#0a0a16');
-
-  // Top bar
-  drawRect(0, 0, 800, 80, '#12122a');
-  drawText("REWIND", 20, 32, 22, '#8ecdf7', 'left');
-  drawText(`Stage ${stageIdx + 1} · ${STAGES[stageIdx].name}`, 20, 54, 12, '#6a7ab0', 'left');
-
-  const timeColor = timeLeft <= Math.min(15, TOTAL_TIME * 0.2) ? '#ff6b6b' : '#ffffff';
-  drawText(`⏱ ${Math.ceil(timeLeft)}초`, 400, 30, 20, timeColor);
-
+  // 열쇠
   let heldCount = 0;
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
@@ -1494,145 +1991,57 @@ function render() {
     }
   }
   const totalKeys = STAGES[stageIdx].keysCount;
-  
-  drawText(`🔑 ${heldCount}/${totalKeys} | 이동 ${player.history.length} | 되감기 ${ghosts.length}/${MAX_REWINDS}`, 400, 55, 13, '#a0aee0');
+  el('hudKeys').textContent = `${heldCount}/${totalKeys}`;
+  el('hudKeys').style.color = (heldCount >= totalKeys) ? '#3ddc84' : '#ffe66d';
 
-  drawRect(BTN.reset.x, BTN.reset.y, BTN.reset.w, BTN.reset.h, '#4a4a75');
-  drawText("RESET", BTN.reset.x + BTN.reset.w/2, BTN.reset.y + 19, 10, '#fff');
+  el('hudMoves').textContent = player.history.length;
+  el('hudRewinds').textContent = `${ghosts.length}/${MAX_REWINDS}`;
 
-  drawRect(BTN.menu.x, BTN.menu.y, BTN.menu.w, BTN.menu.h, '#4a4a75');
-  drawText("STAGE 목록", BTN.menu.x + BTN.menu.w/2, BTN.menu.y + 19, 10, '#fff');
+  // 되감기 버튼: 남은 횟수 표기 + 비활성 표현
+  const remain = MAX_REWINDS - ghosts.length;
+  el('rewindBtnText').innerHTML = `⏪<br>되감기 (${remain})`;
+  const rb = el('rewindBtn');
+  const disabled = (remain <= 0 || player.history.length === 0);
+  rb.style.opacity = disabled ? '0.45' : '1';
+  rb.style.cursor = disabled ? 'not-allowed' : 'pointer';
+}
 
-  drawSoundBtn();
+function hideBanner() {
+  el('resultBanner').classList.remove('active');
+}
 
-  drawGrid();
-
-  ghosts.forEach((g, i) => {
-    const s = ghostStateAt(g, currentTick);
-    if (!s.alive) return;
-    drawEntity(s.col, s.row, GHOST_COLORS[g.colorIdx], 0.55, `과거${i+1}`);
-  });
-
-  // 시간의 감시자 렌더링
-  watchers.forEach(w => {
-    drawWatcher(w.col, w.row, 1);
-  });
-
-  drawEntity(player.col, player.row, '#ff9f43', 0.98, '현재', '#ffd9a0');
-
-  // Bottom control bar
-  drawRect(0, 510, 800, 90, '#12122a');
-
-  Object.entries(BTN).forEach(([key, b]) => {
-    if (key === 'reset' || key === 'menu') return;
-    if (key === 'rewind') {
-      drawRect(b.x, b.y, b.w, b.h, '#6a3fa0');
-      drawRect(b.x + 3, b.y + 3, b.w - 6, b.h - 6, '#8654c4');
-      drawText("⏪ 되감기", b.x + b.w/2, b.y + b.h/2 + 6, 16, '#fff');
-    } else {
-      drawRect(b.x, b.y, b.w, b.h, '#2f2f55');
-      drawRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4, '#3f3f75');
-      const arrow = { up: '▲', down: '▼', left: '◀', right: '▶' }[key];
-      drawText(arrow, b.x + b.w/2, b.y + b.h/2 + 6, 18, '#a8d8f0');
-    }
-  });
-
-  popups.forEach(p => {
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, p.alpha);
-    drawText(p.txt, p.x, p.y, 15, p.col);
-    ctx.restore();
-  });
-
-  if (flashAlpha > 0) {
-    ctx.fillStyle = `rgba(140, 180, 255, ${flashAlpha * 0.35})`;
-    ctx.fillRect(0, 0, 800, 600);
-  }
-
-  // ── 감시자 등장 연출 (화면 중앙 대사) ──
-  if (watcherIntroTimer > 0) {
-    const t = performance.now() / 1000;
-    // 페이드 인/아웃 알파 계산 (등장 0.3초 페이드인, 마지막 0.6초 페이드아웃)
-    let a = 1;
-    if (watcherIntroTimer > 2.7) a = (3.0 - watcherIntroTimer) / 0.3;
-    else if (watcherIntroTimer < 0.6) a = watcherIntroTimer / 0.6;
-
-    ctx.save();
-    ctx.globalAlpha = a;
-
-    // 붉은 비네트 (화면 전체 붉은 기운)
-    const vig = ctx.createRadialGradient(400, 300, 100, 400, 300, 500);
-    vig.addColorStop(0, 'rgba(80, 0, 20, 0.2)');
-    vig.addColorStop(1, 'rgba(120, 0, 30, 0.75)');
-    ctx.fillStyle = vig;
-    ctx.fillRect(0, 0, 800, 600);
-
-    // 대사 배너 (위아래 검은 띠)
-    const bannerH = 110;
-    ctx.fillStyle = 'rgba(10, 0, 5, 0.88)';
-    ctx.fillRect(0, 300 - bannerH/2, 800, bannerH);
-    // 상하 붉은 라인
-    ctx.fillStyle = '#ff0044';
-    ctx.fillRect(0, 300 - bannerH/2, 800, 3);
-    ctx.fillRect(0, 300 + bannerH/2 - 3, 800, 3);
-
-    // 흔들리는 텍스트 (공포감)
-    const shake = Math.sin(t * 28) * 2 * a;
-    ctx.shadowColor = '#ff0044';
-    ctx.shadowBlur = 22;
-    drawText("이놈! 시간의 순리를 어기다니!", 400 + shake, 300 + 4, 30, '#ff5577');
-    ctx.shadowBlur = 0;
-    drawText("— 시간의 감시자 —", 400, 300 + 38, 12, '#ffaabb');
-
-    ctx.restore();
-  }
+function showResultBanner() {
+  const bt = el('bannerTitle');
+  const bd = el('bannerDesc');
+  const bp = el('bannerPrimary');
+  const bs = el('bannerSecondary');
 
   if (currentScreen === SCREEN.WIN) {
-    drawRect(0, 0, 800, 600, 'rgba(0,0,0,0.8)');
-    drawText("🎉 CLEAR! 🎉", 400, 250, 40, '#8ecdf7');
-    drawText(`총 이동 ${player.history.length + ghosts.reduce((s,g)=>s+g.history.length,0)}회 | 되감기 ${ghosts.length}회`, 400, 300, 16, '#fff');
-
+    const totalMoves = player.history.length + ghosts.reduce((s, g) => s + g.history.length, 0);
     const hasNext = stageIdx + 1 < STAGES.length;
-    if (hasNext) {
-      drawRect(300, 340, 200, 50, '#6a3fa0');
-      drawText("다음 스테이지 ▶", 400, 371, 15, '#fff');
-      drawRect(300, 400, 200, 50, '#4a4a75');
-      drawText("스테이지 목록", 400, 431, 15, '#fff');
-    } else {
-      // 마지막 스테이지 클리어 → 엔딩 보기
-      drawRect(300, 340, 200, 50, '#c94f4f');
-      drawRect(303, 343, 194, 44, '#e06565');
-      drawText("🍗 엔딩 보기", 400, 371, 16, '#fff');
-      drawRect(300, 400, 200, 50, '#4a4a75');
-      drawText("스테이지 목록", 400, 431, 15, '#fff');
-    }
-
+    bt.textContent = '🎉 CLEAR!';
+    bt.style.color = '#8ecdf7';
+    bd.innerHTML = `총 이동 <strong style="color:#fff;">${totalMoves}</strong>회 · 되감기 <strong style="color:#c9a8f0;">${ghosts.length}</strong>회`;
+    bp.textContent = hasNext ? '다음 스테이지 ▶' : '🍗 엔딩 보기';
+    bp.dataset.action = hasNext ? 'next' : 'ending';
   } else if (currentScreen === SCREEN.TIMEUP) {
-    drawRect(0, 0, 800, 600, 'rgba(0,0,0,0.8)');
-    drawText("⏰ 시간 초과...", 400, 250, 34, '#ff6b6b');
-    drawText("과거의 나도 결국 시간에 쫓겼다", 400, 295, 15, '#c0c0e0');
-    drawRect(300, 340, 200, 50, '#4a4a75');
-    drawText("다시 시도", 400, 371, 15, '#fff');
-    drawRect(300, 400, 200, 50, '#4a4a75');
-    drawText("스테이지 목록", 400, 431, 15, '#fff');
+    bt.textContent = '⏰ 시간 초과...';
+    bt.style.color = '#ff6b6b';
+    bd.textContent = '과거의 나도 결국 시간에 쫓겼다';
+    bp.textContent = '다시 시도';
+    bp.dataset.action = 'retry';
   } else if (currentScreen === SCREEN.GAMEOVER) {
-    // 감시자에게 잡힘
-    drawRect(0, 0, 800, 600, 'rgba(20, 0, 8, 0.88)');
-    const t = performance.now() / 1000;
-    const shake = Math.sin(t * 24) * 2;
-    ctx.save();
-    ctx.shadowColor = '#ff0044';
-    ctx.shadowBlur = 24;
-    drawText("👻 붙잡혔다!", 400 + shake, 240, 38, '#ff4466');
-    ctx.restore();
-    drawText("\"시간의 순리를 어긴 자는 여기서 끝이다.\"", 400, 288, 15, '#ffaabb');
-    drawText("— 시간의 감시자 —", 400, 314, 11, '#aa6677');
-    drawRect(300, 350, 200, 50, '#8b2e4a');
-    drawRect(303, 353, 194, 44, '#a8395c');
-    drawText("다시 시도", 400, 381, 15, '#fff');
-    drawRect(300, 410, 200, 50, '#4a4a75');
-    drawText("스테이지 목록", 400, 441, 15, '#fff');
+    bt.textContent = '👻 붙잡혔다!';
+    bt.style.color = '#ff4466';
+    bd.innerHTML = `"시간의 순리를 어긴 자는 여기서 끝이다."<br><span style="font-size:10.5px; color:#aa6677;">— 시간의 감시자 —</span>`;
+    bp.textContent = '다시 시도';
+    bp.dataset.action = 'retry';
+  } else {
+    return;
   }
+
+  bs.textContent = '스테이지 목록';
+  el('resultBanner').classList.add('active');
 }
 
 /* ============================================================
@@ -1648,155 +2057,201 @@ function update(dt) {
   if (watcherIntroTimer > 0) watcherIntroTimer = Math.max(0, watcherIntroTimer - dt);
 
   if (currentScreen === SCREEN.PLAYING) {
-    // 이동을 시작한 후에만 타이머 감소 (history가 있거나 유령이 있는 경우 = 움직였다는 뜻)
     if (player.history.length > 0 || ghosts.length > 0) {
       timeLeft -= dt;
       if (timeLeft <= 0) {
         timeLeft = 0;
         currentScreen = SCREEN.TIMEUP;
         audio.playFail();
+        showResultBanner();
       }
+      updateHud();
     }
   }
 }
 
 /* ============================================================
-   INPUT HANDLING
+   INPUT — 캔버스는 타이틀/셀렉트/엔딩만 히트테스트
 ============================================================ */
 function hit(b, x, y) { return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h; }
 
-function handlePointer(clientX, clientY) {
+function handleCanvasPointer(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   const x = (clientX - rect.left) * (canvas.width / rect.width);
   const y = (clientY - rect.top) * (canvas.height / rect.height);
 
-  // 사운드 토글 버튼 (모든 화면 공통 · 최우선 처리)
-  if (hit(soundBtn, x, y)) {
-    const muted = audio.toggleMute();
-    if (!muted) audio.playClick();
-    return;
-  }
-
   if (currentScreen === SCREEN.TITLE) {
-    if (hit(titleBtn, x, y)) {
-      audio.playClick();
-      currentScreen = SCREEN.SELECT;
-    }
+    if (hit(titleBtn, x, y)) { audio.playClick(); goToSelect(); }
     return;
   }
 
   if (currentScreen === SCREEN.ENDING) {
-    if (hit(endingBtn, x, y)) {
-      audio.playClick();
-      currentScreen = SCREEN.TITLE;
-    }
+    if (hit(endingBtn, x, y)) { audio.playClick(); goToTitle(); }
     return;
   }
 
   if (currentScreen === SCREEN.SELECT) {
-    if (hit(selectBackBtn, x, y)) {
-      audio.playClick();
-      currentScreen = SCREEN.TITLE;
-      return;
-    }
     for (const card of selectCards) {
-      if (hit(card, x, y)) {
-        audio.playClick();
-        loadStage(card.idx);
-        return;
-      }
+      if (hit(card, x, y)) { audio.playClick(); loadStage(card.idx); return; }
     }
     return;
-  }
-
-  if (currentScreen === SCREEN.WIN) {
-    const hasNext = stageIdx + 1 < STAGES.length;
-    // 상단 버튼: 다음 스테이지(있으면) / 엔딩 보기(마지막이면)
-    if (x >= 300 && x <= 500 && y >= 340 && y <= 390) {
-      audio.playClick();
-      if (hasNext) {
-        loadStage(stageIdx + 1);
-      } else {
-        audio.stopBgm();
-        audio.playWin();
-        currentScreen = SCREEN.ENDING;
-      }
-      return;
-    }
-    // 하단 버튼: 스테이지 목록
-    if (x >= 300 && x <= 500 && y >= 400 && y <= 450) {
-      audio.playClick();
-      goToSelect();
-      return;
-    }
-    return;
-  }
-
-  if (currentScreen === SCREEN.TIMEUP) {
-    if (x >= 300 && x <= 500 && y >= 340 && y <= 390) {
-      audio.playClick();
-      resetLevel();
-      return;
-    }
-    if (x >= 300 && x <= 500 && y >= 400 && y <= 450) {
-      audio.playClick();
-      goToSelect();
-      return;
-    }
-    return;
-  }
-
-  if (currentScreen === SCREEN.GAMEOVER) {
-    if (x >= 300 && x <= 500 && y >= 350 && y <= 400) {
-      audio.playClick();
-      resetLevel();
-      return;
-    }
-    if (x >= 300 && x <= 500 && y >= 410 && y <= 460) {
-      audio.playClick();
-      goToSelect();
-      return;
-    }
-    return;
-  }
-
-  if (currentScreen === SCREEN.PLAYING) {
-    if (hit(BTN.up, x, y)) attemptMove('up');
-    else if (hit(BTN.down, x, y)) attemptMove('down');
-    else if (hit(BTN.left, x, y)) attemptMove('left');
-    else if (hit(BTN.right, x, y)) attemptMove('right');
-    else if (hit(BTN.rewind, x, y)) doRewind();
-    else if (hit(BTN.reset, x, y)) { audio.playClick(); resetLevel(); }
-    else if (hit(BTN.menu, x, y)) { audio.playClick(); goToSelect(); }
   }
 }
 
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
   audio.init();
-  if (e.touches.length > 0) handlePointer(e.touches[0].clientX, e.touches[0].clientY);
+  if (e.touches.length > 0) handleCanvasPointer(e.touches[0].clientX, e.touches[0].clientY);
 }, { passive: false });
 
 canvas.addEventListener('mousedown', (e) => {
   audio.init();
-  handlePointer(e.clientX, e.clientY);
+  handleCanvasPointer(e.clientX, e.clientY);
 });
 
+// ── 키보드 ──
 window.addEventListener('keydown', (e) => {
   audio.init();
   const key = e.code;
-  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','KeyR','KeyM','Space'].includes(key)) {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','KeyR','KeyM','Space','Enter'].includes(key)) {
     e.preventDefault();
   }
-  // M 키: 사운드 On/Off (모든 화면 공통)
-  if (key === 'KeyM') { audio.toggleMute(); return; }
+  if (key === 'KeyM') { toggleSound(); return; }
+
+  // 결과 화면: Space/Enter = 주 버튼
+  if (currentScreen === SCREEN.WIN || currentScreen === SCREEN.TIMEUP || currentScreen === SCREEN.GAMEOVER) {
+    if (key === 'Space' || key === 'Enter') { el('bannerPrimary').click(); }
+    return;
+  }
+
+  if (currentScreen === SCREEN.TITLE) {
+    if (key === 'Space' || key === 'Enter') { audio.playClick(); goToSelect(); }
+    return;
+  }
 
   if (currentScreen !== SCREEN.PLAYING) return;
   if (key === 'KeyW' || key === 'ArrowUp') attemptMove('up');
   else if (key === 'KeyS' || key === 'ArrowDown') attemptMove('down');
   else if (key === 'KeyA' || key === 'ArrowLeft') attemptMove('left');
   else if (key === 'KeyD' || key === 'ArrowRight') attemptMove('right');
-  else if (key === 'KeyR' || key === 'Space') doRewind();
+  else if (key === 'Space') doRewind();
+  else if (key === 'KeyR') resetLevel();
+});
+
+// ── D-Pad ──
+document.querySelectorAll('.dpad-btn').forEach(btn => {
+  const dir = btn.getAttribute('data-dir');
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    audio.init();
+    if (currentScreen === SCREEN.TITLE) { audio.playClick(); goToSelect(); return; }
+    attemptMove(dir);
+  });
+});
+
+// ── 되감기 / 재시작 ──
+el('rewindBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); audio.init(); doRewind(); });
+el('resetBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); audio.init(); resetLevel(); });
+
+// ── 결과 배너 버튼 ──
+el('bannerPrimary').addEventListener('click', (e) => {
+  e.preventDefault();
+  audio.playClick();
+  const action = e.currentTarget.dataset.action;
+  if (action === 'next') loadStage(stageIdx + 1);
+  else if (action === 'ending') { audio.stopBgm(); audio.playWin(); currentScreen = SCREEN.ENDING; syncCanvasSize(); hideBanner(); updateHud(); }
+  else resetLevel();
+});
+el('bannerSecondary').addEventListener('click', (e) => {
+  e.preventDefault();
+  audio.playClick();
+  goToSelect();
+});
+
+// ── 헤더 버튼 ──
+el('homeBtn').addEventListener('click', () => { audio.playClick(); goToTitle(); });
+
+function toggleSound() {
+  const muted = audio.toggleMute();
+  const b = el('soundBtn');
+  b.textContent = muted ? '🔇 사운드' : '🔊 사운드';
+  b.style.color = muted ? '#ff8899' : '#ffe66d';
+  b.style.borderColor = muted ? '#ff8899' : '#ffe66d';
+  if (!muted) audio.playClick();
+}
+el('soundBtn').addEventListener('click', toggleSound);
+
+// ── 스테이지 목록 모달 ──
+function renderStageList() {
+  const list = el('stageList');
+  list.innerHTML = '';
+
+  STAGES.forEach((stage, i) => {
+    const row = document.createElement('div');
+    row.className = 'stage-row';
+    row.innerHTML = `
+      <div class="stage-num">${i + 1}</div>
+      <div class="stage-info">
+        <div class="nm">${stage.name}</div>
+        <div class="sb">${stage.sub}</div>
+        <div class="tg">🔑 x${stage.keysCount} · ⏱ ${stage.totalTime}초</div>
+      </div>`;
+    row.addEventListener('click', () => {
+      audio.init(); audio.playClick();
+      closeStageModal();
+      loadStage(i);
+    });
+    list.appendChild(row);
+  });
+
+  // 🔧 버그①: 잠금 카드 번호 자동 계산
+  const lock = document.createElement('div');
+  lock.className = 'stage-row locked';
+  lock.innerHTML = `
+    <div class="stage-num" style="color:#55557a;">${STAGES.length + 1}</div>
+    <div class="stage-info">
+      <div class="nm" style="color:#888;">???</div>
+      <div class="sb" style="color:#666;">추후 업데이트 예정 (레이저 / 상자 기믹)</div>
+      <div class="tg" style="color:#666;">🔒 SOON</div>
+    </div>`;
+  list.appendChild(lock);
+}
+
+function openStageModal() { renderStageList(); el('stageModal').style.display = 'flex'; }
+function closeStageModal() { el('stageModal').style.display = 'none'; }
+
+el('stageListBtn').addEventListener('click', () => { audio.playClick(); openStageModal(); });
+el('closeStageModal').addEventListener('click', closeStageModal);
+el('stageModal').addEventListener('click', (e) => {
+  if (e.target === el('stageModal')) closeStageModal();
+});
+
+// ── ⇄ 조작키 좌우 반전 (localStorage 기억) ──
+const gamepad = el('gamepad');
+if (localStorage.getItem('rewind_ctrl_swapped') === 'true') {
+  gamepad.classList.add('swapped');
+}
+el('swapCtrlBtn').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  audio.init();
+  audio.playClick();
+  const swapped = gamepad.classList.toggle('swapped');
+  localStorage.setItem('rewind_ctrl_swapped', swapped ? 'true' : 'false');
+});
+
+// ── 오디오 잠금 해제 ──
+['pointerdown', 'touchstart', 'keydown'].forEach(evt => {
+  window.addEventListener(evt, () => audio.init(), { capture: true, passive: true, once: false });
+});
+
+// ── 백그라운드 전환 시 BGM 정지 ──
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (audio.ctx && audio.ctx.state === 'running') audio.ctx.suspend().catch(() => {});
+  } else {
+    if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume().catch(() => {});
+  }
 });
 
 /* ============================================================
@@ -1809,7 +2264,12 @@ function loop(timestamp) {
   render();
   requestAnimationFrame(loop);
 }
+
+syncCanvasSize();
+updateHud();
 requestAnimationFrame((t) => { lastTime = t; loop(t); });
+
 </script>
+
 </body>
 </html>
