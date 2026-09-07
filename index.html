@@ -22,6 +22,11 @@
       #070714;
   }
 
+  /* 폰 화면에서는 좌우 여백을 최소화해 꽉 차게 표시 */
+  @media (max-width: 480px) {
+    #app { padding: 16px 6px 20px; }
+  }
+
   /* ══ 딸깍 게임사 로고 & 헤더 ══ */
   .company-header {
     display: flex; flex-direction: column; align-items: center; gap: 6px;
