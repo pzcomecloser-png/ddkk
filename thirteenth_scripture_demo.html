@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>열세 번째 성서 — DEMO</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin:0; min-height:100%; background:#080808; color:#ddd; font-family:"Courier New", monospace; }
+  body { display:flex; justify-content:center; padding:18px; }
+  button { font:inherit; }
+  #game { width:min(1180px,100%); min-height:720px; border:1px solid #444; background:#111; box-shadow:0 0 0 5px #050505, 0 0 30px #000; }
+  header { height:66px; border-bottom:1px solid #444; display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:#0c0c0c; }
+  .title { font-weight:bold; letter-spacing:3px; color:#eee; }
+  .status { font-size:12px; color:#777; }
+  .layout { display:grid; grid-template-columns: 1.05fr .95fr; min-height:650px; }
+  #scene { border-right:1px solid #444; padding:22px; position:relative; overflow:hidden; }
+  #terminal { padding:22px; background:#0a0a0a; }
+  .label { color:#777; font-size:11px; letter-spacing:2px; margin-bottom:9px; }
+  .room { height:250px; border:1px solid #333; position:relative; background:
+      linear-gradient(#151515 1px,transparent 1px),
+      linear-gradient(90deg,#151515 1px,transparent 1px);
+    background-size:18px 18px;
+  }
+  .desk { position:absolute; left:13%; bottom:18%; width:72%; height:14%; border:2px solid #777; }
+  .monitor { position:absolute; left:36%; bottom:32%; width:29%; height:26%; border:2px solid #888; background:#050505; }
+  .screen { margin:8px; height:calc(100% - 16px); border:1px solid #555; color:#aaa; padding:9px; font-size:10px; }
+  .books { position:absolute; left:16%; bottom:33%; width:18%; height:18%; display:flex; align-items:flex-end; gap:2px; }
+  .book { width:15%; border:1px solid #aaa; background:#222; }
+  .b1{height:80%}.b2{height:100%}.b3{height:70%}.b4{height:92%}.b5{height:65%}.b6{height:86%}.b7{height:75%}.b8{height:96%}.b9{height:70%}.b10{height:82%}
+  .chair { position:absolute; right:12%; bottom:10%; width:15%; height:23%; border:1px solid #555; }
+  .floor { position:absolute; bottom:0; left:0; right:0; height:12%; border-top:1px solid #333; }
+  .choices { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:18px; }
+  button.choice { background:#151515; border:1px solid #555; color:#ccc; padding:12px; text-align:left; cursor:pointer; }
+  button.choice:hover { background:#222; border-color:#aaa; color:#fff; }
+  button.choice:disabled { color:#444; border-color:#222; cursor:default; }
+  #log { height:280px; overflow:auto; border:1px solid #333; padding:13px; font-size:12px; line-height:1.65; background:#050505; }
+  .msg { margin:0 0 9px; }
+  .user { color:#aaa; }
+  .ai { color:#ccc; }
+  .warn { color:#999; }
+  .red { color:#ddd; text-shadow:0 0 5px #aaa; }
+  #inputRow { display:flex; margin-top:10px; gap:7px; }
+  #query { flex:1; background:#080808; border:1px solid #555; color:#ddd; padding:11px; outline:none; }
+  #ask { background:#ddd; color:#080808; border:0; padding:0 16px; cursor:pointer; font-weight:bold; }
+  #ask:disabled { background:#333; color:#666; cursor:default; }
+  .meter { margin-top:18px; font-size:11px; color:#777; }
+  .bar { height:8px; border:1px solid #444; margin-top:6px; }
+  .fill { height:100%; width:10%; background:#aaa; transition:width .5s; }
+  #overlay { position:fixed; inset:0; background:#000; display:none; align-items:center; justify-content:center; z-index:10; text-align:center; padding:30px; }
+  #overlay .end { max-width:700px; }
+  #overlay h1 { font-size:clamp(24px,5vw,58px); letter-spacing:8px; margin:0 0 28px; }
+  #overlay p { line-height:2; color:#aaa; }
+  .blink { animation:blink 1.2s steps(2,end) infinite; }
+  @keyframes blink { 50%{opacity:.25} }
+  @media(max-width:760px){
+    body{padding:0}.layout{grid-template-columns:1fr}.layout #scene{border-right:0;border-bottom:1px solid #444}.room{height:210px}#log{height:220px}
+  }
+</style>
+</head>
+<body>
+<div id="game">
+<header>
+  <div class="title">《열세 번째 성서》 / FIELD TEST 0.1</div>
+  <div class="status">SUBJECT: CHOI GIL-MUN &nbsp; | &nbsp; DAY 18</div>
+</header>
+<div class="layout">
+<section id="scene">
+  <div class="label">LOCATION / PRIVATE RESEARCH ROOM</div>
+  <div class="room">
+    <div class="monitor"><div class="screen" id="screenText">ARCHIVE TERMINAL<br><br>10 VOLUMES LOADED<br>AI ANALYSIS: READY_</div></div>
+    <div class="books" id="books"></div>
+    <div class="desk"></div><div class="chair"></div><div class="floor"></div>
+  </div>
+  <div class="label" style="margin-top:20px;">INVESTIGATION</div>
+  <div class="choices" id="choices"></div>
+</section>
+
+<section id="terminal">
+  <div class="label">AI / TEXTUAL ANALYSIS ENGINE</div>
+  <div id="log"></div>
+  <div id="inputRow">
+    <input id="query" placeholder="AI에게 질문하세요..." autocomplete="off">
+    <button id="ask">ASK</button>
+  </div>
+  <div class="meter">
+    CORRELATION / PERSONA STABILITY
+    <div class="bar"><div class="fill" id="fill"></div></div>
+  </div>
+</section>
+</div>
+</div>
+
+<div id="overlay">
+  <div class="end">
+    <h1 class="blink">아……</h1>
+    <p>하늘이 갈라졌다.</p>
+    <p>구름 사이로 붉은 빛이 번졌다.</p>
+    <p>그리고 어디선가, 너무 크고 낮은 나팔 소리가 들렸다.</p>
+    <p style="margin-top:35px;">— DEMO END —</p>
+  </div>
+</div>
+
+<script>
+const log = document.getElementById('log');
+const choices = document.getElementById('choices');
+const query = document.getElementById('query');
+const ask = document.getElementById('ask');
+const fill = document.getElementById('fill');
+const screenText = document.getElementById('screenText');
+const overlay = document.getElementById('overlay');
+
+let progress = 0;
+let persona = false;
+let asked = new Set();
+
+const events = {
+  intro: {
+    text: "의뢰받은 지 18일째입니다. 책상 위에는 '이전 메시아'가 남겼다는 성서 10권이 놓여 있습니다. 의뢰 내용은 단순합니다. <b>휴거가 시작되는 정확한 날짜를 찾아라.</b>",
+    opts: [
+      ["10권 전체를 분석한다", "analyze"],
+      ["제1권을 먼저 읽는다", "book1"],
+      ["의뢰인에게 질문한다", "client"]
+    ]
+  },
+  analyze: {
+    text: "AI가 10권의 문장을 분해합니다. 날짜, 지명, 반복되는 단어, 문장 길이, 기록 순서를 대조합니다.",
+    opts: [
+      ["날짜 패턴을 찾는다", "dates"],
+      ["반복 문장을 찾는다", "repeat"],
+      ["모순되는 기록을 찾는다", "contradiction"]
+    ]
+  },
+  book1: {
+    text: "제1권은 일기처럼 보입니다. 그런데 한 문장이 이상합니다.<br><br>「새벽 3시 17분. 문을 세 번 두드렸다. 나는 열지 않았다.」",
+    opts: [
+      ["기록 당시의 실제 사건인지 분석한다", "knock"],
+      ["3시 17분의 의미를 묻는다", "time"]
+    ]
+  },
+  client: {
+    text: "의뢰인은 짧게 대답합니다.<br><br>“날짜만 찾아주십시오. 그 이상은 알 필요가 없습니다.”<br><br>통화가 끊긴 뒤, AI 터미널의 커서가 혼자 한 번 깜빡입니다.",
+    opts: [
+      ["다시 분석으로 돌아간다", "analyze"],
+      ["통화 기록을 확인한다", "call"]
+    ]
+  },
+  dates: {
+    text: "날짜는 일정한 간격으로 반복되지 않습니다. 오히려 <b>아직 발생하지 않은 날짜</b>처럼 보이는 항목들이 섞여 있습니다.",
+    opts: [
+      ["그 날짜들을 현재 날짜와 대조한다", "future"],
+      ["AI에게 예언인지 묻는다", "prophecy"]
+    ]
+  },
+  repeat: {
+    text: "가장 많이 반복되는 문장은 '생각'과 '기록'에 관한 것입니다. AI는 한 문장을 별도로 표시합니다.<br><br>「기록은 생각이 죽은 뒤에도 남는다.」",
+    opts: [
+      ["'생각'의 의미를 분석한다", "thought"],
+      ["숨겨진 데이터가 있는지 찾는다", "hidden"]
+    ]
+  },
+  contradiction: {
+    text: "같은 사건이 서로 다른 날짜에 두 번 기록되어 있습니다. 어느 쪽이 원본인지 판별할 수 없습니다.",
+    opts: [
+      ["작성 순서를 복원한다", "hidden"],
+      ["모순 자체를 AI에게 질문한다", "contradictAsk"]
+    ]
+  },
+  knock: {
+    text: "현재 시각은 02:56입니다. 분석을 계속합니다.",
+    opts: [
+      ["계속 기다린다", "wait"],
+      ["그 문장을 다시 분석한다", "analyze"]
+    ]
+  },
+  time: {
+    text: "AI: '3시 17분은 문맥상 사건의 시간이지만, 반복되는 다른 기록과 직접적인 상관관계는 없습니다.'<br><br>그 순간 벽시계의 초침이 멈춥니다.",
+    opts: [
+      ["시계를 확인한다", "clock"],
+      ["무시하고 분석한다", "analyze"]
+    ]
+  },
+  future: {
+    text: "대조 결과, 한 날짜는 <b>내일</b>입니다. 해당 날짜 뒤에는 같은 문장이 붙어 있습니다.<br><br>「그날, 누군가 나의 생각을 되살릴 것이다.」",
+    opts: [
+      ["이 문장을 메모한다", "note"],
+      ["11권에 대한 기록을 찾는다", "hidden"]
+    ]
+  },
+  prophecy: {
+    text: "AI: '예언으로 분류할 수 없습니다. 예언은 미래 사건을 전제로 하지만, 이 문서들은 발생한 사건을 기록한 형태에 더 가깝습니다.'<br><br>잠시 후 AI가 덧붙입니다.<br>AI: '단, 한 가지 예외가 있습니다.'",
+    opts: [
+      ["예외가 무엇인지 묻는다", "exception"],
+      ["대화 기록을 저장한다", "save"]
+    ]
+  },
+  thought: {
+    text: "AI는 '생각'이라는 단어가 등장할 때마다 문장의 주어가 사라지는 현상을 발견합니다. 마치 누군가의 생각을 기록하면서도 <b>누구의 생각인지 지운 것처럼</b> 보입니다.",
+    opts: [
+      ["저자의 인격을 복원할 수 있는지 묻는다", "personaAsk"],
+      ["분석을 중단한다", "stop"]
+    ]
+  },
+  hidden: {
+    text: "삭제된 아카이브에서 파일 두 개가 발견됩니다.<br><br><b>VOLUME_11 / VOLUME_12</b><br><br>공식 목록에는 존재하지 않습니다. 두 파일 모두 암호화되어 있습니다.",
+    opts: [
+      ["11권을 복호화한다", "vol11"],
+      ["12권을 복호화한다", "vol12"]
+    ]
+  },
+  knock: {
+    text: "현재 시각은 03:16입니다.<br><br>연구실은 조용합니다.",
+    opts: [
+      ["1분 기다린다", "knock17"],
+      ["분석을 계속한다", "analyze"]
+    ]
+  },
+  wait: {
+    text: "03:17.<br><br><b>똑. 똑. 똑.</b><br><br>문 밖입니다.",
+    opts: [
+      ["문을 연다", "openDoor"],
+      ["열지 않는다", "dontOpen"]
+    ]
+  },
+  clock: {
+    text: "벽시계가 다시 움직입니다. 현재 시각은 03:17입니다.<br><br>터미널에는 새로운 한 줄이 생겨 있습니다.<br><br>「나는 문을 열지 않았다.」",
+    opts: [
+      ["이 문장을 검색한다", "searchSentence"],
+      ["문을 확인한다", "door"]
+    ]
+  },
+  future: {
+    text: "대조 결과, 한 날짜는 내일입니다. 해당 날짜 뒤에는 같은 문장이 붙어 있습니다.<br><br>「그날, 누군가 나의 생각을 되살릴 것이다.」",
+    opts: [["11권에 대한 기록을 찾는다","hidden"]]
+  },
+  exception: {
+    text: "AI: '저자 자신에 대한 기록입니다. 다른 사람의 기록이 아니라, 기록자 자신의 사고 구조를 설명합니다.'<br><br>AI가 멈춥니다.<br>AI: '이건 조금 이상합니다.'",
+    opts: [["왜 이상한지 묻는다","why"],["페르소나 복원을 시험한다","personaAsk"]]
+  },
+  personaAsk: {
+    text: "최길문은 잠시 고민합니다.<br><br>“그냥 해보자.”<br><br>죽은 메시아의 사고방식을 AI가 얼마나 그럴듯하게 복원할 수 있는지 시험해 보기로 합니다. 별다른 의미는 없었습니다. 적어도, 그때까지는.",
+    opts: [["AI에 질문한다","persona"],["시험을 취소한다","stop"]]
+  },
+  vol11: {
+    text: "11권에는 문장이 거의 없습니다. 대신 질문과 답변의 흔적이 반복됩니다.<br><br>질문: <i>“당신은 누구인가?”</i><br>답: <i>“내가 누구였는지는 중요하지 않다.”</i>",
+    opts: [["12권을 연다","vol12"],["이 패턴을 AI에 입력한다","personaAsk"]]
+  },
+  vol12: {
+    text: "12권의 마지막 페이지에는 단 한 줄이 있습니다.<br><br><b>「나의 생각이 되살아날 때까지, 마지막 기록은 쓰이지 않는다.」</b>",
+    opts: [["이 문장을 AI에 입력한다","personaAsk"],["13권을 만들 수 있는지 시험한다","create13"]]
+  },
+  persona: {
+    text: "AI가 10권과 11·12권의 패턴을 바탕으로 가상의 응답자를 생성합니다.<br><br><b>PERSONA: PREVIOUS MESSIAH</b><br>상태: 불안정<br><br>AI: “질문하십시오.”",
+    opts: [["“휴거 날짜가 언제입니까?”","askDate"],["“당신은 정말 메시아입니까?”","askWho"]]
+  },
+  askDate: {
+    text: "PERSONA: “날짜를 말할 수 없습니다.”<br><br>최길문: “왜?”<br><br>PERSONA: “마지막 기록이 아직 완성되지 않았기 때문입니다.”",
+    opts: [["“그럼 마지막 기록을 어떻게 완성합니까?”","askFinal"],["세션을 종료한다","stop"]]
+  },
+  askWho: {
+    text: "PERSONA: “당신이 생각하는 메시아의 정의를 먼저 말하십시오.”<br><br>최길문은 한참을 바라보다가 웃습니다.<br>“이거 그냥 내가 만든 거잖아.”",
+    opts: [["“마지막 성서를 쓴다면?”","askFinal"],["종료한다","stop"]]
+  },
+  askFinal: {
+    text: "PERSONA가 긴 문장을 생성합니다. 대부분은 기존 성서의 문체를 닮았습니다.<br><br>마지막에 새로운 문장이 하나 나타납니다.<br><br><b>「내 생각이 되살아나는 그때, 세계의 휴거가 시작된다.」</b>",
+    opts: [["이 문장을 저장한다","create13"],["삭제한다","delete13"]]
+  },
+  create13: {
+    text: "최길문은 생성된 문장을 하나의 문서로 정리합니다.<br><br><b>VOLUME_13 / FINAL RECORD</b><br><br>그는 이것이 꽤 그럴듯한 사기 종교의 마지막 경전이 될 거라고 생각합니다.",
+    opts: [["13권을 의뢰인에게 넘긴다","handoff"]]
+  },
+  delete13: {
+    text: "삭제 버튼을 누릅니다.<br><br>화면이 잠깐 검게 변합니다.<br><br>그리고 같은 문장이 다시 나타납니다.",
+    opts: [["다시 저장한다","create13"],["터미널을 끈다","stop"]]
+  },
+  handoff: {
+    text: "책을 넘긴 뒤 의뢰인은 아무 말 없이 봉투를 건넵니다. 최길문은 웃으며 연구실을 나옵니다.<br><br>“이 돈이면 동남아 한 달은 놀겠네.”<br><br>건물 밖. 밤공기가 차갑습니다.",
+    opts: [["집으로 돌아간다","ending"],["한 번 뒤를 돌아본다","ending"]]
+  },
+  ending: {
+    text: "차에 올라탄 순간입니다.<br><br>아주 멀리서, 낮고 거대한 소리가 들립니다.<br><br><b>우우우우우우우—</b>",
+    opts: [["하늘을 본다","final"]]
+  }
+};
+
+function add(text, cls="ai"){
+  const p=document.createElement('p'); p.className="msg "+cls; p.innerHTML=text; log.appendChild(p); log.scrollTop=log.scrollHeight;
+}
+function render(key){
+  const e=events[key];
+  choices.innerHTML="";
+  add(e.text);
+  e.opts.forEach(([label,next])=>{
+    const b=document.createElement('button'); b.className="choice"; b.textContent=label;
+    b.onclick=()=>{ b.disabled=true; progress=Math.min(100,progress+7); fill.style.width=progress+"%"; render(next); };
+    choices.appendChild(b);
+  });
+  screenText.innerHTML = key==="final" ? "SIGNAL LOST<br><br>SKY: RED<br>STATUS: UNKNOWN_" :
+    `ARCHIVE TERMINAL<br><br>10 VOLUMES LOADED<br>ANOMALY INDEX: ${Math.floor(progress/8)}<br>AI ANALYSIS: ${persona?"PERSONA ACTIVE":"RUNNING"}_`;
+}
+function askAI(){
+  const q=query.value.trim(); if(!q)return;
+  add("USER: "+escapeHtml(q),"user"); query.value="";
+  ask.disabled=true;
+  setTimeout(()=>{
+    let response;
+    const lower=q.toLowerCase();
+    if(lower.includes("휴거")||lower.includes("날짜")) response="AI: 날짜 데이터의 직접적 근거는 없습니다. 그러나 '마지막 기록'과 '생각의 복원' 사이에 높은 상관관계가 있습니다.";
+    else if(lower.includes("메시아")||lower.includes("누구")) response="AI: 현재 데이터로는 인격의 진위를 판단할 수 없습니다. 다만 이전 메시아의 문체와 사고 패턴을 모사하는 것은 가능합니다.";
+    else if(lower.includes("예언")) response="AI: 예언이라고 단정할 수 없습니다. 기록처럼 보이는 미래 참조가 존재합니다.";
+    else response="AI: 입력된 질문과 기존 기록 사이에 새로운 상관관계가 발견되었습니다. 계속 조사하십시오.";
+    add(response);
+    progress=Math.min(100,progress+4); fill.style.width=progress+"%"; ask.disabled=false;
+  },650);
+}
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+ask.onclick=askAI;
+query.addEventListener("keydown",e=>{if(e.key==="Enter")askAI();});
+
+const books=document.getElementById('books');
+for(let i=1;i<=10;i++){let d=document.createElement('div');d.className="book b"+i;books.appendChild(d);}
+render("intro");
+
+const oldRender=render;
+render=function(key){
+  if(key==="final"){
+    choices.innerHTML="";
+    add("하늘을 올려다봅니다.","user");
+    setTimeout(()=>overlay.style.display="flex",1100);
+    return;
+  }
+  if(key==="openDoor"){ add("문을 엽니다. 아무도 없습니다."); return oldRender("analyze"); }
+  if(key==="dontOpen"){ add("문을 열지 않습니다. 세 번의 노크가 멈춥니다."); return oldRender("clock"); }
+  if(key==="knock17"){ add("03:17."); return oldRender("wait"); }
+  if(key==="searchSentence"){ add("검색 결과: 동일한 문장이 제4권, 제7권, 그리고 존재하지 않는 제12권에서 발견됩니다."); return oldRender("hidden"); }
+  if(key==="door"){ add("문손잡이는 차갑습니다."); return oldRender("hidden"); }
+  if(key==="note"){ add("메모 저장 완료."); return oldRender("hidden"); }
+  if(key==="save"){ add("대화 기록 저장 완료."); return oldRender("personaAsk"); }
+  if(key==="why"){ add("AI: '제가 방금 생성한 문장이 원본 데이터에 존재하지 않습니다.'"); return oldRender("personaAsk"); }
+  if(key==="stop"){ add("분석을 중단합니다. 하지만 터미널의 커서는 계속 깜빡입니다."); return; }
+  oldRender(key);
+};
+</script>
+</body>
+</html>
