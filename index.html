@@ -1,3 +1,12 @@
+요청하신 **10번째 게임 "창고담당 김대리" (레트로 창고 퍼즐)**를 추가하고, 첨부해주신 도트 캐릭터(갈색 머리, 파란 상의, 주황/흰색 사원증, 따봉 손짓)를 24×24 픽셀 캔버스 아이콘으로 정밀 구현하여 반영한 전체 코드입니다.
+
+링크 파일명은 관례에 맞춰 `warehouse_kim.html`(또는 원하시는 파일명)로 지정하실 수 있도록 구성했습니다.
+
+---
+
+### 수정된 전체 `index.html` 코드
+
+```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -61,6 +70,621 @@
   }
 
   .page-title {
+    color: #ffe15a; font-size: 13px; font-weight: 900;
+    letter-spacing: 2px; text-shadow: 1px 1px 0 #000;
+    margin-top: 4px;
+  }
+
+  /* ══ 게임 리스트 ══ */
+  .card-list {
+    display: flex; flex-direction: column; gap: 12px;
+    width: 100%; max-width: 380px;
+    padding: 4px 2px;
+  }
+
+  .game-card {
+    display: flex; align-items: center; gap: 14px;
+    background: #14142c; border: 3px solid #3a3a5c; border-radius: 8px;
+    padding: 10px 14px; text-decoration: none; cursor: pointer;
+    box-shadow: 0 4px 0 #05050f, 0 6px 14px rgba(0,0,0,.55);
+    transition: transform .08s ease, border-color .15s ease;
+  }
+  .game-card:hover {
+    border-color: #00e5ff;
+  }
+  .game-card:active {
+    transform: translateY(3px); box-shadow: 0 1px 0 #05050f;
+  }
+
+  .icon-frame {
+    flex: none; width: 56px; height: 56px; background: #05050f;
+    border: 2px solid #4a4a72; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .icon-frame canvas {
+    width: 46px; height: 46px;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+
+  .card-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .card-title {
+    color: #fff; font-size: 16px; font-weight: 900;
+    letter-spacing: 0.5px; text-shadow: 1px 1px 0 #000;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card-desc {
+    color: #a0a0c8; font-size: 11.5px; font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card-arrow {
+    margin-left: auto; color: #ffe15a; font-size: 18px; font-weight: 900;
+    flex: none; padding-left: 4px;
+  }
+
+  /* ══ 하단 푸터 ══ */
+  .footer-box {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    margin-top: 10px; padding-bottom: 8px;
+  }
+  .footer-hint {
+    color: #6a6a95; font-size: 11px; font-weight: 700; letter-spacing: .5px;
+  }
+  .footer-copy {
+    color: #404060; font-size: 9px; font-family: monospace;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- 딸깍 게임즈 로고 & 헤더 -->
+  <div class="company-header">
+    <div class="logo-box">
+      <div class="logo-canvas-wrap">
+        <canvas id="logoCanvas" width="24" height="24"></canvas>
+      </div>
+      <div class="brand-text">
+        <div class="brand-title">딸깍 게임즈 ⚡</div>
+        <div class="brand-slogan">DDALKKAK · 100% AI RETRO STUDIO</div>
+      </div>
+    </div>
+    <div class="page-title">✦ SELECT CARTRIDGE ✦</div>
+  </div>
+
+  <!-- 전체 게임 카트리지 목록 -->
+  <div class="card-list">
+    <!-- 1. 나 키우기 -->
+    <a class="game-card" href="naup.html">
+      <div class="icon-frame"><canvas id="iconNaup" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">나 키우기</div>
+        <div class="card-desc">육성 시뮬레이션 개그물</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 2. 지구침공 -->
+    <a class="game-card" href="g9att.html">
+      <div class="icon-frame"><canvas id="iconUfo" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">지구침공</div>
+        <div class="card-desc">횡스크롤 액션 슈팅</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 3. 양상치 소녀의 모험 -->
+    <a class="game-card" href="lettuce adventure.html">
+      <div class="icon-frame"><canvas id="iconLettuce" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">양상치 소녀의 모험</div>
+        <div class="card-desc">플랫포머 어드벤처 게임</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 4. 선협전 -->
+    <a class="game-card" href="선협전 v0.0.3.html">
+      <div class="icon-frame"><canvas id="iconSeonhyeop" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">선협전</div>
+        <div class="card-desc">무협 탄막 서바이벌 액션</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 5. 삼국무쌍: 도원의 검 -->
+    <a class="game-card" href="three_kingdoms_slash.html">
+      <div class="icon-frame"><canvas id="iconThreeKingdoms" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">삼국무쌍: 도원의 검</div>
+        <div class="card-desc">2D 도트 핵앤슬래시 무협 액션</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 6. 배틀 쉽 -->
+    <a class="game-card" href="Battleship.html">
+      <div class="icon-frame"><canvas id="iconBattleship" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">배틀 쉽</div>
+        <div class="card-desc">본격 해양 전략 전투</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 7. 세계를 구하자 -->
+    <a class="game-card" href="save_the_world_ver_01.html">
+      <div class="icon-frame"><canvas id="iconSaveWorld" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">세계를 구하자</div>
+        <div class="card-desc">초단편 마왕 토벌 RPG</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 8. 세계를 구하자 2 -->
+    <a class="game-card" href="save_the_world_part2.html">
+      <div class="icon-frame"><canvas id="iconSaveWorld2" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">세계를 구하자 2</div>
+        <div class="card-desc">마왕이 된 전직 용사의 귀환</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 9. REWIND -->
+    <a class="game-card" href="rewind.html">
+      <div class="icon-frame"><canvas id="iconRewind" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">REWIND — 아까의 나야 도와줘</div>
+        <div class="card-desc">시간 되감기 협력 퍼즐</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 10. 창고담당 김대리 (NEW) -->
+    <a class="game-card" href="warehouse_kim.html">
+      <div class="icon-frame"><canvas id="iconKim" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">창고담당 김대리</div>
+        <div class="card-desc">레트로 창고 퍼즐</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+  </div>
+
+  <div class="footer-box">
+    <div class="footer-hint">CLICK TO PLAY</div>
+    <div class="footer-copy">© 2026 DDALKKAK GAMES CORP. ALL AI RIGHTS RESERVED.</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  딸깍 게임즈 로고 & 픽셀아트 아이콘 렌더러 (총 10개)
+// ═══════════════════════════════════════════════════════════════
+
+// 0. 딸깍 게임스 로고
+function drawCompanyLogo(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#060a17';
+  ctx.fillRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#ff007f';
+  ctx.fillRect(14, 2, 2, 2);
+  ctx.fillRect(19, 5, 2, 2);
+  ctx.fillRect(20, 11, 2, 2);
+  ctx.fillStyle = '#00f0ff';
+  ctx.fillRect(16, 3, 2, 2);
+  ctx.fillRect(18, 8, 2, 2);
+
+  ctx.fillStyle = '#ffe600';
+  ctx.fillRect(3, 2, 4, 2);
+  ctx.fillRect(2, 4, 4, 2);
+  ctx.fillRect(1, 6, 7, 2);
+  ctx.fillRect(3, 8, 3, 2);
+  ctx.fillRect(2, 10, 2, 2);
+
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(5, 7, 2, 14);
+  ctx.fillRect(7, 9, 2, 10);
+  ctx.fillRect(9, 11, 2, 8);
+  ctx.fillRect(11, 13, 2, 7);
+  ctx.fillRect(13, 15, 2, 5);
+  ctx.fillRect(15, 17, 2, 3);
+  ctx.fillRect(7, 19, 7, 2);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(6, 8, 1, 12);
+  ctx.fillRect(7, 10, 1, 9);
+  ctx.fillRect(8, 11, 1, 7);
+  ctx.fillRect(9, 12, 1, 6);
+  ctx.fillRect(10, 13, 1, 5);
+  ctx.fillRect(11, 14, 1, 4);
+  ctx.fillRect(12, 15, 1, 3);
+
+  ctx.fillStyle = '#00f0ff';
+  ctx.fillRect(7, 11, 2, 3);
+  ctx.fillRect(9, 13, 2, 2);
+}
+
+// 1. 나 키우기
+function drawNaupIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0,0,24,24);
+
+  ctx.fillStyle = '#ff5a5a'; ctx.fillRect(11, 1, 2, 2);
+  ctx.fillStyle = '#b9c3cf'; ctx.fillRect(11, 3, 2, 3);
+  ctx.fillStyle = '#eef3f8'; ctx.fillRect(7, 6, 10, 7);
+  ctx.fillStyle = '#2b3f66'; ctx.fillRect(9, 7, 6, 4);
+  ctx.fillStyle = '#3a9bff'; ctx.fillRect(10, 8, 1, 1); ctx.fillRect(13, 8, 1, 1);
+  ctx.fillStyle = '#b9c3cf'; ctx.fillRect(10, 13, 4, 1);
+  ctx.fillStyle = '#3a72e0'; ctx.fillRect(6, 14, 12, 6);
+  ctx.fillStyle = '#eef3f8'; ctx.fillRect(9, 16, 6, 3);
+  ctx.fillStyle = '#ffd76a'; ctx.fillRect(10, 17, 1, 1); ctx.fillRect(13, 17, 1, 1);
+  ctx.fillStyle = '#2652a8'; ctx.fillRect(4, 15, 2, 4); ctx.fillRect(18, 15, 2, 4);
+  ctx.fillStyle = '#22315c'; ctx.fillRect(8, 20, 3, 3); ctx.fillRect(13, 20, 3, 3);
+}
+
+// 2. 지구침공
+function drawUfoIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0,0,24,24);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(3, 3, 1, 1); ctx.fillRect(19, 5, 1, 1);
+  ctx.fillRect(20, 15, 1, 1); ctx.fillRect(4, 18, 1, 1);
+  ctx.fillStyle = 'rgba(150,255,180,0.35)';
+  ctx.beginPath();
+  ctx.moveTo(9, 13); ctx.lineTo(15, 13); ctx.lineTo(19, 22); ctx.lineTo(5, 22);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#c3c8e0';
+  ctx.beginPath();
+  ctx.ellipse(12, 9, 5, 4, 0, Math.PI, 0);
+  ctx.fill();
+  ctx.fillStyle = '#8a8fa8'; ctx.fillRect(3, 11, 18, 3);
+  ctx.fillStyle = '#6a6f88'; ctx.fillRect(3, 13, 18, 1);
+  ctx.fillStyle = '#5af06e';
+  ctx.fillRect(5, 12, 1, 1); ctx.fillRect(9, 12, 1, 1);
+  ctx.fillRect(14, 12, 1, 1); ctx.fillRect(18, 12, 1, 1);
+}
+
+// 3. 양상치 소녀
+function drawLettuceIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#4fa348'; ctx.fillRect(6, 2, 12, 9); ctx.fillRect(4, 4, 15, 7);
+  ctx.fillStyle = '#82cf6e'; ctx.fillRect(9, 3, 7, 5); ctx.fillRect(8, 4, 8, 4);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(11, 4, 3, 1); ctx.fillRect(14, 5, 2, 1);
+  ctx.fillStyle = '#ffd0a6'; ctx.fillRect(12, 9, 4, 3);
+  ctx.fillStyle = '#4a2820'; ctx.fillRect(15, 9, 1, 2);
+  ctx.fillStyle = '#ff6b8b'; ctx.fillRect(14, 10, 3, 1);
+  ctx.fillStyle = '#ffc83b'; ctx.fillRect(10, 11, 5, 2);
+  ctx.fillStyle = '#ffd0a6'; ctx.fillRect(8, 13, 2, 3); ctx.fillRect(14, 12, 3, 4);
+  ctx.fillStyle = '#357ae8'; ctx.fillRect(10, 13, 5, 5);
+  ctx.fillStyle = '#2459b8'; ctx.fillRect(12, 14, 2, 2);
+  ctx.fillStyle = '#2459b8'; ctx.fillRect(10, 17, 3, 2);
+  ctx.fillStyle = '#ff9626'; ctx.fillRect(13, 17, 4, 3);
+  ctx.fillStyle = '#ffc83b'; ctx.fillRect(9, 18, 5, 3);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(9, 21, 5, 1);
+}
+
+// 4. 선협전
+function drawSeonhyeopIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#211710'; ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#3d2b1f'; ctx.fillRect(2, 2, 20, 20);
+
+  ctx.fillStyle = '#22c55e';
+  ctx.fillRect(4, 5, 2, 2); ctx.fillRect(18, 6, 2, 2);
+  ctx.fillRect(5, 17, 2, 2);
+  ctx.fillStyle = '#4ade80'; ctx.fillRect(19, 7, 1, 1);
+
+  ctx.fillStyle = '#38bdf8'; ctx.fillRect(4, 8, 3, 1); ctx.fillRect(5, 9, 1, 3);
+  ctx.fillRect(17, 16, 3, 1); ctx.fillRect(18, 14, 1, 3);
+
+  ctx.fillStyle = '#dc2626'; ctx.fillRect(4, 19, 2, 3); ctx.fillRect(5, 18, 2, 2);
+  ctx.fillStyle = '#f59e0b'; ctx.fillRect(6, 15, 4, 3); ctx.fillRect(7, 14, 3, 4);
+
+  ctx.fillStyle = '#38bdf8';
+  ctx.fillRect(8, 12, 4, 4); ctx.fillRect(11, 9, 4, 4);
+  ctx.fillRect(14, 6, 4, 4); ctx.fillRect(17, 3, 4, 4);
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(9, 13, 2, 2); ctx.fillRect(12, 10, 2, 2);
+  ctx.fillRect(15, 7, 2, 2);
+  ctx.fillRect(18, 4, 2, 2);
+  ctx.fillRect(20, 2, 2, 2);
+}
+
+// 5. 삼국무쌍: 도원의 검
+function drawThreeKingdomsIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#2b1418'; ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#4a2220'; ctx.fillRect(2, 2, 20, 20);
+
+  ctx.fillStyle = '#ff8ea8';
+  ctx.fillRect(3, 4, 2, 2); ctx.fillRect(19, 6, 2, 2);
+  ctx.fillRect(5, 17, 2, 2); ctx.fillRect(17, 19, 2, 2);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(4, 4, 1, 1); ctx.fillRect(19, 7, 1, 1);
+
+  ctx.fillStyle = '#4a2f1c';
+  ctx.fillRect(4, 18, 3, 3); ctx.fillRect(6, 16, 3, 3);
+  ctx.fillRect(8, 14, 3, 3); ctx.fillRect(10, 12, 3, 3); ctx.fillRect(12, 10, 3, 3);
+
+  ctx.fillStyle = '#e8c93a'; ctx.fillRect(12, 9, 4, 4);
+  ctx.fillStyle = '#b8202a'; ctx.fillRect(11, 12, 3, 4);
+
+  ctx.fillStyle = '#dfe7ea';
+  ctx.fillRect(14, 4, 4, 6); ctx.fillRect(16, 2, 4, 5);
+  ctx.fillRect(18, 1, 3, 4); ctx.fillRect(15, 6, 5, 4);
+  ctx.fillStyle = '#43a96d'; ctx.fillRect(14, 5, 2, 4); ctx.fillRect(16, 3, 2, 3);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(19, 1, 2, 2); ctx.fillRect(15, 9, 3, 1);
+}
+
+// 6. 배틀 쉽
+function drawBattleshipIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#0a1d37'; ctx.fillRect(0, 0, 24, 13);
+  ctx.fillStyle = '#0c356a'; ctx.fillRect(0, 13, 24, 11);
+  ctx.fillStyle = '#0174be'; ctx.fillRect(2, 16, 5, 1); ctx.fillRect(15, 17, 6, 1); ctx.fillRect(0, 21, 24, 3);
+  ctx.fillStyle = '#40f8ff'; ctx.fillRect(1, 15, 3, 1); ctx.fillRect(19, 15, 4, 1);
+  ctx.strokeStyle = 'rgba(0, 255, 180, 0.25)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(12, 10, 8, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath(); ctx.moveTo(2, 15); ctx.lineTo(21, 15); ctx.lineTo(18, 18); ctx.lineTo(4, 18); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#475569'; ctx.fillRect(4, 13, 15, 2); ctx.fillRect(19, 13, 2, 1);
+  ctx.fillStyle = '#94a3b8'; ctx.fillRect(8, 9, 6, 4);
+  ctx.fillStyle = '#cbd5e1'; ctx.fillRect(9, 7, 4, 2); ctx.fillRect(10, 5, 2, 2);
+  ctx.fillStyle = '#00ffcc'; ctx.fillRect(10, 4, 2, 1);
+  ctx.fillStyle = '#64748b'; ctx.fillRect(14, 11, 4, 2); ctx.fillRect(5, 11, 3, 2);
+  ctx.fillStyle = '#334155'; ctx.fillRect(17, 10, 3, 1); ctx.fillRect(4, 10, 2, 1);
+  ctx.fillStyle = '#ff9900'; ctx.fillRect(20, 9, 2, 2);
+  ctx.fillStyle = '#ffff00'; ctx.fillRect(21, 9, 1, 1);
+}
+
+// 7. 세계를 구하자
+function drawSaveWorldIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#1a0526'; ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#450a36'; ctx.fillRect(2, 2, 20, 20);
+  ctx.fillStyle = '#edd298';
+  ctx.fillRect(4, 2, 2, 4); ctx.fillRect(5, 5, 2, 3); ctx.fillRect(6, 7, 2, 2);
+  ctx.fillRect(18, 2, 2, 4); ctx.fillRect(17, 5, 2, 3); ctx.fillRect(16, 7, 2, 2);
+  ctx.fillStyle = '#c79a4b'; ctx.fillRect(4, 1, 2, 1); ctx.fillRect(18, 1, 2, 1);
+  ctx.fillStyle = '#a81334'; ctx.fillRect(6, 8, 12, 11); ctx.fillRect(5, 10, 14, 8); ctx.fillRect(7, 19, 10, 2);
+  ctx.fillStyle = '#c72045'; ctx.fillRect(8, 9, 8, 2); ctx.fillRect(6, 11, 2, 4); ctx.fillRect(16, 11, 2, 4);
+  ctx.fillStyle = '#5e071b'; ctx.fillRect(7, 11, 4, 1); ctx.fillRect(13, 11, 4, 1);
+  ctx.fillStyle = '#ffee00'; ctx.fillRect(7, 12, 4, 2); ctx.fillRect(13, 12, 4, 2);
+  ctx.fillStyle = '#ff0000'; ctx.fillRect(9, 12, 2, 2); ctx.fillRect(13, 12, 2, 2);
+  ctx.fillStyle = '#150308'; ctx.fillRect(8, 15, 8, 4);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(8, 15, 2, 2); ctx.fillRect(14, 15, 2, 2);
+  ctx.fillRect(10, 15, 1, 1); ctx.fillRect(13, 15, 1, 1);
+  ctx.fillRect(10, 18, 1, 1); ctx.fillRect(13, 18, 1, 1);
+  ctx.fillStyle = '#22092c'; ctx.fillRect(4, 20, 4, 3); ctx.fillRect(16, 20, 4, 3);
+  ctx.fillStyle = '#e5b83b'; ctx.fillRect(8, 21, 8, 2);
+}
+
+// 8. 세계를 구하자 2
+function drawSaveWorld2Icon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#06101e'; ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#0f243d'; ctx.fillRect(2, 2, 20, 20);
+  ctx.fillStyle = '#ffd700'; ctx.fillRect(4, 2, 2, 4); ctx.fillRect(18, 2, 2, 4);
+  ctx.fillStyle = '#ff5500'; ctx.fillRect(5, 5, 2, 2); ctx.fillRect(17, 5, 2, 2);
+  ctx.fillStyle = '#eceff1'; ctx.fillRect(7, 6, 10, 4); ctx.fillRect(6, 8, 12, 10);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(8, 6, 4, 2);
+  ctx.fillStyle = '#ffd1b3'; ctx.fillRect(8, 10, 8, 6);
+  ctx.fillStyle = '#00838f'; ctx.fillRect(8, 11, 3, 1); ctx.fillRect(13, 11, 3, 1);
+  ctx.fillStyle = '#00e5ff'; ctx.fillRect(9, 12, 2, 2); ctx.fillRect(13, 12, 2, 2);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(9, 12, 1, 1); ctx.fillRect(13, 12, 1, 1);
+  ctx.fillStyle = '#c47a5a'; ctx.fillRect(11, 15, 2, 1);
+  ctx.fillStyle = '#00838f'; ctx.fillRect(4, 18, 4, 5); ctx.fillRect(16, 18, 4, 5);
+  ctx.fillStyle = '#b0bec5'; ctx.fillRect(8, 18, 8, 5);
+  ctx.fillStyle = '#00e5ff'; ctx.fillRect(11, 19, 2, 2);
+  ctx.fillStyle = '#ffd700'; ctx.fillRect(17, 17, 6, 6);
+  ctx.fillStyle = '#102238';
+  ctx.fillRect(18, 18, 4, 1); ctx.fillRect(21, 19, 1, 1);
+  ctx.fillRect(18, 20, 4, 1); ctx.fillRect(18, 21, 1, 1);
+  ctx.fillRect(18, 22, 4, 1);
+}
+
+// 9. REWIND (되감기 아이콘)
+function drawRewindIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#171735';
+  ctx.fillRect(2, 2, 20, 20);
+
+  // 빛나는 열쇠 아이콘 (우측 상단)
+  ctx.fillStyle = '#c9a227';
+  ctx.fillRect(15, 4, 4, 3);
+  ctx.fillRect(16, 7, 2, 6);
+  ctx.fillRect(18, 9, 2, 2);
+  ctx.fillStyle = '#ffe66d';
+  ctx.fillRect(16, 5, 2, 1);
+  ctx.fillRect(17, 8, 1, 4);
+
+  // 과거의 나 (하늘색)
+  ctx.fillStyle = '#a8d8f0';
+  ctx.fillRect(4, 10, 6, 8);
+  ctx.fillRect(5, 18, 1, 2);
+  ctx.fillRect(8, 18, 1, 2);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(5, 12, 1, 1);
+  ctx.fillRect(8, 12, 1, 1);
+
+  // 현재의 나 (주황색)
+  ctx.fillStyle = '#ff9f43';
+  ctx.fillRect(10, 10, 6, 8);
+  ctx.fillRect(11, 18, 1, 2);
+  ctx.fillRect(14, 18, 1, 2);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(11, 12, 1, 1);
+  ctx.fillRect(14, 12, 1, 1);
+
+  // 되감기 궤적 선
+  ctx.fillStyle = '#8ecdf7';
+  ctx.fillRect(6, 8, 2, 1);
+  ctx.fillRect(9, 7, 2, 1);
+  ctx.fillRect(12, 8, 2, 1);
+
+  // 하단 REWIND 재생 기호
+  ctx.fillStyle = '#8ecdf7';
+  ctx.beginPath();
+  ctx.moveTo(11, 21); ctx.lineTo(15, 19); ctx.lineTo(15, 23);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(7, 21); ctx.lineTo(11, 19); ctx.lineTo(11, 23);
+  ctx.fill();
+}
+
+// 10. 창고담당 김대리 (첨부 도트 캐릭터 반영)
+function drawKimIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // 배경 (창고 분위기의 다크 차콜)
+  ctx.fillStyle = '#16141a';
+  ctx.fillRect(0, 0, 24, 24);
+
+  // 발밑 그림자 타원
+  ctx.fillStyle = '#09080c';
+  ctx.fillRect(6, 21, 11, 2);
+  ctx.fillRect(5, 22, 13, 1);
+
+  // 1. 머리카락 (갈색)
+  ctx.fillStyle = '#4e342e';
+  ctx.fillRect(6, 2, 11, 5);
+  ctx.fillRect(5, 4, 1, 3);
+  ctx.fillRect(17, 4, 1, 3);
+  // 앞머리 바운스
+  ctx.fillRect(6, 7, 2, 1);
+  ctx.fillRect(10, 7, 3, 1);
+  ctx.fillRect(15, 7, 2, 1);
+
+  // 2. 얼굴 피부톤
+  ctx.fillStyle = '#ffdfc4';
+  ctx.fillRect(6, 7, 11, 5);
+  ctx.fillRect(8, 7, 2, 1); // 이마 노출
+  ctx.fillRect(13, 7, 2, 1);
+
+  // 눈 (큰 픽셀 눈동자 + 반사광)
+  ctx.fillStyle = '#151528';
+  ctx.fillRect(8, 8, 2, 2);
+  ctx.fillRect(13, 8, 2, 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(8, 8, 1, 1);
+  ctx.fillRect(13, 8, 1, 1);
+
+  // 볼터치 (분홍)
+  ctx.fillStyle = '#ff8a9e';
+  ctx.fillRect(6, 9, 2, 2);
+  ctx.fillRect(15, 9, 2, 2);
+
+  // 입 (미소)
+  ctx.fillStyle = '#793a26';
+  ctx.fillRect(10, 10, 3, 1);
+
+  // 3. 몸통 & 옷 (파란색 티셔츠)
+  ctx.fillStyle = '#3b82f6';
+  ctx.fillRect(7, 12, 9, 6);
+
+  // 왼손
+  ctx.fillStyle = '#ffdfc4';
+  ctx.fillRect(4, 13, 3, 2);
+
+  // 오른손 (따봉 👍)
+  ctx.fillRect(16, 13, 2, 2);
+  ctx.fillRect(18, 10, 2, 4); // 엄지 척
+  ctx.fillRect(17, 12, 1, 2);
+
+  // 사원증 목걸이 줄 (주황) & 사원증 본체 (흰색 카드)
+  ctx.fillStyle = '#f97316';
+  ctx.fillRect(11, 12, 1, 1);
+  ctx.fillRect(10, 13, 3, 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(10, 14, 3, 3);
+
+  // 4. 하의 (남색 바지)
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(8, 18, 7, 2);
+  ctx.fillRect(8, 20, 3, 1);
+  ctx.fillRect(12, 20, 3, 1);
+
+  // 5. 신발 (갈색 구두)
+  ctx.fillStyle = '#8d4f27';
+  ctx.fillRect(7, 21, 4, 2);
+  ctx.fillRect(12, 21, 4, 2);
+}
+
+// 전체 렌더링
+drawCompanyLogo('logoCanvas');
+drawNaupIcon('iconNaup');
+drawUfoIcon('iconUfo');
+drawLettuceIcon('iconLettuce');
+drawSeonhyeopIcon('iconSeonhyeop');
+drawThreeKingdomsIcon('iconThreeKingdoms');
+drawBattleshipIcon('iconBattleship');
+drawSaveWorldIcon('iconSaveWorld');
+drawSaveWorld2Icon('iconSaveWorld2');
+drawRewindIcon('iconRewind');
+drawKimIcon('iconKim');
+</script>
+</body>
+</html>
+```  .page-title {
     color: #ffe15a; font-size: 13px; font-weight: 900;
     letter-spacing: 2px; text-shadow: 1px 1px 0 #000;
     margin-top: 4px;
