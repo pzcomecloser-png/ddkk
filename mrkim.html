@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <!-- 📱 아이폰 사파리 메뉴창/주소창 완전 제거 (독립 앱 실행) -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
 
@@ -46,6 +46,9 @@
       overscroll-behavior: none;
       overscroll-behavior-y: none;
       -webkit-overflow-scrolling: auto;
+      -webkit-text-size-adjust: 100% !important;
+      text-size-adjust: 100% !important;
+      zoom: 1 !important;
     }
 
     body {
@@ -592,12 +595,23 @@
         display: block;
       }
 
-      /* 3. 하단 조작부: 맨 아래로 바짝 내림 */
+      /* 📱 하단 패드: 가로 100% 꽉 채우고 십자키와 버튼을 양 끝 벽으로 강제 분산 */
       .gamepad-container {
-        width: 100%;
-        padding: 0 4px 2px 4px; /* 아래 여백 제거 */
-        margin-bottom: 0;
-        flex-shrink: 0;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        justify-content: space-between !important; /* 👈 좌측 끝 / 우측 끝 강제 밀착 */
+        align-items: center !important;
+        padding: 0 10px 4px 10px !important;
+        margin-bottom: 0 !important;
+        flex-shrink: 0 !important;
+      }
+
+      /* 🔄 좌우 반전 시에도 양 끝 정렬 유지 */
+      .gamepad-container.swapped {
+        flex-direction: row-reverse !important;
+        justify-content: space-between !important;
       }
 
       .dpad-cross {
@@ -4467,6 +4481,23 @@ if (savedTrack) sound.setTrack(savedTrack);
 showTitleScreen();
 renderNav();
 requestAnimationFrame(draw);
+// 📱 사파리 배율 설정과 상관없이 무조건 100% 정비율로 화면 고정
+function force100PercentScale() {
+  if (window.visualViewport) {
+    const scale = window.visualViewport.scale;
+    const container = document.querySelector('.game-container');
+    if (container && scale !== 1.0) {
+      container.style.transform = `scale(${1 / scale})`;
+      container.style.transformOrigin = 'center center';
+    } else if (container) {
+      container.style.transform = 'none';
+    }
+  }
+}
+
+window.visualViewport?.addEventListener('resize', force100PercentScale);
+window.addEventListener('resize', force100PercentScale);
+window.addEventListener('load', force100PercentScale);
 </script>
 </body>
 </html>
