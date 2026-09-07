@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
 <title>딸깍 게임즈 - 게임 모음</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
@@ -240,11 +240,21 @@
     </a>
 
     <!-- 10. 창고담당 김대리 (NEW) -->
-    <a class="game-card" href="mrkim.html">
+    <a class="game-card" href="warehouse_kim.html">
       <div class="icon-frame"><canvas id="iconKim" width="24" height="24"></canvas></div>
       <div class="card-text">
         <div class="card-title">창고담당 김대리</div>
         <div class="card-desc">레트로 창고 퍼즐</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 11. 칸맞추기 퍼즐 (NEW) -->
+    <a class="game-card" href="sliding_puzzle.html">
+      <div class="icon-frame"><canvas id="iconSliding" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">칸맞추기 퍼즐</div>
+        <div class="card-desc">3×3 · 4×4 슬라이딩 퍼즐</div>
       </div>
       <div class="card-arrow">▶</div>
     </a>
@@ -527,7 +537,7 @@ function drawSaveWorld2Icon(id) {
   ctx.fillRect(18, 22, 4, 1);
 }
 
-// 9. REWIND (되감기 아이콘)
+// 9. REWIND (엔딩 장면 — 마주보는 과거의 나 & 현재의 나)
 function drawRewindIcon(id) {
   const c = document.getElementById(id);
   if (!c) return;
@@ -535,52 +545,120 @@ function drawRewindIcon(id) {
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, 24, 24);
 
-  ctx.fillStyle = '#0a0a14';
+  // ── 배경: 엔딩의 따뜻한 실내 톤 ──
+  ctx.fillStyle = '#2b1a10';
   ctx.fillRect(0, 0, 24, 24);
-  ctx.fillStyle = '#171735';
+  ctx.fillStyle = '#3d2718';
   ctx.fillRect(2, 2, 20, 20);
 
-  // 빛나는 열쇠 아이콘 (우측 상단)
-  ctx.fillStyle = '#c9a227';
-  ctx.fillRect(15, 4, 4, 3);
-  ctx.fillRect(16, 7, 2, 6);
-  ctx.fillRect(18, 9, 2, 2);
-  ctx.fillStyle = '#ffe66d';
-  ctx.fillRect(16, 5, 2, 1);
-  ctx.fillRect(17, 8, 1, 4);
+  // 천장 조명 빛 (상단 중앙 은은한 노란빛)
+  ctx.fillStyle = 'rgba(255, 225, 150, 0.10)';
+  ctx.fillRect(5, 2, 14, 8);
+  ctx.fillStyle = 'rgba(255, 225, 150, 0.08)';
+  ctx.fillRect(3, 2, 18, 5);
 
-  // 과거의 나 (하늘색)
-  ctx.fillStyle = '#a8d8f0';
-  ctx.fillRect(4, 10, 6, 8);
-  ctx.fillRect(5, 18, 1, 2);
-  ctx.fillRect(8, 18, 1, 2);
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(5, 12, 1, 1);
-  ctx.fillRect(8, 12, 1, 1);
+  // ── 하트 (둘 사이 위로 떠오르는 💛) ──
+  ctx.fillStyle = '#ffe15a';
+  ctx.fillRect(10, 2, 2, 1);
+  ctx.fillRect(13, 2, 2, 1);
+  ctx.fillRect(10, 3, 5, 1);
+  ctx.fillRect(11, 4, 3, 1);
+  ctx.fillRect(12, 5, 1, 1);
+  ctx.fillStyle = '#fff6c0';
+  ctx.fillRect(10, 3, 1, 1);
 
-  // 현재의 나 (주황색)
-  ctx.fillStyle = '#ff9f43';
-  ctx.fillRect(10, 10, 6, 8);
-  ctx.fillRect(11, 18, 1, 2);
-  ctx.fillRect(14, 18, 1, 2);
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(11, 12, 1, 1);
-  ctx.fillRect(14, 12, 1, 1);
+  // 반짝임
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillRect(4, 4, 1, 1);
+  ctx.fillRect(19, 6, 1, 1);
+  ctx.fillRect(20, 3, 1, 1);
 
-  // 되감기 궤적 선
-  ctx.fillStyle = '#8ecdf7';
-  ctx.fillRect(6, 8, 2, 1);
-  ctx.fillRect(9, 7, 2, 1);
-  ctx.fillRect(12, 8, 2, 1);
+  /* ══════════════════════════════════════════════
+     캐릭터 드로잉 헬퍼 — 엔딩의 둥근 몸통 캐릭터
+     x0: 왼쪽 시작 좌표(9px 폭), look: 'R' | 'L'
+  ══════════════════════════════════════════════ */
+  function drawEndChar(x0, body, outline, look) {
+    // 몸통 (모서리 깎은 둥근 사각형)
+    ctx.fillStyle = body;
+    ctx.fillRect(x0 + 1, 7, 7, 1);
+    ctx.fillRect(x0, 8, 9, 8);
+    ctx.fillRect(x0 + 1, 16, 7, 1);
 
-  // 하단 REWIND 재생 기호
-  ctx.fillStyle = '#8ecdf7';
-  ctx.beginPath();
-  ctx.moveTo(11, 21); ctx.lineTo(15, 19); ctx.lineTo(15, 23);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(7, 21); ctx.lineTo(11, 19); ctx.lineTo(11, 23);
-  ctx.fill();
+    // 윤곽 하이라이트 (밝은 테두리 느낌)
+    ctx.fillStyle = outline;
+    ctx.fillRect(x0 + 1, 7, 7, 1);
+    ctx.fillRect(x0, 8, 1, 8);
+    ctx.fillRect(x0 + 8, 8, 1, 8);
+
+    // 배 하이라이트 (입체감)
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fillRect(x0 + 1, 8, 7, 3);
+
+    // 발 2개
+    ctx.fillStyle = body;
+    ctx.fillRect(x0 + 1, 17, 2, 2);
+    ctx.fillRect(x0 + 6, 17, 2, 2);
+
+    // 눈 (흰자 2×2 + 눈동자, 시선 방향 반영)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x0 + 2, 10, 2, 2);
+    ctx.fillRect(x0 + 5, 10, 2, 2);
+    ctx.fillStyle = '#20203a';
+    const px = (look === 'R') ? 1 : 0;
+    ctx.fillRect(x0 + 2 + px, 11, 1, 1);
+    ctx.fillRect(x0 + 5 + px, 11, 1, 1);
+
+    // 웃는 입
+    ctx.fillStyle = 'rgba(40,20,10,0.55)';
+    ctx.fillRect(x0 + 3, 14, 3, 1);
+    ctx.fillRect(x0 + 2, 13, 1, 1);
+    ctx.fillRect(x0 + 6, 13, 1, 1);
+
+    // 볼터치
+    ctx.fillStyle = 'rgba(255,255,255,0.40)';
+    ctx.fillRect(x0, 12, 1, 2);
+    ctx.fillRect(x0 + 8, 12, 1, 2);
+  }
+
+  // 의자 등받이 (양쪽 바깥)
+  ctx.fillStyle = '#5c3520';
+  ctx.fillRect(0, 8, 2, 11);
+  ctx.fillRect(22, 8, 2, 11);
+
+  // 과거의 나 (왼쪽 · 하늘색 · 오른쪽을 바라봄)
+  drawEndChar(2, '#a8d8f0', '#d4ecf8', 'R');
+  // 현재의 나 (오른쪽 · 주황색 · 왼쪽을 바라봄)
+  drawEndChar(13, '#ff9f43', '#ffd9a0', 'L');
+
+  // ── 식탁 (체크무늬 붉은 식탁보) ──
+  ctx.fillStyle = '#e06565';
+  ctx.fillRect(0, 19, 24, 1);
+  ctx.fillStyle = '#c94f4f';
+  ctx.fillRect(0, 20, 24, 4);
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fillRect(2, 20, 2, 4);
+  ctx.fillRect(8, 20, 2, 4);
+  ctx.fillRect(14, 20, 2, 4);
+  ctx.fillRect(20, 20, 2, 4);
+
+  // ── 치킨 접시 (둘 사이 식탁 위) ──
+  ctx.fillStyle = '#f0ece4';
+  ctx.fillRect(9, 18, 6, 1);
+  ctx.fillStyle = '#d8d2c6';
+  ctx.fillRect(10, 19, 4, 1);
+
+  // 치킨 드럼스틱
+  ctx.fillStyle = '#d98a2b';
+  ctx.fillRect(10, 16, 4, 2);
+  ctx.fillStyle = '#e8a94a';
+  ctx.fillRect(10, 16, 3, 1);
+  ctx.fillStyle = '#f5efe0';
+  ctx.fillRect(9, 15, 1, 2);
+
+  // 모락모락 김
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillRect(11, 14, 1, 1);
+  ctx.fillRect(12, 12, 1, 1);
 }
 
 // 10. 창고담당 김대리 (첨부 도트 캐릭터 반영)
@@ -665,6 +743,62 @@ function drawKimIcon(id) {
   ctx.fillRect(12, 21, 4, 2);
 }
 
+// 11. 칸맞추기 퍼즐 (3×3 슬라이딩 타일 + 빈 칸)
+function drawSlidingIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // 배경 & 퍼즐 프레임 (금속 트레이)
+  ctx.fillStyle = '#0e1420';
+  ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#2b3448';
+  ctx.fillRect(1, 1, 22, 22);
+  ctx.fillStyle = '#141b28';
+  ctx.fillRect(2, 2, 20, 20);
+  // 프레임 상단 하이라이트
+  ctx.fillStyle = '#3f4c66';
+  ctx.fillRect(1, 1, 22, 1);
+  ctx.fillRect(1, 1, 1, 22);
+
+  // ── 3×3 타일 배치 (각 타일 6×6, 간격 1px) ──
+  // 우측 하단 한 칸은 비워서 "슬라이딩 퍼즐"임을 표현
+  const tiles = [
+    [3,  3], [10, 3], [17, 3],
+    [3, 10], [10,10], [17,10],
+    [3, 17], [10,17]           // (17,17) = 빈 칸
+  ];
+
+  tiles.forEach(([x, y], i) => {
+    // 타일 본체 (시안 → 청록 그라데이션 느낌)
+    ctx.fillStyle = '#1d7fa8';
+    ctx.fillRect(x, y, 4, 4);
+    ctx.fillStyle = '#29a8d4';
+    ctx.fillRect(x, y, 4, 3);
+    // 상단 하이라이트
+    ctx.fillStyle = '#7fe4ff';
+    ctx.fillRect(x, y, 4, 1);
+    // 하단 그림자
+    ctx.fillStyle = '#125a78';
+    ctx.fillRect(x, y + 3, 4, 1);
+  });
+
+  // 빈 칸 (움푹 들어간 홈)
+  ctx.fillStyle = '#080c14';
+  ctx.fillRect(17, 17, 4, 4);
+  ctx.fillStyle = '#1e2634';
+  ctx.fillRect(17, 17, 4, 1);
+
+  // ── 마지막 타일이 빈 칸으로 밀려드는 화살표 (노란색) ──
+  ctx.fillStyle = '#ffe15a';
+  ctx.fillRect(14, 19, 2, 1);   // 화살대
+  ctx.fillRect(16, 18, 1, 1);   // 화살촉 위
+  ctx.fillRect(16, 20, 1, 1);   // 화살촉 아래
+  ctx.fillRect(16, 19, 1, 1);
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -677,6 +811,7 @@ drawSaveWorldIcon('iconSaveWorld');
 drawSaveWorld2Icon('iconSaveWorld2');
 drawRewindIcon('iconRewind');
 drawKimIcon('iconKim');
+drawSlidingIcon('iconSliding');
 </script>
 </body>
 </html>
