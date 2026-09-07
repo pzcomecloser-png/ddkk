@@ -2,7 +2,14 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <!-- 📱 아이폰 사파리 메뉴창/주소창 완전 제거 (독립 앱 실행) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="김대리 창고" />
+  <meta name="theme-color" content="#0b0d14" />
   <title>창고담당 김대리 - 레트로 창고 퍼즐</title>
   <style>
     :root {
@@ -26,7 +33,19 @@
       -webkit-user-select: none;
       margin: 0;
       padding: 0;
-      touch-action: manipulation;
+      touch-action: manipulation; /* 👈 버튼 터치 지연 없이 즉시 반응 */
+    }
+
+    body body {
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      overscroll-behavior-y: none;
+      -webkit-overflow-scrolling: auto;
     }
 
     body {
@@ -37,8 +56,6 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
-      overflow-x: hidden;
       padding: 10px;
     }
 
@@ -50,29 +67,32 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 16px;
-      max-width: 720px;
+      padding: 12px;
+      max-width: 540px; /* 👈 720px에서 축소 */
       width: 100%;
       position: relative;
     }
 
-    /* 상단 상태바 */
+    /* 1단 윗줄: 양 끝으로 쫙 벌리기 */
     .header-bar {
       width: 100%;
       display: flex;
-      justify-content: space-between;
+      justify-content: space-between; /* 👈 왼쪽 끝과 오른쪽 끝 밀착 */
       align-items: center;
-      margin-bottom: 10px;
-      padding-bottom: 10px;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
       border-bottom: 1px solid var(--panel-border);
-      flex-wrap: wrap;
-      gap: 6px;
     }
 
     .title-group {
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+     /* 👈 여기에 새로 추가! (BGM 버튼을 오른쪽 끝으로 밀어냄) */
+    #bgmSelectBtn {
+      margin-left: auto !important;
     }
 
     .title-badge {
@@ -86,27 +106,42 @@
     }
 
     .level-title {
-      font-size: 16px;
+      font-size: 13.5px; /* 👈 16px에서 13.5px로 축소 */
       font-weight: 700;
       color: var(--text-main);
+      white-space: nowrap; /* 글자가 줄바꿈되지 않도록 방지 */
     }
 
+    /* 2단 아랫줄: 공간을 똑같이 나눠서 균등 간격 배치 */
     .stats-group {
       display: flex;
+      justify-content: space-between; /* 👈 아이템 사이 간격을 100% 동일하게 배분 */
       align-items: center;
-      gap: 8px;
-      font-size: 12.5px;
+      width: 100%; /* 전체 폭 100% 사용 */
+      font-size: 11.5px;
       font-weight: 600;
     }
 
+    /* 🎯 마지막 '남은 목표'는 무조건 오른쪽 끝 밀착 */
+    .stats-group .stat-item:last-child {
+      margin-left: auto !important;
+    }
+
+     /* 🎯 아랫줄 각 항목이 너비에 맞게 균등하게 늘어남 */
     .stat-item {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       background: rgba(0, 0, 0, 0.35);
-      padding: 3px 8px;
+      padding: 3px 6px;
       border-radius: 6px;
       border: 1px solid rgba(255, 255, 255, 0.06);
+      white-space: nowrap;
+
+      /* 👈 여기에 새로 추가! (남은 목표 칸을 오른쪽 끝으로 밀어냄) */
+    .stats-group .stat-item:last-child {
+      margin-left: auto !important;
+    }
     }
 
     .stat-item span.label {
@@ -218,27 +253,32 @@
       image-rendering: pixelated;
       image-rendering: crisp-edges;
       cursor: pointer;
+      width: 100%;       /* 👈 가로 공간 100% 꽉 채움 */
+      max-width: 100%;
+      height: auto;
+      aspect-ratio: 600 / 660;
     }
 
     /* 클리어 팝업 */
     .banner-overlay {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(8, 11, 18, 0.9);
-      backdrop-filter: blur(5px);
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #000000; /* 👈 완전 암전 */
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.25s ease;
-      z-index: 10;
+      transition: opacity 0.2s ease;
+      z-index: 100;
       text-align: center;
       padding: 16px;
+    }
+
+    .banner-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
     }
 
     .banner-overlay.active {
@@ -277,29 +317,65 @@
       transform: scale(0.96);
     }
 
-    /* 모바일 친화 컨트롤 바 */
     .gamepad-container {
       width: 100%;
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-end; /* 👈 PC에서는 버튼들을 오른쪽 끝으로 정렬 */
       align-items: center;
-      padding: 4px 8px;
-      gap: 16px;
+      padding: 8px 4px 4px 4px;
+      gap: 12px;
+      transition: flex-direction 0.2s ease;
+    }
+    /* 👆 터치 조작 모드: 십자키/교체버튼 숨기고 하단 전체를 제스처 영역화 */
+    .gamepad-container.touch-only-mode .dpad-cross,
+    .gamepad-container.touch-only-mode .swap-ctrl-btn {
+      display: none !important;
+    }
+    .gamepad-container.touch-only-mode {
+      justify-content: flex-end; /* 되돌리기/재시작 버튼 우측 밀착 */
+    }
+    /* 🔄 좌우 반전 모드 */
+    .gamepad-container.swapped {
+      flex-direction: row-reverse;
     }
 
-    .dpad-cross {
-      display: grid;
-      grid-template-columns: repeat(3, 44px);
-      grid-template-rows: repeat(3, 40px);
-      gap: 3px;
+    /* ⇄ 중앙 작은 전환 버튼 */
+    .swap-ctrl-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #1e2536;
+      border: 1px solid #36425c;
+      color: #38bdf8;
+      font-size: 16px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+    }
+    .swap-ctrl-btn:active {
+      background: #38bdf8;
+      color: #000;
+      transform: scale(0.92);
+    }
+
+    /* PC에서는 가상 십자키와 반전버튼 숨김 (키보드로 조작) */
+    .dpad-cross,
+    .swap-ctrl-btn {
+      display: none !important;
     }
 
     .dpad-btn {
       background: linear-gradient(180deg, #242d40, #1b2232);
       border: 1px solid #36425c;
       color: var(--text-main);
-      border-radius: 8px;
-      font-size: 16px;
+      border-radius: 10px;
+      font-size: 22px;
       font-weight: bold;
       display: flex;
       align-items: center;
@@ -350,8 +426,8 @@
     }
 
     .circle-btn {
-      width: 58px;
-      height: 58px;
+      width: 62px; /* 👈 52 -> 62px 확대 */
+      height: 62px;
       border-radius: 50%;
       border: 2px solid;
       background: #1a202e;
@@ -421,49 +497,218 @@
       gap: 6px;
       line-height: 1.4;
     }
+    /* 📱 사파리 주소창/하단바 제외 순수 화면 100% 꽉 채움 */
+    /* 📱 사파리 주소창 제외: 하단 키패드 최하단 밀착 + 남은 전체 영역 게임 화면 */
+    @media (max-width: 640px) {
+
+      /* 모바일에서는 가상 십자키와 반전버튼 다시 켜기 */
+      .dpad-cross {
+        display: grid !important;
+      }
+      .swap-ctrl-btn {
+        display: flex !important;
+      }
+
+      /* 모바일에서는 시계 이모티콘 빼고 순수 '시간'만 표시 */
+      #timerLabel {
+        font-size: 0;
+      }
+      #timerLabel::after {
+        content: "시간";
+        font-size: 11px;
+      }
+
+      .pc-vol-slider {
+        display: none !important; /* 👈 모바일에서 스피커 + 슬라이더 완전 삭제 */
+      }
+      .mobile-vol-btn-group {
+        display: flex !important; /* 👈 모바일에서 ◀ 100% ▶ 만 표시 */
+      }
+
+      body {
+        padding: 0;
+        margin: 0;
+        width: 100vw;
+        height: 100svh;
+        overflow: hidden;
+      }
+
+      .game-container {
+        width: 100%;
+        height: 100svh;
+        max-width: 100%;
+        /* 상단 4px, 좌우 4px, 하단은 아이폰 홈바(safe-area)에 바짝 밀착 */
+        padding: 4px 4px env(safe-area-inset-bottom, 2px) 4px;
+        border: none;
+        border-radius: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      /* 모바일에서는 긴 스테이지 바 숨김 */
+      .stage-selector-container {
+        display: none !important;
+      }
+      .mobile-stage-btn {
+        display: inline-flex !important;
+      }
+
+      /* 1. 상단 상태바: 여백 최소화 */
+      .header-bar {
+        margin-bottom: 2px;
+        padding-bottom: 2px;
+        flex-shrink: 0;
+      }
+      .level-title {
+        font-size: 12px;
+      }
+      .stats-group {
+        gap: 2px;
+        font-size: 11px;
+      }
+      .stat-item {
+        padding: 2px 4px;
+        gap: 2px;
+      }
+
+      /* 2. 중앙 캔버스: 상단바와 하단패드를 뺀 모든 남는 공간을 100% 흡수 */
+      .canvas-wrapper {
+        flex: 1 1 auto; /* 👈 남은 세로 공간 전부 차지 */
+        width: 100%;
+        margin-bottom: 2px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+
+      canvas {
+        width: 100%;
+        height: auto;
+        max-height: 100%;
+        aspect-ratio: 600 / 660; /* 👈 늘어난 캔버스 도화지 660과 1:1 일치 */
+        display: block;
+      }
+
+      /* 3. 하단 조작부: 맨 아래로 바짝 내림 */
+      .gamepad-container {
+        width: 100%;
+        padding: 0 4px 2px 4px; /* 아래 여백 제거 */
+        margin-bottom: 0;
+        flex-shrink: 0;
+      }
+
+      .dpad-cross {
+        grid-template-columns: repeat(3, 46px);
+        grid-template-rows: repeat(3, 38px);
+        gap: 2px;
+      }
+      .dpad-btn {
+        font-size: 17px;
+      }
+
+      .circle-btn {
+        width: 52px;
+        height: 52px;
+      }
+    }
   </style>
 </head>
 <body>
 
 <div class="game-container">
   <!-- 상단 상태바 -->
+  <!-- 1단: 상단 내비게이션 바 (좌: 타이틀/스테이지 ── 우: BGM/스테이지 팝업) -->
   <div class="header-bar">
     <div class="title-group">
-      <button class="home-btn" id="titleScreenBtn" title="타이틀 화면으로 이동">🏠 타이틀</button>
+      <button class="home-btn" id="titleScreenBtn" title="타이틀 화면으로 이동">🏠 HOME</button>
       <div class="level-title" id="stageName">Stage 1</div>
     </div>
-    <div class="stats-group">
-      <div class="stat-item" style="padding: 2px 6px; display: flex; align-items: center; gap: 3px;">
-        <button id="bgmMuteBtn" title="BGM 켜기/끄기 (ON/OFF)" style="border:none; background:transparent; font-size:13px; color:#f59e0b; cursor:pointer; padding:2px;">🎵</button>
-        <button id="bgmVolumeStepBtn" title="볼륨 조절 (5% > 15% > 30% > 60% > 100%)" style="border:none; background:transparent; font-size:11px; font-weight:800; color:#f59e0b; cursor:pointer; padding:2px 4px;">30%</button>
-      </div>
-      <div class="stat-item">
-        <span class="label">난이도</span>
-        <span id="diffBadge" style="color:#34d399">입문 (Easy)</span>
-      </div>
-      <div class="stat-item">
-        <span class="label">이동</span>
-        <span id="moveCount">0</span>
-      </div>
-      <div class="stat-item">
-        <span class="label">남은 목표</span>
-        <span id="targetRemaining">1</span>
-      </div>
+    <!-- 우측 끝: BGM 및 스테이지 선택 모달 버튼 -->
+    <div style="display:flex; gap:6px;">
+      <button class="home-btn" id="bgmSelectBtn" style="background:#1e293b; color:#f59e0b; border-color:#f59e0b; padding:4px 8px;">🎵 BGM</button>
+      <button class="home-btn" id="stageSelectBtn" style="background:#1e293b; color:#38bdf8; border-color:#38bdf8; padding:4px 8px;">📂 스테이지</button>
     </div>
   </div>
 
-  <!-- 15개 스테이지 선택 바 -->
-  <div class="stage-selector-container">
-    <div class="stage-selector-header">
-      <span>스테이지 선택 (1~15)</span>
-      <span id="clearedCount">클리어: 0 / 15</span>
+  <!-- 2단: 인게임 스탯 바 (볼륨 -- 시간 -- 이동 -- 남은 목표 균일 간격) -->
+  <div class="stats-group" style="display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom:8px;">
+  <div class="stat-item vol-control-item" style="padding: 2px 6px; display: flex; align-items: center; gap: 4px;">
+    <!-- 🖥️ PC 전용: 스피커 + 슬라이더 -->
+    <div class="pc-vol-slider" style="display:flex; align-items:center; gap:4px;">
+      <span style="font-size:13px; cursor:default;">🔊</span>
+      <input type="range" id="volSlider" min="0" max="1" step="0.05" value="1.0" style="width:70px; height:18px; accent-color:#f59e0b; cursor:pointer;" />
     </div>
-    <div class="level-grid-nav" id="levelNav"></div>
+    <!-- 📱 모바일 전용: ◀ 100% ▶ 만 노출 -->
+    <div class="mobile-vol-btn-group" style="display:none; align-items:center; gap:2px;">
+      <button id="volDownBtn" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; border-radius:4px; width:22px; height:22px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;">◀</button>
+      <span id="volTextDisplay" style="font-size:11px; font-family:monospace; color:#fcd34d; min-width:32px; text-align:center; font-weight:bold;">100%</span>
+      <button id="volUpBtn" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; border-radius:4px; width:22px; height:22px; font-size:12px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;">▶</button>
+    </div>
+  </div>
+
+      <!-- 🔊 볼륨 컨트롤 (정상 닫힘 구조) -->
+   
+    
+    <div class="stat-item" >
+      <span class="label">시간</span>
+      <span id="stageTimer" style="color:#fcd34d;">00:00</span>
+    </div>
+
+    <!-- 3. 가운데: 이동 (시간과 남은 목표 사이로 이동!) -->
+    <div class="stat-item" margin-right: auto;>
+      <span class="label">이동</span>
+      <span id="moveCount" style="display:inline-block; min-width:34px; text-align:center; font-family:monospace;">0</span>
+    </div>
+
+
+    <div class="stat-item">
+      <span class="label">남은 목표</span>
+      <span id="targetRemaining" style="color:#38bdf8;">30개</span>
+    </div>
+  </div>
+
+  
+  <!-- 📂 스테이지 선택 팝업 모달 (PC / 모바일 공용) -->
+  <div class="modal-backdrop" id="stageSelectModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:9999; justify-content:center; align-items:center; padding:16px;">
+    <div style="background:#141824; border:2px solid #38bdf8; border-radius:14px; width:100%; max-width:420px; padding:18px; box-shadow:0 16px 40px rgba(0,0,0,0.9); display:flex; flex-direction:column; gap:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222a3d; padding-bottom:10px;">
+        <span style="font-size:15px; font-weight:800; color:#38bdf8;">📂 스테이지 선택 (1~30)</span>
+        <button id="closeStageModalBtn" style="background:transparent; border:none; color:#9ca3af; font-size:20px; cursor:pointer; padding:0 6px;">✕</button>
+      </div>
+      <div id="stageModalNav" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-height:320px; overflow-y:auto; padding:6px 0;"></div>
+    </div>
+  </div>
+
+  <!-- 🎵 BGM 선택 팝업 모달 -->
+  <div class="modal-backdrop" id="bgmSelectModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:9999; justify-content:center; align-items:center; padding:16px;">
+    <div style="background:#141824; border:2px solid #f59e0b; border-radius:14px; width:100%; max-width:320px; padding:18px; box-shadow:0 16px 40px rgba(0,0,0,0.9); display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222a3d; padding-bottom:8px;">
+        <span style="font-size:15px; font-weight:800; color:#f59e0b;">🎵 배경음악 선택</span>
+        <button id="closeBgmModalBtn" style="background:transparent; border:none; color:#9ca3af; font-size:20px; cursor:pointer; padding:0 6px;">✕</button>
+      </div>
+      
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <!-- 재생 모드 버튼 2개 -->
+        <button class="bgm-pick-btn" data-track="seq" style="background:#1e2536; border:1px solid #38bdf8; color:#38bdf8; border-radius:8px; padding:9px; font-size:12.5px; font-weight:bold; cursor:pointer;">🔁 순차 재생 (1 → 5 순환)</button>
+        <button class="bgm-pick-btn" data-track="rand" style="background:#1e2536; border:1px solid #a855f7; color:#a855f7; border-radius:8px; padding:9px; font-size:12.5px; font-weight:bold; cursor:pointer;">🔀 랜덤 재생 (무작위 셔플)</button>
+
+        <div style="height:1px; background:#222a3d; margin:2px 0;"></div>
+        
+        <button class="bgm-pick-btn" data-track="1" style="background:#1e2536; border:1px solid #36425c; color:#fff; border-radius:8px; padding:10px; font-size:13px; font-weight:bold; cursor:pointer;">BGM1</button>
+        <button class="bgm-pick-btn" data-track="2" style="background:#1e2536; border:1px solid #36425c; color:#fff; border-radius:8px; padding:10px; font-size:13px; font-weight:bold; cursor:pointer;">BGM2</button>
+        <button class="bgm-pick-btn" data-track="3" style="background:#1e2536; border:1px solid #36425c; color:#fff; border-radius:8px; padding:10px; font-size:13px; font-weight:bold; cursor:pointer;">BGM3</button>
+        <button class="bgm-pick-btn" data-track="4" style="background:#1e2536; border:1px solid #36425c; color:#fff; border-radius:8px; padding:10px; font-size:13px; font-weight:bold; cursor:pointer;">BGM4</button>
+        <button class="bgm-pick-btn" data-track="5" style="background:#1e2536; border:1px solid #36425c; color:#fff; border-radius:8px; padding:10px; font-size:13px; font-weight:bold; cursor:pointer;">BGM5</button>
+      </div>
+    </div>
   </div>
 
   <!-- 게임 화면 캔버스 -->
   <div class="canvas-wrapper">
-    <canvas id="gameCanvas" width="600" height="410"></canvas>
+    <canvas id="gameCanvas" width="600" height="660"></canvas>
     
     <!-- 스테이지 클리어 오버레이 -->
     <div class="banner-overlay" id="clearBanner">
@@ -484,16 +729,11 @@
       <button class="dpad-btn dpad-down" data-dir="down" aria-label="아래로">▼</button>
     </div>
 
-    <!-- 우측 원형 액션 버튼 (힌트 / 되돌리기 / 재시작) -->
-    <div class="action-circle-group">
-      <!-- 힌트 버튼 (최대 5회, 단축키 H) -->
-      <div class="circle-btn-wrapper">
-        <button class="circle-btn hint" id="hintBtn" title="스테이지 힌트 보기 (단축키: H)">
-          <span class="btn-text">힌트 (5)</span>
-        </button>
-        <span class="key-badge">H</span>
-      </div>
+    <!-- ⇄ 중앙 좌우 전환 버튼 -->
+    <button id="swapCtrlBtn" class="swap-ctrl-btn" title="조작키 좌우 반전">⇄</button>
 
+    <!-- 우측 원형 액션 버튼 (되돌리기 / 재시작) -->
+    <div class="action-circle-group">
       <!-- 되돌리기 (Undo, 최대 3회, 단축키 Z) -->
       <div class="circle-btn-wrapper">
         <button class="circle-btn undo" id="undoBtn" title="되돌리기 (단축키: Z)">
@@ -502,15 +742,15 @@
         <span class="key-badge">Z</span>
       </div>
 
-      <!-- 재시작 (Reset, 단축키 R) -->
+       <!-- 재시작 (Reset, 단축키 R) -->
       <div class="circle-btn-wrapper">
         <button class="circle-btn reset" id="resetBtn" title="재시작 (단축키: R)">
-          <span class="btn-text">재시작</span>
+          <span class="btn-text">재시작 (0)</span>
         </button>
         <span class="key-badge">R</span>
       </div>
     </div>
-  </div>
+  </div> <!-- 👈 gamepad-container 닫는 태그 -->
 
   <!-- 힌트 & 가이드 바 (기본 숨김, 힌트 버튼 클릭 시 노출) -->
   <div class="help-hint" id="hintText" style="display: none;"></div>
@@ -523,7 +763,64 @@
 /* =====================================================================
    1. 사운드 & 8비트 레트로 BGM 시스템 (Web Audio API 완전 통합)
    ===================================================================== */
+// 🎛️ BGM 음원 스위치: true = bgm1.mp3 재생 / false = 기존 신디사이저 로파이 재생
+const USE_MP3_BGM = true;
+
 class SoundEngine {
+  setTrack(modeOrTrack) {
+    const isPlaying = this.bgmPlaying;
+    if (this.bgmAudio) {
+      this.bgmAudio.pause();
+    }
+
+    this.playMode = modeOrTrack; // 'seq' | 'rand' | '1'~'5'
+
+    let fileNum = 1;
+    if (modeOrTrack === 'seq') {
+      fileNum = this.currentSeqIndex || 1;
+    } else if (modeOrTrack === 'rand') {
+      // 직전 곡과 다른 곡 무작위 선택
+      let nextR;
+      do {
+        nextR = Math.floor(Math.random() * 5) + 1;
+      } while (nextR === this.currentRandIndex && 5 > 1);
+      this.currentRandIndex = nextR;
+      fileNum = nextR;
+    } else {
+      fileNum = parseInt(modeOrTrack, 10) || 1;
+    }
+
+    this.bgmAudio = new Audio(`bgm${fileNum}.mp3`);
+    this.bgmAudio.loop = (!['seq', 'rand'].includes(modeOrTrack)); // 단일 곡일 때만 단독 루프
+    this.bgmAudio.preload = 'auto';
+
+    const isMobile = window.innerWidth <= 640;
+    const bgmRatio = isMobile ? 0.05 : 0.10;
+    this.bgmAudio.volume = this.bgmVolume * bgmRatio;
+
+    // 곡 끝났을 때 동작 분기
+    this.bgmAudio.addEventListener('ended', () => {
+      if (this.playMode === 'seq') {
+        // 1 -> 2 -> 3 -> 4 -> 5 -> 1 순환
+        this.currentSeqIndex = ((fileNum % 5) + 1);
+        this.setTrack('seq');
+      } else if (this.playMode === 'rand') {
+        // 랜덤 다음 곡
+        this.setTrack('rand');
+      } else {
+        // 단일 곡 무한 루프
+        this.bgmAudio.currentTime = 0;
+        this.bgmAudio.play().catch(() => {});
+      }
+    });
+
+    if (isPlaying) {
+      this.bgmAudio.play().catch(() => {});
+    }
+
+    localStorage.setItem('kimdaeri_bgm_track', modeOrTrack);
+  }
+
   constructor() {
     this.ctx = null;
     this.masterGain = null;
@@ -531,9 +828,19 @@ class SoundEngine {
     this.sfxGain = null;
     
     this.bgmTimer = null;
-    this.bgmVolume = 0.3; // 기본값 30% (나른하고 평온한 볼륨)
+    this.bgmVolume = 0.7;
     this.bgmPlaying = false;
     this.bgmStep = 0;
+
+    // 🎵 mp3 음원 객체 생성 + 2중 무한 루프 방어 (아이폰 사파리 완벽 보장)
+    this.bgmAudio = new Audio('bgm1.mp3');
+    this.bgmAudio.loop = true;
+    this.bgmAudio.preload = 'auto';
+    this.bgmAudio.volume = this.bgmVolume * 0.1;
+    this.bgmAudio.addEventListener('ended', () => {
+      this.bgmAudio.currentTime = 0;
+      this.bgmAudio.play().catch(() => {});
+    });
   }
 
   init() {
@@ -560,29 +867,54 @@ class SoundEngine {
     }
   }
 
-  // 🎵 인게임 전용: 나른하고 평온한 로파이 앰비언트 BGM
   startBGM() {
     this.init();
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
-    }
-    if (this.bgmPlaying) return;
+    if (this.bgmVolume <= 0) return;
     this.bgmPlaying = true;
-    this.scheduleBgmTick();
+
+    if (USE_MP3_BGM) {
+      // 1. mp3 재생 (10% 볼륨 유지)
+      this.bgmAudio.volume = this.bgmVolume * 0.1;
+      this.bgmAudio.play().catch(() => {});
+    } else {
+      // 2. 기존 신디사이저 로파이 재생 (보존)
+      this.scheduleBgmTick();
+    }
   }
 
   stopBGM() {
     this.bgmPlaying = false;
-    if (this.bgmTimer) {
-      clearTimeout(this.bgmTimer);
-      this.bgmTimer = null;
+    if (USE_MP3_BGM) {
+      if (this.bgmAudio) {
+        this.bgmAudio.pause();
+        this.bgmAudio.currentTime = 0;
+      }
+    } else {
+      if (this.bgmTimer) {
+        clearTimeout(this.bgmTimer);
+        this.bgmTimer = null;
+      }
     }
   }
 
   setBgmVolume(val) {
-    this.bgmVolume = Math.max(0, Math.min(1, val));
-    if (this.bgmGain && this.ctx) {
-      this.bgmGain.gain.setValueAtTime(this.bgmVolume, this.ctx.currentTime);
+    const x = Math.max(0, Math.min(1, val));
+    // 🎚️ 0~70% 구간: 최대 30% / 70~100% 구간: 31~100%
+    const vol = (x <= 0.7) ? (x / 0.7) * 0.3 : 0.31 + ((x - 0.7) / 0.3) * 0.69;
+    this.bgmVolume = vol;
+
+    const isMobile = window.innerWidth <= 640;
+    
+    // 🎵 BGM 비율: 모바일은 0.05 (절반으로 뚝 낮춤), PC는 0.10 유지
+    const bgmRatio = isMobile ? 0.05 : 0.10;
+    if (this.bgmAudio) this.bgmAudio.volume = vol * bgmRatio;
+
+    if (this.ctx) {
+      if (this.masterGain) this.masterGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+      if (this.bgmGain) this.bgmGain.gain.setValueAtTime(vol * bgmRatio, this.ctx.currentTime);
+      // 🔊 효과음 비율: 모바일은 2.2배 풀파워 빵빵하게, PC는 1.3배 유지
+      const sfxRatio = isMobile ? 3 : 1.3;
+      if (this.sfxGain) this.sfxGain.gain.setValueAtTime(vol * sfxRatio, this.ctx.currentTime);
     }
   }
 
@@ -675,6 +1007,7 @@ class SoundEngine {
   }
 
   playStep() {
+    if (this.bgmVolume <= 0) return; // 👈 0일 때만 무음
     this.init();
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -682,7 +1015,9 @@ class SoundEngine {
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(140, this.ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(75, this.ctx.currentTime + 0.04);
-    gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+    // 📱 모바일(스마트폰 스피커)에서는 2로 초대형 증폭, PC는 0.60 유지
+    const stepGain = (window.innerWidth <= 640) ? 2 : 0.60;
+    gain.gain.setValueAtTime(stepGain, this.ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.04);
     osc.connect(gain);
     gain.connect(this.sfxGain || this.ctx.destination);
@@ -691,6 +1026,7 @@ class SoundEngine {
   }
 
   playPush() {
+    if (this.bgmVolume <= 0) return; // 👈 0이면 즉시 무음
     this.init();
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -698,7 +1034,7 @@ class SoundEngine {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(180, this.ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(55, this.ctx.currentTime + 0.09);
-    gain.gain.setValueAtTime(0.28, this.ctx.currentTime);
+    gain.gain.setValueAtTime(0.65, this.ctx.currentTime); // 상자 밀기 2.3배 증폭
     gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.09);
     osc.connect(gain);
     gain.connect(this.sfxGain || this.ctx.destination);
@@ -707,6 +1043,7 @@ class SoundEngine {
   }
 
   playGoal() {
+    if (this.bgmVolume <= 0) return;
     this.init();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
@@ -725,6 +1062,7 @@ class SoundEngine {
   }
 
   playUndo() {
+    if (this.bgmVolume <= 0) return;
     this.init();
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -741,6 +1079,7 @@ class SoundEngine {
   }
 
   playTalk() {
+    if (this.bgmVolume <= 0) return; // 👈 0이면 즉시 무음
     this.init();
     if (!this.ctx) return;
     try {
@@ -756,7 +1095,7 @@ class SoundEngine {
 
       const now = this.ctx.currentTime;
       // 볼륨을 0.08 -> 0.012로 대폭 낮춰 부드러운 타자기 느낌 부여
-      gain.gain.setValueAtTime(0.012, now);
+      gain.gain.setValueAtTime(1, now);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
 
       osc.connect(filter);
@@ -769,6 +1108,7 @@ class SoundEngine {
   }
 
   playDoor() {
+    if (this.bgmVolume <= 0) return;
     this.init();
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
@@ -785,6 +1125,7 @@ class SoundEngine {
   }
 
   playVictory() {
+    if (this.bgmVolume <= 0) return;
     this.init();
     if (!this.ctx) return;
     const notes = [523.25, 659.25, 783.99, 1046.50];
@@ -804,6 +1145,7 @@ class SoundEngine {
   }
 
   playStart() {
+    if (this.bgmVolume <= 0) return;
     this.init();
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
@@ -812,7 +1154,7 @@ class SoundEngine {
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, now + idx * 0.05);
-      gain.gain.setValueAtTime(0.25, now + idx * 0.05);
+      gain.gain.setValueAtTime(0.03, now + idx * 0.05); // 👈 0.25 -> 0.03 (초저음량 은은함)
       gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.2);
       osc.connect(gain);
       gain.connect(this.sfxGain || this.ctx.destination);
@@ -825,9 +1167,9 @@ class SoundEngine {
 const sound = new SoundEngine();
 
 /* =====================================================================
-   2. 스토리 컷씬 데이터
+   2. 스토리 컷씬 데이터 (Chapter 1 & Chapter 2)
    ===================================================================== */
-const STORY_SCENES = [
+const STORY_CHAPTER_1 = [
   {
     type: 'building',
     speaker: '해설',
@@ -869,6 +1211,51 @@ const STORY_SCENES = [
     speakerColor: '#38bdf8',
     text: '“으악... 상자들이 온 사방에 어지럽게 널려있잖아...?! 여기서 어떻게 서류를 찾지? ...일단 상자들부터 정리해야겠다!!”',
     sub: '지하 7층 폐쇄 창고 내부'
+  }
+];
+
+const STORY_CHAPTER_2 = [
+  {
+    type: 'office',
+    speaker: '박부장',
+    speakerColor: '#ef4444',
+    text: '“오 김대리!! 5년 전 기획서를 벌써 찾아왔군! 역시 자네야, 일 처리가 아주 빨라!!”',
+    sub: '기획1팀 부서장 박부장 (급방긋 모드)'
+  },
+  {
+    type: 'office',
+    speaker: '김대리',
+    speakerColor: '#38bdf8',
+    text: '“감사합니다 부장님! 그럼 저 이제 드디어 칼퇴해도 되겠습니까...?!”',
+    sub: '기획1팀 김대리 (설레는 퇴근 직전)'
+  },
+  {
+    type: 'office',
+    speaker: '박부장',
+    speakerColor: '#ef4444',
+    text: '“어~ 좋은데 말이야... 진짜 미안한데... 7년 전 기획서도 마저 좀 찾아와 줄 수 있나?”',
+    sub: '박부장의 청천벽력 추가 지시'
+  },
+  {
+    type: 'office',
+    speaker: '김대리',
+    speakerColor: '#38bdf8',
+    text: '“네에?! 7년 전이면... 지하 10층 심층 폐쇄 구역인데요...?! 거긴 아무도 안 가는 곳인데...”',
+    sub: '다시 멘붕 온 김대리'
+  },
+  {
+    type: 'office',
+    speaker: '박부장',
+    speakerColor: '#ef4444',
+    text: '“그래서 뭐? 지금 나한테 말대꾸하는 거야? 못 찾으면 집에 못 갈 줄 알아!!”',
+    sub: '박부장의 영원한 치트키: 그래서 뭐?'
+  },
+  {
+    type: 'warehouse_inside',
+    speaker: '김대리',
+    speakerColor: '#38bdf8',
+    text: '“으악... 지하 10층은 상자가 두 배로 꼬여있잖아...?! 이번에야말로 진짜 칼퇴하고 만다!!”',
+    sub: '지하 14층 심층 폐쇄 창고 내부'
   }
 ];
 
@@ -1083,12 +1470,11 @@ const STAGES = [
       "   ####   "
     ]
   },
-  // 🔴 Stage 14~15 (초심층)
   {
     name: "Stage 14",
-    diff: "초심층",
-    diffColor: "#ef4444",
-    hint: "👑 <strong>초심층:</strong> 51수 이상의 정밀한 공간 기동 퍼즐입니다.",
+    diff: "고급",
+    diffColor: "#f97316",
+    hint: "👑 <strong>고급:</strong> 51수 이상의 정밀한 공간 기동 퍼즐입니다.",
     map: [
       "  #######",
       "  #.....#",
@@ -1100,9 +1486,9 @@ const STAGES = [
   },
   {
     name: "Stage 15",
-    diff: "초심층",
-    diffColor: "#ef4444",
-    hint: "🏆 <strong>초심층 (107수):</strong> 소코반의 정점! 100수 이상의 장거리 연쇄 밀기로 칼퇴를 완성하세요!",
+    diff: "고급",
+    diffColor: "#f97316",
+    hint: "🏆 <strong>고급 (107수):</strong> 소코반의 정점! 100수 이상의 장거리 연쇄 밀기로 칼퇴를 완성하세요!",
     map: [
       "###### #####",
       "#....###...#",
@@ -1110,6 +1496,242 @@ const STAGES = [
       "#.$.#***...#",
       "#...########",
       "#####       "
+    ]
+ 
+  },
+  // 🟠 Stage 16~20: 고급 마스터 (33~37수, 기둥 우회 & 복합 스위칭)
+  {
+    name: "Stage 16",
+    diff: "고급",
+    diffColor: "#f97316",
+    hint: "🧠 <strong>고급:</strong> 두 상자의 통로 우선순위를 먼저 결정하세요.",
+    map: [
+      "  ######",
+      "  #...*#",
+      "  #.##.##",
+      "  #..$$@#",
+      "  #.#...#",
+      "  #*..###",
+      "  #####  "
+    ]
+  },
+  {
+    name: "Stage 17",
+    diff: "고급",
+    diffColor: "#f97316",
+    hint: "🧠 <strong>고급:</strong> 상단 방에서 상자를 돌아 밀어 하단으로 유도하세요.",
+    map: [
+      "  #####  ",
+      "  #...#  ",
+      "  #.@.#  ",
+      "  #.$$###",
+      "  ##*.*.#",
+      "   #....#",
+      "   ######"
+    ]
+  },
+  {
+    name: "Stage 18",
+    diff: "고급",
+    diffColor: "#f97316",
+    hint: "🧠 <strong>고급:</strong> 3개 상자의 인터락킹을 조심스럽게 해제하세요.",
+    map: [
+      "   ####  ",
+      "  ##..###",
+      "  #.....#",
+      "  #*&&$@#",
+      "  #...###",
+      "  ##..#  ",
+      "   ####  "
+    ]
+  },
+  {
+    name: "Stage 19",
+    diff: "고급",
+    diffColor: "#f97316",
+    hint: "🔥 <strong>고급:</strong> 37수의 치밀한 경로 계산으로 상자를 분리하세요.",
+    map: [
+      "  ##########",
+      "  #........#",
+      "  #.##*###.#",
+      "  #.#.$$.*.#",
+      "  #.*.@$##.#",
+      "  #####....#",
+      "      ######"
+    ]
+  },
+  {
+    name: "Stage 20",
+    diff: "고급",
+    diffColor: "#f97316",
+    hint: "🔥 <strong>고급:</strong> 4개 상자를 사분면 대칭으로 이동시키세요.",
+    map: [
+      "   #####  ",
+      "  ##*.*## ",
+      "  #.&.&.# ",
+      "  #..#..# ",
+      "  #.$.$.# ",
+      "  ##.@.## ",
+      "   #####  "
+    ]
+  },
+  // 🟣 Stage 21~25: 초심층 마스터 (41~47수, 깊은 수읽기)
+  {
+    name: "Stage 21",
+    diff: "초심층",
+    diffColor: "#ef4444",
+    hint: "🧠 <strong>초심층:</strong> 3개 상자를 아래쪽 골부터 차례로 채웁니다.",
+    map: [
+      "   ##### ",
+      "   #.@.# ",
+      "   #...# ",
+      "  ###$.# ",
+      "  #.***# ",
+      "  #.$$.# ",
+      "  ###..# ",
+      "    #### "
+    ]
+  },
+  {
+    name: "Stage 22",
+    diff: "초심층",
+    diffColor: "#ef4444",
+    hint: "🧠 <strong>초심층:</strong> 양쪽 날개의 상자를 중앙 통로로 유도하세요.",
+    map: [
+      "  #######",
+      "  #*.#..#",
+      "  #..$..#",
+      "  #*.$#@#",
+      "  #..$..#",
+      "  #*.#..#",
+      "  #######"
+    ]
+  },
+  {
+    name: "Stage 23",
+    diff: "초심층",
+    diffColor: "#ef4444",
+    hint: "🧠 <strong>초심층:</strong> 44수의 정밀한 회랑 기동을 실행하세요.",
+    map: [
+      "   ####   ",
+      "   #..####",
+      "   #*&$..#",
+      "   #.*$#.#",
+      "   ##.@..#",
+      "    #...##",
+      "    ##### "
+    ]
+  },
+  {
+    name: "Stage 24",
+    diff: "초심층",
+    diffColor: "#ef4444",
+    hint: "👑 <strong>초심층:</strong> 세로 일자 골목의 병목을 완벽하게 통제하세요.",
+    map: [
+      "  ######",
+      "  #***.#",
+      "  #..$.#",
+      "  #.#$##",
+      "  #..$.#",
+      "  #..@.#",
+      "  ######"
+    ]
+  },
+  {
+    name: "Stage 25",
+    diff: "초심층",
+    diffColor: "#ef4444",
+    hint: "👑 <strong>초심층:</strong> 깊은 코너 포켓의 2개 상자를 연쇄 이동하세요.",
+    map: [
+      "   ######",
+      "  ##....#",
+      "  #..##.#",
+      "  #.#.$.#",
+      "  #..&.*#",
+      "  ##.#@##",
+      "   #...# ",
+      "   ##### "
+    ]
+  },
+  // 🔴 Stage 26~30: 두뇌 한계 & 그랜드마스터 (50~104수)
+  {
+    name: "Stage 26",
+    diff: "두뇌 한계",
+    diffColor: "#dc2626",
+    hint: "👑 <strong>두뇌 한계:</strong> 50수의 장거리 스위칭으로 벽을 돌파하세요.",
+    map: [
+      "  ###### ",
+      "  #...*# ",
+      "  #.##.##",
+      "  #..$$@#",
+      "  #.#...#",
+      "  #*..###",
+      "  #####  "
+    ]
+  },
+  {
+    name: "Stage 27",
+    diff: "두뇌 한계",
+    diffColor: "#dc2626",
+    hint: "👑 <strong>두뇌 한계:</strong> 3개 상자를 가로 3연속 골에 정렬하세요.",
+    map: [
+      "  ####### ",
+      "  #.....# ",
+      "  #@$$$.##",
+      "  #..#***#",
+      "  ##....##",
+      "   ###### "
+    ]
+  },
+  {
+    name: "Stage 28",
+    diff: "두뇌 한계",
+    diffColor: "#dc2626",
+    hint: "👑 <strong>두뇌 한계:</strong> 60수의 치밀한 이동으로 막다른 골목을 뚫어내세요.",
+    map: [
+      "    ####    ",
+      "    #..#    ",
+      "    #@.#    ",
+      "    #..#    ",
+      "  ###.####  ",
+      "  #....&.#  ",
+      "  #..$...#  ",
+      "  #####*.#  ",
+      "      ####  "
+    ]
+  },
+  {
+    name: "Stage 29",
+    diff: "두뇌 한계",
+    diffColor: "#dc2626",
+    hint: "👑 <strong>두뇌 한계:</strong> 61수의 장거리 수읽기를 통해 상자를 구출하세요.",
+    map: [
+      "      ####  ",
+      "      #.@#  ",
+      "      #..#  ",
+      " ######.*#  ",
+      " #...$..*#  ",
+      " #..$$#.*#  ",
+      " #....####  ",
+      " ###..#     ",
+      "   ####     "
+    ]
+  },
+  {
+    name: "Stage 30",
+    diff: "마스터",
+    diffColor: "#a855f7",
+    hint: "🏆 <strong>그랜드마스터 (104수):</strong> 전설의 104수 초장거리 연쇄 퍼즐! 소코반의 정점에서 칼퇴의 신화가 되세요!",
+    map: [
+      "     #####    ",
+      "     #...##   ",
+      "     #....#   ",
+      " ######...#   ",
+      "##.....#*.#   ",
+      "#.$.$.@..##   ",
+      "#.######*#    ",
+      "#........#    ",
+      "##########    "
     ]
   }
 ];
@@ -1123,12 +1745,19 @@ const ctx = canvas.getContext('2d');
 let gameState = 'TITLE';
 let titleTimer = 0;
 
+let storyChapter = 1;
 let storyIndex = 0;
 let storyTextProgress = 0;
 let doorOpenProgress = 0;
 let isDoorOpening = false;
+let chapter2Seen = false;
+let storyPlaybackMode = 'gameplay'; // 'gameplay' | 'replay'
+let showStorySelectModal = false; // 스토리 선택 팝업 플래그
 
 let currentStageIndex = 0;
+let isOverviewMode = false; // 🔍 전체보기 / 확대보기 토글
+let camCurrentX = 0;
+let camCurrentY = 0;
 let grid = [];
 let rows = 0;
 let cols = 0;
@@ -1139,11 +1768,17 @@ let offsetY = 0;
 let player = { x: 0, y: 0, facing: 'down', animFrame: 0 };
 let moveHistory = [];
 let moveCount = 0;
+let stageResetCount = 0; // 👈 누락된 재시작 카운트 변수 선언!
 let undoRemaining = 3;
-let hintRemaining = 5;
+let globalHintRemaining = 5; // 게임 전체 통합 5회 (스테이지 이동/재시작 시 리필되지 않음)
 let isCleared = false;
 let devModeActive = false;
 let particles = [];
+
+let stageStartTime = null;
+let stageTimerInterval = null;
+let clearBannerTimeout = null; // 👈 이 변수 선언이 빠져서 즉사했음!
+let stageClearTimes = {}; // 스테이지별 최고 클리어 시간 (초 단위)
 
 // 세이브 불러오기
 let clearedStages = new Set();
@@ -1152,6 +1787,18 @@ try {
   if (saved) {
     clearedStages = new Set(JSON.parse(saved));
   }
+  const savedHints = localStorage.getItem('kimdaeri_global_hints');
+  if (savedHints !== null) {
+    globalHintRemaining = Math.max(0, parseInt(savedHints, 10));
+  }
+  const savedCh2 = localStorage.getItem('kimdaeri_ch2_seen');
+  if (savedCh2 === 'true') {
+    chapter2Seen = true;
+  }
+  const savedTimes = localStorage.getItem('kimdaeri_stage_times');
+  if (savedTimes) {
+    stageClearTimes = JSON.parse(savedTimes);
+  }
 } catch (e) {
   console.log('Storage not accessible', e);
 }
@@ -1159,14 +1806,23 @@ try {
 function saveProgress() {
   try {
     localStorage.setItem('kimdaeri_cleared_stages', JSON.stringify([...clearedStages]));
+    localStorage.setItem('kimdaeri_global_hints', globalHintRemaining.toString());
+    localStorage.setItem('kimdaeri_ch2_seen', chapter2Seen ? 'true' : 'false');
+    localStorage.setItem('kimdaeri_stage_times', JSON.stringify(stageClearTimes));
   } catch (e) {}
 }
 
 function clearProgress() {
-  if (confirm('모든 스테이지 클리어 기록을 삭제하시겠습니까?')) {
+  if (confirm('모든 스테이지 클리어 기록, 시간 기록, 힌트 횟수를 초기화하시겠습니까?')) {
     clearedStages.clear();
+    globalHintRemaining = 5;
+    chapter2Seen = false;
+    stageClearTimes = {};
     try {
       localStorage.removeItem('kimdaeri_cleared_stages');
+      localStorage.removeItem('kimdaeri_global_hints');
+      localStorage.removeItem('kimdaeri_ch2_seen');
+      localStorage.removeItem('kimdaeri_stage_times');
     } catch (e) {}
     sound.init();
     sound.playUndo();
@@ -1175,18 +1831,67 @@ function clearProgress() {
   }
 }
 
-// 타이틀 버튼 히트박스
-const pushStartBtnRect = { x: 190, y: 308, w: 220, h: 44 };
-const storyReplayBtnRect = { x: 155, y: 362, w: 135, h: 32 };
-const resetProgressBtnRect = { x: 310, y: 362, w: 135, h: 32 };
+function formatTime(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatKoreanDuration(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}시간 ${m}분 ${s}초`;
+  if (m > 0) return `${m}분 ${s}초`;
+  return `${s}초`;
+}
+
+function startStageTimer(keepExisting = false) {
+  stopStageTimer();
+  // ⏱️ keepExisting이 true면 기존 흘러가던 시간을 리셋하지 않고 계속 이어감
+  if (!keepExisting || !stageStartTime) {
+    stageStartTime = Date.now();
+  }
+  const timerEl = document.getElementById('stageTimer');
+  if (timerEl) {
+    const elapsed = Math.floor((Date.now() - stageStartTime) / 1000);
+    timerEl.innerText = formatTime(elapsed);
+  }
+  
+  stageTimerInterval = setInterval(() => {
+    if (gameState === 'PLAYING' && !isCleared && stageStartTime) {
+      const elapsed = Math.floor((Date.now() - stageStartTime) / 1000);
+      const el = document.getElementById('stageTimer');
+      if (el) el.innerText = formatTime(elapsed);
+    }
+  }, 1000);
+}
+
+function stopStageTimer() {
+  if (stageTimerInterval) {
+    clearInterval(stageTimerInterval);
+    stageTimerInterval = null;
+  }
+}
+
+// 타이틀 버튼 히트박스 (화면 너비 600 기준 정확한 시작 좌표 지정)
+const pushStartBtnRect   = { x: 150, y: 590, w: 300, h: 62 };
+const storyReplayBtnRect = { x: 80,  y: 530, w: 138, h: 52 };
+const touchModeBtnRect   = { x: 230, y: 530, w: 140, h: 52 };
+const resetProgressBtnRect = { x: 382, y: 530, w: 138, h: 52 };
 const singleResetBtnRect = { x: 232, y: 362, w: 135, h: 32 };
-const devModeBtnRect = { x: 520, y: 370, w: 66, h: 26 };
+const devModeBtnRect     = { x: 515, y: 615, w: 72,  h: 30 };
+let isTouchMode = localStorage.getItem('kimdaeri_touch_mode') === 'true'; // 👈 추가
+
+// 스토리 선택 모달 내부 버튼 히트박스
+const modalStory1BtnRect = { x: 170, y: 170, w: 260, h: 42 };
+const modalStory2BtnRect = { x: 170, y: 226, w: 260, h: 42 };
+const modalCloseBtnRect  = { x: 235, y: 284, w: 130, h: 34 };
 
 // 타이틀 화면에서 PUSH START 눌렀을 때 동작
 function onTitlePushStart() {
   sound.init();
   if (clearedStages.size >= 1) {
-    // 1스테이지 이상 클리어했으면 스토리 건너뛰고 바로 게임 시작 (가장 최근 미클리어 스테이지 또는 0번)
     let targetStage = 0;
     for (let i = 0; i < STAGES.length; i++) {
       if (!clearedStages.has(i)) {
@@ -1194,32 +1899,47 @@ function onTitlePushStart() {
         break;
       }
     }
+    // 16단계 시작 전이고 2번째 스토리를 아직 안 봤다면 Chapter 2 재생
     sound.playStart();
     startGame(targetStage);
   } else {
     // 최초 플레이 시 프롤로그 스토리 시작
-    startStory();
+    startStory(1, 'gameplay');
   }
 }
 
-function startStory() {
+function startStory(chapter = 1, mode = 'gameplay') {
+  isCleared = false;
+  clearTimeout(clearBannerTimeout); // 👈 뒤늦게 뜨려는 팝업 타이머 즉시 파기!
+  const banner = document.getElementById('clearBanner');
+  if (banner) banner.classList.remove('active');
+
   sound.init();
   sound.stopBGM();
-  sound.playStart();
   gameState = 'STORY';
+  storyChapter = chapter;
+  storyPlaybackMode = mode;
+  showStorySelectModal = false;
   storyIndex = 0;
   storyTextProgress = 0;
   doorOpenProgress = 0;
   isDoorOpening = false;
-  document.getElementById('stageName').innerText = "스토리 프롤로그";
-  document.getElementById('diffBadge').innerText = "프롤로그";
+  
+  if (chapter === 2) {
+    chapter2Seen = true;
+    saveProgress();
+  }
+
+  document.getElementById('stageName').innerText = chapter === 1 ? "스토리 1: 5년 전 기획서" : "스토리 2: 7년 전 기획서";
+  document.getElementById('diffBadge').innerText = "스토리";
   document.getElementById('diffBadge').style.color = "#38bdf8";
   document.getElementById('hintText').innerHTML = "💬 <strong>스토리:</strong> 화면 터치나 [Space / Enter] 키를 눌러 다음 대사로 넘어가세요. (우상단 SKIP 가능)";
 }
 
 function advanceStory() {
   sound.init();
-  const currentScene = STORY_SCENES[storyIndex];
+  const currentScenes = storyChapter === 1 ? STORY_CHAPTER_1 : STORY_CHAPTER_2;
+  const currentScene = currentScenes[storyIndex];
 
   if (storyTextProgress < currentScene.text.length) {
     storyTextProgress = currentScene.text.length;
@@ -1227,7 +1947,7 @@ function advanceStory() {
     return;
   }
 
-  if (storyIndex < STORY_SCENES.length - 1) {
+  if (storyIndex < currentScenes.length - 1) {
     storyIndex++;
     storyTextProgress = 0;
     sound.playTalk();
@@ -1242,11 +1962,44 @@ function advanceStory() {
 function skipStory() {
   sound.init();
   sound.playStart();
-  startGame(0);
+  isDoorOpening = false;
+  doorOpenProgress = 0;
+  const banner = document.getElementById('clearBanner');
+  if (banner) banner.classList.remove('active');
+
+  if (storyPlaybackMode === 'replay') {
+    showTitleScreen();
+  } else {
+    const targetStage = (storyChapter === 1) ? 0 : 15;
+    startGame(targetStage);
+  }
+}
+
+function finishStory() {
+  isDoorOpening = false;
+  doorOpenProgress = 0;
+  const banner = document.getElementById('clearBanner');
+  if (banner) banner.classList.remove('active');
+
+  if (storyPlaybackMode === 'replay') {
+    showTitleScreen();
+  } else {
+    const targetStage = (storyChapter === 1) ? 0 : 15;
+    startGame(targetStage);
+  }
 }
 
 function startGame(stageIdx = 0) {
   sound.init();
+  if (sound.ctx && sound.ctx.state === 'suspended') {
+    sound.ctx.resume();
+  }
+  
+  // 🎚️ 기본 볼륨 30%(0.3) 보장 및 슬라이더 동기화
+  const slider = document.getElementById('volSlider');
+  const baseVol = slider ? (parseFloat(slider.value) || 0.7) : 0.7;
+  sound.setBgmVolume(baseVol);
+
   gameState = 'PLAYING';
   sound.startBGM();
   initStage(stageIdx);
@@ -1255,25 +2008,52 @@ function startGame(stageIdx = 0) {
 function showTitleScreen() {
   gameState = 'TITLE';
   sound.stopBGM();
+  stopStageTimer();
   document.getElementById('clearBanner').classList.remove('active');
   document.getElementById('stageName').innerText = "메인 타이틀";
-  document.getElementById('diffBadge').innerText = devModeActive ? "개발자 모드" : "창고담당 김대리";
-  document.getElementById('diffBadge').style.color = devModeActive ? "#34d399" : "#f59e0b";
-  document.getElementById('hintText').innerHTML = "🕹️ <strong>PUSH START</strong> 버튼을 눌러 김대리의 칼퇴 여정을 시작하세요!";
+
+  // 🎯 1. 이동 횟수 및 시간 0으로 초기화
+  moveCount = 0;
+  const moveEl = document.getElementById('moveCount');
+  if (moveEl) moveEl.innerText = "0";
+  const timerEl = document.getElementById('stageTimer');
+  if (timerEl) timerEl.innerText = "00:00";
+
+  // 🎯 상단 상태바 남은 목표 동기화 (30 - 클리어수)
+  const remainGoals = Math.max(0, STAGES.length - clearedStages.size);
+  const targetEl = document.getElementById('targetRemaining');
+  if (targetEl) targetEl.innerText = `${remainGoals}개`;
+
+  // 🎯 2. 타이틀 화면에서는 '난이도' 칸 전체를 숨김
+  const diffBadge = document.getElementById('diffBadge');
+  if (diffBadge && diffBadge.parentElement) {
+    diffBadge.parentElement.style.display = 'none';
+  }
+
+  const hintEl = document.getElementById('hintText');
+  if (hintEl) hintEl.innerHTML = "🕹️ <strong>PUSH START</strong> 버튼을 눌러 김대리의 칼퇴 여정을 시작하세요!";
 }
 
-function initStage(index) {
+function initStage(index, preserveTimer = false) {
   currentStageIndex = index;
+  if (!preserveTimer) stageResetCount = 0; // 👈 새 스테이지 진입 시 0으로 초기화
   const stageData = STAGES[index];
   
   if (gameState === 'PLAYING') {
     sound.startBGM();
+    startStageTimer(preserveTimer); // 👈 재시작 시에는 타이머 유지
   }
   
   document.getElementById('stageName').innerText = stageData.name;
   const diffEl = document.getElementById('diffBadge');
-  diffEl.innerText = stageData.diff;
-  diffEl.style.color = stageData.diffColor;
+  if (diffEl) {
+    diffEl.innerText = stageData.diff;
+    diffEl.style.color = stageData.diffColor;
+    // 🎯 스테이지 플레이 화면에서는 난이도 칸을 다시 보여줌
+    if (diffEl.parentElement) {
+      diffEl.parentElement.style.display = 'flex';
+    }
+  }
   
   // 힌트는 기본적으로 숨김 처리 (힌트 버튼 클릭 시 노출)
   const hintEl = document.getElementById('hintText');
@@ -1291,7 +2071,6 @@ function initStage(index) {
   moveHistory = [];
   moveCount = 0;
   undoRemaining = 3;
-  hintRemaining = 5;
   isCleared = false;
   particles = [];
   
@@ -1334,12 +2113,29 @@ function initStage(index) {
     grid.push(rowArr);
   }
   
-  const maxTileW = Math.floor((canvas.width - 32) / cols);
-  const maxTileH = Math.floor((canvas.height - 32) / rows);
-  tileSize = Math.min(maxTileW, maxTileH, 46);
+  const fitTile = Math.min(Math.floor((canvas.width - 32) / cols), Math.floor((canvas.height - 32) / rows));
+  tileSize = Math.max(56, Math.min(fitTile + 14, 62));
   
-  offsetX = Math.floor((canvas.width - cols * tileSize) / 2);
-  offsetY = Math.floor((canvas.height - rows * tileSize) / 2);
+  offsetX = 0;
+  offsetY = 0;
+
+  // 🎯 실제 벽/바닥 유효 범위(Bounding Box) 계산
+  let minC = cols, maxC = 0, minR = rows, maxR = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c].type !== 'void') {
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+      }
+    }
+  }
+  const initTile = Math.max(62, Math.min(Math.floor((canvas.width - 24) / Math.min(cols, 8)), 72));
+  const validCenterX = ((minC + maxC + 1) / 2) * initTile;
+  const validCenterY = ((minR + maxR + 1) / 2) * initTile;
+  camCurrentX = validCenterX - canvas.width / 2;
+  camCurrentY = validCenterY - canvas.height / 2;
   
   updateUI();
   renderNav();
@@ -1360,8 +2156,14 @@ function updateUI() {
       }
     }
   }
-  document.getElementById('targetRemaining').innerText = remaining;
-  document.getElementById('clearedCount').innerText = `클리어: ${clearedStages.size} / ${STAGES.length}`;
+
+// 전체 30개에서 클리어할 때마다 1개씩 차감
+  const remainGoals = Math.max(0, STAGES.length - clearedStages.size);
+  const targetEl = document.getElementById('targetRemaining');
+  if (targetEl) targetEl.innerText = `${remainGoals}개`;
+
+  const clearEl = document.getElementById('clearedCount');
+  if (clearEl) clearEl.innerText = `클리어: ${clearedStages.size} / ${STAGES.length}`;
 
   // 되돌리기 잔여 횟수 및 버튼 상태 갱신
   const undoBtn = document.getElementById('undoBtn');
@@ -1379,19 +2181,12 @@ function updateUI() {
     }
   }
 
-  // 힌트 잔여 횟수 및 버튼 상태 갱신
-  const hintBtn = document.getElementById('hintBtn');
-  if (hintBtn) {
-    const textEl = hintBtn.querySelector('.btn-text');
+  // 🔄 재시작 횟수 버튼 갱신
+  const resetBtn = document.getElementById('resetBtn');
+  if (resetBtn) {
+    const textEl = resetBtn.querySelector('.btn-text');
     if (textEl) {
-      textEl.innerText = `힌트 (${hintRemaining})`;
-    }
-    if (hintRemaining <= 0) {
-      hintBtn.style.opacity = '0.4';
-      hintBtn.style.cursor = 'not-allowed';
-    } else {
-      hintBtn.style.opacity = '1.0';
-      hintBtn.style.cursor = 'pointer';
+      textEl.innerText = `재시작 (${stageResetCount})`;
     }
   }
 }
@@ -1484,7 +2279,9 @@ function resetStage() {
   if (gameState !== 'PLAYING') return;
   sound.init();
   sound.playUndo();
-  initStage(currentStageIndex);
+  stageResetCount++; // 👈 1씩 증가
+  initStage(currentStageIndex, true);
+  updateUI();
 }
 
 function checkVictory() {
@@ -1500,58 +2297,44 @@ function checkVictory() {
 
   if (allDone) {
     isCleared = true;
+    gameState = 'CLEAR'; // 👈 골인 즉시 키 입력 차단 (연타 방지)
+    stopStageTimer();
+
+    const elapsedSec = stageStartTime ? Math.max(1, Math.floor((Date.now() - stageStartTime) / 1000)) : 0;
+    stageClearTimes[currentStageIndex] = elapsedSec;
     clearedStages.add(currentStageIndex);
     saveProgress();
     sound.playVictory();
     renderNav();
     updateUI();
-    
+
     const bannerTitle = document.querySelector('#clearBanner .banner-title');
     const bannerDesc = document.querySelector('#clearBanner .banner-desc');
     const bannerBtn = document.getElementById('nextStageBtn');
+    const stageTimeStr = formatKoreanDuration(elapsedSec);
 
-    // 15 스테이지(최종 엔딩) 클리어 시에만 꽃가루 대폭발 + 칼퇴 확정 연출!
+    // 30 스테이지(최종 엔딩)
     if (currentStageIndex >= STAGES.length - 1) {
+      let totalSec = 0;
+      for (let i = 0; i < STAGES.length; i++) totalSec += (stageClearTimes[i] || 0);
+      const totalTimeStr = formatKoreanDuration(totalSec);
       if (bannerTitle) bannerTitle.innerText = "🎉 전설의 칼퇴 확정! 김대리 퇴근 성공!";
-      if (bannerDesc) bannerDesc.innerText = "15개의 모든 난관을 뚫고 5년 전 기획서를 찾아냈습니다. 이제 당당하게 퇴근합니다!";
+      if (bannerDesc) bannerDesc.innerHTML = `모든 난관을 뚫고 7년 전 기획서까지 완벽하게 찾아냈습니다.<br><strong style="color:#fcd34d;">⏱️ 이번: ${stageTimeStr} | 🏆 총: ${totalTimeStr}</strong><br>이제 진짜 당당하게 퇴근합니다!`;
       if (bannerBtn) bannerBtn.innerText = "🏠 타이틀로 돌아가기 (Space / Enter)";
-
-      // 화려한 축하 꽃가루 파티클 150개 대폭발
-      for (let i = 0; i < 150; i++) {
-        particles.push({
-          x: canvas.width / 2 + (Math.random() - 0.5) * canvas.width * 0.9,
-          y: (Math.random() - 0.5) * 60,
-          vx: (Math.random() - 0.5) * 8,
-          vy: Math.random() * 4 + 1.5,
-          color: ['#f59e0b', '#10b981', '#38bdf8', '#fbbf24', '#ec4899', '#a855f7', '#ffffff'][Math.floor(Math.random() * 7)],
-          size: Math.random() * 7 + 3,
-          life: 1.8,
-          decay: Math.random() * 0.012 + 0.008
-        });
-      }
     } else {
-      // 1~14 스테이지는 "칼퇴 확정" 없이 순수 스테이지 클리어
+      // 1~29 스테이지
       if (bannerTitle) bannerTitle.innerText = "✨ 스테이지 클리어!";
-      if (bannerDesc) bannerDesc.innerText = "김대리가 상자를 안전하게 정리했습니다.";
-      if (bannerBtn) bannerBtn.innerText = "다음 업무로 (Space / Enter)";
-
-      for (let i = 0; i < 40; i++) {
-        particles.push({
-          x: canvas.width / 2 + (Math.random() - 0.5) * 220,
-          y: canvas.height / 2 + (Math.random() - 0.5) * 120,
-          vx: (Math.random() - 0.5) * 7,
-          vy: (Math.random() - 0.8) * 6,
-          color: ['#f59e0b', '#10b981', '#38bdf8', '#fbbf24'][Math.floor(Math.random() * 4)],
-          size: Math.random() * 5 + 3,
-          life: 1.0,
-          decay: Math.random() * 0.02 + 0.015
-        });
+      if (bannerDesc) {
+        const descMsg = (currentStageIndex === 14) 
+          ? "5년 전 기획서 획득 성공! 박부장에게 보고합니다." 
+          : "김대리가 상자를 안전하게 정리했습니다.";
+        bannerDesc.innerHTML = `${descMsg}<br><span style="color:#fcd34d; font-weight:700;">⏱️ 클리어 시간: ${stageTimeStr}</span>`;
       }
+      if (bannerBtn) bannerBtn.innerText = "다음 업무로 (Space / Enter)";
     }
 
-    setTimeout(() => {
-      document.getElementById('clearBanner').classList.add('active');
-    }, 350);
+    // 🎯 핵심 변경: setTimeout 없이 즉시 배너 노출
+    document.getElementById('clearBanner').classList.add('active');
   }
 }
 
@@ -1595,7 +2378,8 @@ function draw() {
 function drawStoryScreen() {
   const w = canvas.width;
   const h = canvas.height;
-  const scene = STORY_SCENES[storyIndex];
+  const scenes = storyChapter === 1 ? STORY_CHAPTER_1 : STORY_CHAPTER_2;
+  const scene = scenes[storyIndex];
 
   if (storyTextProgress < scene.text.length && titleTimer % 2 === 0) {
     storyTextProgress++;
@@ -1629,11 +2413,13 @@ function drawStoryScreen() {
   ctx.restore();
 
   if (isDoorOpening) {
-    doorOpenProgress += 0.035;
+    doorOpenProgress += 0.05; // 👈 0.035 -> 0.05로 빠르게 페이드
     ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, doorOpenProgress)})`;
     ctx.fillRect(0, 0, w, h);
     if (doorOpenProgress >= 1.0) {
-      startGame(0);
+      isDoorOpening = false;
+      doorOpenProgress = 0;
+      finishStory();
     }
   }
 }
@@ -2155,39 +2941,44 @@ function drawFlusteredKimDaeri(cx, cy, timer) {
 
 function drawDialogBox(w, h, scene) {
   const boxX = 14;
-  const boxY = h - 130;
+  const boxH = 155;
+  const boxY = h - boxH - 16;
   const boxW = w - 28;
-  const boxH = 118;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(10, 14, 26, 0.92)';
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 2;
+  ctx.fillStyle = 'rgba(10, 14, 26, 0.95)';
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 2.2;
   ctx.beginPath();
-  ctx.roundRect(boxX, boxY, boxW, boxH, 10);
+  ctx.roundRect(boxX, boxY, boxW, boxH, 14);
   ctx.fill();
   ctx.stroke();
 
+  // 1. 화자 이름 먼저 측정 및 출력 (20px)
   ctx.fillStyle = scene.speakerColor || '#f59e0b';
-  ctx.font = 'bold 14px "Pretendard", sans-serif';
+  ctx.font = '900 20px "Pretendard", sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText(`[ ${scene.speaker} ]`, boxX + 16, boxY + 26);
+  const speakerLabel = `[ ${scene.speaker} ]`;
+  ctx.fillText(speakerLabel, boxX + 20, boxY + 34);
+  const speakerWidth = ctx.measureText(speakerLabel).width; // 👈 20px 상태에서 정확 측정
 
-  ctx.fillStyle = '#64748b';
-  ctx.font = '11px sans-serif';
-  ctx.fillText(`- ${scene.sub}`, boxX + 100, boxY + 26);
+  // 2. 부가 설명 충분한 간격(+16px) 두고 출력 (14px)
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '600 14px "Pretendard", sans-serif';
+  ctx.fillText(`- ${scene.sub}`, boxX + 20 + speakerWidth + 16, boxY + 34);
 
-  ctx.fillStyle = '#f8fafc';
-  ctx.font = '500 14px "Pretendard", sans-serif';
+  // 📖 메인 스토리 대사 폰트 (21px 볼드체, 줄간격 31px)
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 21px "Pretendard", -apple-system, sans-serif';
   
   const currentText = scene.text.substring(0, storyTextProgress);
-  wrapText(ctx, currentText, boxX + 16, boxY + 54, boxW - 32, 22);
+  wrapText(ctx, currentText, boxX + 20, boxY + 72, boxW - 40, 31);
 
   if (titleTimer % 40 < 25) {
-    ctx.fillStyle = '#f59e0b';
-    ctx.font = 'bold 12px sans-serif';
+    ctx.fillStyle = '#fcd34d';
+    ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText('▼ 터치하여 계속', boxX + boxW - 16, boxY + boxH - 12);
+    ctx.fillText('▼ 터치하여 계속', boxX + boxW - 18, boxY + boxH - 14);
   }
 
   ctx.restore();
@@ -2214,6 +3005,7 @@ function drawTitleScreen() {
   const w = canvas.width;
   const h = canvas.height;
 
+  // 1. 다크 배경 그라데이션
   const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
   bgGrad.addColorStop(0, '#0a0d16');
   bgGrad.addColorStop(0.7, '#131929');
@@ -2221,191 +3013,285 @@ function drawTitleScreen() {
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, w, h);
 
+  // 천장 레트로 트러스 철골
   ctx.strokeStyle = '#1e283d';
   ctx.lineWidth = 3;
   ctx.beginPath();
   for (let x = 0; x <= w; x += 60) {
     ctx.moveTo(x, 0);
-    ctx.lineTo(x + 30, 40);
+    ctx.lineTo(x + 30, 48);
     ctx.lineTo(x + 60, 0);
   }
   ctx.stroke();
 
+  // 중앙 스포트라이트 조명 (660px 높이 꽉 차게 확장)
   ctx.save();
-  const spotGrad = ctx.createRadialGradient(w / 2, 70, 20, w / 2, 220, 260);
-  spotGrad.addColorStop(0, 'rgba(245, 158, 11, 0.22)');
-  spotGrad.addColorStop(0.5, 'rgba(245, 158, 11, 0.08)');
+  const spotGrad = ctx.createRadialGradient(w / 2, 90, 30, w / 2, 340, 420);
+  spotGrad.addColorStop(0, 'rgba(245, 158, 11, 0.28)');
+  spotGrad.addColorStop(0.5, 'rgba(245, 158, 11, 0.09)');
   spotGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = spotGrad;
   ctx.beginPath();
-  ctx.moveTo(w / 2 - 40, 0);
-  ctx.lineTo(w / 2 + 40, 0);
-  ctx.lineTo(w / 2 + 220, h);
-  ctx.lineTo(w / 2 - 220, h);
+  ctx.moveTo(w / 2 - 60, 0);
+  ctx.lineTo(w / 2 + 60, 0);
+  ctx.lineTo(w / 2 + 280, h);
+  ctx.lineTo(w / 2 - 280, h);
   ctx.closePath();
   ctx.fill();
   ctx.restore();
 
-  draw3DBox(40, 260, 64, false);
-  draw3DBox(100, 260, 64, false);
-  draw3DBox(70, 205, 64, true);
-  draw3DBox(30, 150, 56, false);
+  // 📦 660px 높이에 맞춰 좌우 3D 크라프트/에메랄드 상자더미 큼직하게 하향 배치
+  // 좌측 4단 상자탑 (Y: 270 ~ 445)
+  draw3DBox(25, 445, 82, false);
+  draw3DBox(105, 445, 82, false);
+  draw3DBox(65, 370, 80, true);
+  draw3DBox(20, 295, 74, false);
 
-  draw3DBox(440, 260, 64, false);
-  draw3DBox(500, 260, 64, false);
-  draw3DBox(470, 205, 64, false);
-  draw3DBox(520, 150, 56, true);
+  // 우측 4단 상자탑 (Y: 270 ~ 445)
+  draw3DBox(415, 445, 82, false);
+  draw3DBox(495, 445, 82, false);
+  draw3DBox(455, 370, 80, false);
+  draw3DBox(510, 295, 74, true);
 
   ctx.save();
   ctx.textAlign = 'center';
   
+  // 1. 레트로 퍼즐 영문 (Y: 72)
   ctx.fillStyle = '#f59e0b';
-  ctx.font = 'bold 12px monospace';
-  ctx.letterSpacing = '2px';
-  ctx.fillText('★ RETRO LOGIC PUZZLE ★', w / 2, 36);
+  ctx.font = 'bold 18px monospace';
+  ctx.letterSpacing = '4px';
+  ctx.fillText('★ RETRO LOGIC PUZZLE ★', w / 2, 72);
 
-  ctx.font = '900 38px "Pretendard", sans-serif';
+  // 2. 메인 타이틀 (58px 초대형 ExtraBold, Y: 145)
+  ctx.font = '900 58px "Pretendard", sans-serif';
   ctx.fillStyle = '#000';
-  ctx.fillText('창고담당 김대리', w / 2 + 2, 82);
-  ctx.fillText('창고담당 김대리', w / 2 - 2, 82);
-  ctx.fillText('창고담당 김대리', w / 2, 84);
+  ctx.fillText('창고담당 김대리', w / 2 + 2, 147);
+  ctx.fillText('창고담당 김대리', w / 2 - 2, 147);
+  ctx.fillText('창고담당 김대리', w / 2, 149);
 
-  const titleGrad = ctx.createLinearGradient(0, 50, 0, 85);
+  const titleGrad = ctx.createLinearGradient(0, 100, 0, 155);
   titleGrad.addColorStop(0, '#fef08a');
   titleGrad.addColorStop(0.5, '#f59e0b');
   titleGrad.addColorStop(1, '#d97706');
   ctx.fillStyle = titleGrad;
-  ctx.fillText('창고담당 김대리', w / 2, 80);
+  ctx.fillText('창고담당 김대리', w / 2, 145);
 
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '500 13px sans-serif';
-  ctx.fillText('“오늘도 무사히 칼퇴할 수 있을까...?”', w / 2, 108);
+  // 3. 서브 타이틀 (21px 볼드, Y: 195)
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = '700 21px "Pretendard", sans-serif';
+  ctx.fillText('“오늘도 무사히 칼퇴할 수 있을까...?”', w / 2, 195);
+
+  // 4. 남은 목표 뱃지 (24px ExtraBold, Y: 240)
+  const remainTitleGoals = Math.max(0, 30 - ((typeof clearedStages !== 'undefined' && clearedStages) ? clearedStages.size : 0));
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = '900 24px "Pretendard", sans-serif';
+  ctx.fillText(`📋 남은 목표: ${remainTitleGoals}개`, w / 2, 240);
   ctx.restore();
 
-  drawHeroKimDaeri(w / 2, 215, titleTimer);
+  // 🧑‍💼 2등신 김대리 (Y: 385 위치로 큼직하고 당당하게 배치)
+  drawHeroKimDaeri(w / 2, 385, titleTimer);
 
-  // 1. PUSH START 버튼
+  // 1. PUSH START 메인 버튼 (크기 300x62, Y: 495로 하향 배치)
   const pulse = Math.sin(titleTimer * 0.08) * 0.5 + 0.5;
   const btn = pushStartBtnRect;
-  btn.x = w / 2 - 110;
-  btn.y = 308;
-  btn.w = 220;
-  btn.h = 44;
+  btn.w = 300;
+  btn.h = 62;
+  btn.x = w / 2 - btn.w / 2;
+  btn.y = 590;
 
   ctx.save();
   ctx.shadowColor = `rgba(245, 158, 11, ${0.4 + pulse * 0.4})`;
-  ctx.shadowBlur = 16 * pulse + 8;
+  ctx.shadowBlur = 20 * pulse + 8;
 
   const btnGrad = ctx.createLinearGradient(btn.x, btn.y, btn.x, btn.y + btn.h);
   btnGrad.addColorStop(0, `rgba(245, 158, 11, ${0.9 + pulse * 0.1})`);
   btnGrad.addColorStop(1, `rgba(217, 119, 6, ${0.9 + pulse * 0.1})`);
   ctx.fillStyle = btnGrad;
   ctx.beginPath();
-  ctx.roundRect(btn.x, btn.y, btn.w, btn.h, 10);
+  ctx.roundRect(btn.x, btn.y, btn.w, btn.h, 14);
   ctx.fill();
 
   ctx.strokeStyle = '#fef08a';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.8;
   ctx.stroke();
   ctx.restore();
 
   ctx.save();
   ctx.textAlign = 'center';
   ctx.fillStyle = '#000';
-  ctx.font = '900 16px "Pretendard", monospace';
-  ctx.fillText('▶ PUSH START ◀', w / 2, btn.y + 27);
+  ctx.font = '900 22px "Pretendard", monospace';
+  ctx.fillText('▶ PUSH START ◀', w / 2, btn.y + 35);
   ctx.restore();
 
-  // 2. 하단 서브 버튼들: [스토리 보기] (클리어 1개 이상 시) & [기록 초기화]
-  const hasClearedAny = clearedStages.size >= 1;
+  // 2. 하단 3대 서브 버튼 (Y: 575로 맨 아래 안정적 배치)
+  // [스토리 보기]
+  // 2. 하단 서브 버튼들 (모바일: 3개 버튼 / PC: 터치모드 제거 후 2개 버튼 깔끔 배치)
+  const isMobile = window.innerWidth <= 640;
 
-  if (hasClearedAny) {
-    // [스토리 보기]
+  if (isMobile) {
+    // 📱 모바일: [스토리 보기] | [터치/십자키 모드] | [기록 초기화]
     const sBtn = storyReplayBtnRect;
-    sBtn.x = w / 2 - 145;
-    sBtn.y = 362;
-    sBtn.w = 135;
-    sBtn.h = 32;
-
+    sBtn.w = 135; sBtn.h = 48; sBtn.x = w / 2 - 215; sBtn.y = 530;
     ctx.save();
-    ctx.fillStyle = '#1a2333';
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(sBtn.x, sBtn.y, sBtn.w, sBtn.h, 6);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 12px "Pretendard", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#1a2333'; ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.roundRect(sBtn.x, sBtn.y, sBtn.w, sBtn.h, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 13px "Pretendard", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('스토리 보기', sBtn.x + sBtn.w / 2, sBtn.y + sBtn.h / 2);
     ctx.restore();
 
-    // [기록 초기화]
-    const rBtn = resetProgressBtnRect;
-    rBtn.x = w / 2 + 10;
-    rBtn.y = 362;
-    rBtn.w = 135;
-    rBtn.h = 32;
-
+    const tBtn = touchModeBtnRect;
+    tBtn.w = 140; tBtn.h = 48; tBtn.x = w / 2 - 70; tBtn.y = 530;
     ctx.save();
-    ctx.fillStyle = '#1e1b24';
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(rBtn.x, rBtn.y, rBtn.w, rBtn.h, 6);
-    ctx.fill();
-    ctx.stroke();
+    const showTouchText = !isTouchMode;
+    ctx.fillStyle = showTouchText ? '#1a2333' : 'rgba(245, 158, 11, 0.25)';
+    ctx.strokeStyle = showTouchText ? '#38bdf8' : '#f59e0b'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.roundRect(tBtn.x, tBtn.y, tBtn.w, tBtn.h, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = showTouchText ? '#38bdf8' : '#fcd34d'; ctx.font = 'bold 13px "Pretendard", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(showTouchText ? '👆 터치 모드' : '🎮 십자키 모드', tBtn.x + tBtn.w / 2, tBtn.y + tBtn.h / 2);
+    ctx.restore();
 
-    ctx.fillStyle = '#f87171';
-    ctx.font = 'bold 12px "Pretendard", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    const rBtn = resetProgressBtnRect;
+    rBtn.w = 135; rBtn.h = 48; rBtn.x = w / 2 + 80; rBtn.y = 530;
+    ctx.save();
+    ctx.fillStyle = '#1e1b24'; ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.roundRect(rBtn.x, rBtn.y, rBtn.w, rBtn.h, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#f87171'; ctx.font = 'bold 13px "Pretendard", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('기록 초기화', rBtn.x + rBtn.w / 2, rBtn.y + rBtn.h / 2);
     ctx.restore();
   } else {
-    // 0개 클리어 시 중앙에 [기록 초기화]
-    const rBtn = singleResetBtnRect;
-    rBtn.x = w / 2 - 68;
-    rBtn.y = 362;
-    rBtn.w = 136;
-    rBtn.h = 30;
+    // 🖥️ PC: 터치모드 버튼 숨김 (클릭 판정 제거), [스토리 보기] & [기록 초기화] 2개만 배치
+    touchModeBtnRect.w = 0; 
+    touchModeBtnRect.h = 0;
 
+    const sBtn = storyReplayBtnRect;
+    sBtn.w = 160; sBtn.h = 48; sBtn.x = w / 2 - 175; sBtn.y = 530;
     ctx.save();
-    ctx.fillStyle = '#1a202c';
-    ctx.strokeStyle = '#64748b';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.roundRect(rBtn.x, rBtn.y, rBtn.w, rBtn.h, 6);
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillStyle = '#1a2333'; ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.roundRect(sBtn.x, sBtn.y, sBtn.w, sBtn.h, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 14px "Pretendard", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('스토리 보기', sBtn.x + sBtn.w / 2, sBtn.y + sBtn.h / 2);
+    ctx.restore();
 
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = 'bold 11.5px "Pretendard", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    const rBtn = resetProgressBtnRect;
+    rBtn.w = 160; rBtn.h = 48; rBtn.x = w / 2 + 15; rBtn.y = 530;
+    ctx.save();
+    ctx.fillStyle = '#1e1b24'; ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.roundRect(rBtn.x, rBtn.y, rBtn.w, rBtn.h, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#f87171'; ctx.font = 'bold 14px "Pretendard", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('기록 초기화', rBtn.x + rBtn.w / 2, rBtn.y + rBtn.h / 2);
     ctx.restore();
   }
 
-  // 3. 타이틀 우측 하단 개발자 모드 버튼 ("개발자" 3글자, 비밀번호: 1029)
+  // 3. 우측 하단 [개발자] 버튼 (Y: 615)
   const dBtn = devModeBtnRect;
+  dBtn.x = w - 85; dBtn.y = h - 45; dBtn.w = 72; dBtn.h = 30;
   ctx.save();
   ctx.fillStyle = devModeActive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(30, 41, 59, 0.7)';
-  ctx.strokeStyle = devModeActive ? '#10b981' : '#475569';
-  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = devModeActive ? '#10b981' : '#475569'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.roundRect(dBtn.x, dBtn.y, dBtn.w, dBtn.h, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = devModeActive ? '#34d399' : '#94a3b8';
+  ctx.font = 'bold 13px "Pretendard", sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('개발자', dBtn.x + dBtn.w / 2, dBtn.y + dBtn.h / 2);
+  ctx.restore();
+
+  // 4. 스토리 선택 모달
+  if (showStorySelectModal) {
+    drawStorySelectModalPopup(w, h);
+  }
+}
+
+// 🎬 스토리 1/2 선택 팝업 모달 렌더링
+function drawStorySelectModalPopup(w, h) {
+  const mw = 320;
+  const mh = 220;
+  const mx = w / 2 - mw / 2;
+  const my = h / 2 - mh / 2;
+
+  ctx.save();
+  // 어두운 배경 딤
+  ctx.fillStyle = 'rgba(5, 8, 15, 0.85)';
+  ctx.fillRect(0, 0, w, h);
+
+  // 모달 박스 본체
+  ctx.fillStyle = '#161d2d';
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(dBtn.x, dBtn.y, dBtn.w, dBtn.h, 5);
+  ctx.roundRect(mx, my, mw, mh, 12);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = devModeActive ? '#34d399' : '#94a3b8';
-  ctx.font = 'bold 11px "Pretendard", sans-serif';
+  // 모달 헤더 타이틀
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '900 16px "Pretendard", sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('개발자', dBtn.x + dBtn.w / 2, dBtn.y + dBtn.h / 2);
+  ctx.fillText('🎬 스토리 다시보기', w / 2, my + 26);
+
+  // 1. 스토리 1 버튼 (5년 전 기획서)
+  const m1 = modalStory1BtnRect;
+  m1.x = w / 2 - 130;
+  m1.y = my + 52;
+  m1.w = 260;
+  m1.h = 42;
+
+  ctx.fillStyle = '#1e293b';
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(m1.x, m1.y, m1.w, m1.h, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = 'bold 13px "Pretendard", sans-serif';
+  ctx.fillText('1. 스토리 1: 5년 전 기획서', w / 2, m1.y + m1.h / 2);
+
+  // 2. 스토리 2 버튼 (7년 전 기획서 - 15단계 클리어 or 개발자 모드 시 해금)
+  const m2 = modalStory2BtnRect;
+  m2.x = w / 2 - 130;
+  m2.y = my + 104;
+  m2.w = 260;
+  m2.h = 42;
+
+  const ch2Unlocked = clearedStages.has(14) || chapter2Seen || devModeActive;
+  ctx.fillStyle = ch2Unlocked ? '#1e293b' : 'rgba(15, 23, 42, 0.6)';
+  ctx.strokeStyle = ch2Unlocked ? '#f59e0b' : '#334155';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(m2.x, m2.y, m2.w, m2.h, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = ch2Unlocked ? '#f59e0b' : '#64748b';
+  ctx.font = 'bold 13px "Pretendard", sans-serif';
+  ctx.fillText(ch2Unlocked ? '2. 스토리 2: 7년 전 기획서' : '🔒 스토리 2 (15단계 클리어 필요)', w / 2, m2.y + m2.h / 2);
+
+  // 3. 닫기 버튼
+  const mc = modalCloseBtnRect;
+  mc.x = w / 2 - 60;
+  mc.y = my + 160;
+  mc.w = 120;
+  mc.h = 32;
+
+  ctx.fillStyle = '#334155';
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(mc.x, mc.y, mc.w, mc.h, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = 'bold 12px "Pretendard", sans-serif';
+  ctx.fillText('✕ 닫기', w / 2, mc.y + mc.h / 2);
+
   ctx.restore();
 }
 
@@ -2525,7 +3411,10 @@ function drawHeroKimDaeri(cx, cy, timer) {
 }
 
 function drawInGame() {
-  ctx.fillStyle = '#090b10';
+  const isDeepZone = currentStageIndex >= 15;
+  const isMobile = window.innerWidth <= 640; // 📱 모바일 기기 여부 판정
+
+  ctx.fillStyle = isDeepZone ? '#080d0e' : '#090b10';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
@@ -2537,67 +3426,124 @@ function drawInGame() {
     ctx.stroke();
   }
 
-  // 1. 바닥 & 목표 발판 & 이동 불가 벽
+  // 📐 타일 크기 & 오프셋 (PC: 기존 유지 / 모바일: 확대 추적 or 전체보기)
+  let curTile = 46;
+  let curOffsetX = 0;
+  let curOffsetY = 0;
+
+  if (!isMobile) {
+    // 🖥️ PC: 전체 맵 한눈에 깔끔 뷰
+    const fitW = Math.floor((canvas.width - 32) / cols);
+    const fitH = Math.floor((canvas.height - 32) / rows);
+    curTile = Math.min(fitW, fitH, 46);
+    curOffsetX = Math.floor((canvas.width - cols * curTile) / 2);
+    curOffsetY = Math.floor((canvas.height - rows * curTile) / 2);
+  } else {
+    // 📱 모바일: 억지 늘림 없이 1:1 정비율 유지하며 화면 꽉 차게 최대 확대 + 카메라 추적
+    // 📱 가로/세로 모두 보라색 영역에 쏙 들어가도록 정비율 계산
+    const fitW = Math.floor((canvas.width - 24) / cols);
+    const fitH = Math.floor((canvas.height - 24) / rows);
+    curTile = Math.max(58, Math.min(fitW, fitH, 72));
+    const targetCamX = (player.x + 0.5) * curTile - canvas.width / 2;
+    const targetCamY = (player.y + 0.5) * curTile - canvas.height / 2;
+
+    const mapW = cols * curTile;
+    const mapH = rows * curTile;
+
+    // 🎯 앞뒤 빈 공백 제거한 실제 유효 맵 중심 정렬
+    let minC = cols, maxC = 0, minR = rows, maxR = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r][c].type !== 'void') {
+          if (c < minC) minC = c; if (c > maxC) maxC = c;
+          if (r < minR) minR = r; if (r > maxR) maxR = r;
+        }
+      }
+    }
+    const realW = (maxC - minC + 1) * curTile;
+    const realH = (maxR - minR + 1) * curTile;
+    const realCenterX = ((minC + maxC + 1) / 2) * curTile;
+    const realCenterY = ((minR + maxR + 1) / 2) * curTile;
+
+    let targetX = realW <= canvas.width ? realCenterX - canvas.width / 2 : Math.max(minC * curTile, Math.min((maxC + 1) * curTile - canvas.width, targetCamX));
+    let targetY = realH <= canvas.height ? realCenterY - canvas.height / 2 : Math.max(minR * curTile, Math.min((maxR + 1) * curTile - canvas.height, targetCamY));
+
+    camCurrentX += (targetX - camCurrentX) * 0.25;
+    camCurrentY += (targetY - camCurrentY) * 0.25;
+
+    curOffsetX = -Math.round(camCurrentX);
+    curOffsetY = -Math.round(camCurrentY);
+  }
+
+  ctx.save();
+
+  // 1. 바닥 & 목표 발판 & 벽 렌더링
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const cell = grid[r][c];
-      const px = offsetX + c * tileSize;
-      const py = offsetY + r * tileSize;
+      const px = curOffsetX + c * curTile;
+      const py = curOffsetY + r * curTile;
 
       if (cell.type === 'floor') {
         const isAlt = (r + c) % 2 === 0;
-        ctx.fillStyle = isAlt ? '#181e2a' : '#141822';
-        ctx.fillRect(px, py, tileSize, tileSize);
-        
-        ctx.strokeStyle = '#222938';
-        ctx.strokeRect(px + 0.5, py + 0.5, tileSize - 1, tileSize - 1);
+        if (isDeepZone) {
+          ctx.fillStyle = isAlt ? '#131f22' : '#0e1719';
+          ctx.fillRect(px, py, curTile, curTile);
+          ctx.strokeStyle = '#1c2d31';
+          ctx.strokeRect(px + 0.5, py + 0.5, curTile - 1, curTile - 1);
+        } else {
+          ctx.fillStyle = isAlt ? '#181e2a' : '#141822';
+          ctx.fillRect(px, py, curTile, curTile);
+          ctx.strokeStyle = '#222938';
+          ctx.strokeRect(px + 0.5, py + 0.5, curTile - 1, curTile - 1);
+        }
 
         if (cell.isGoal) {
-          drawGoalPad(px, py, tileSize, cell.hasBox);
+          drawGoalPad(px, py, curTile, cell.hasBox);
         }
       } else if (cell.type === 'wall') {
-        // 🧱 지정된 슬레이트 메탈 벽 텍스처
-        drawCustomWall(px, py, tileSize);
+        drawCustomWall(px, py, curTile);
       }
     }
   }
 
-  // 2. 오브젝트 레이어 (상자 + 플레이어)
+  // 2. 상자 & 플레이어 렌더링
   const renderList = [];
-
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const cell = grid[r][c];
-      const px = offsetX + c * tileSize;
-      const py = offsetY + r * tileSize;
+      const px = curOffsetX + c * curTile;
+      const py = curOffsetY + r * curTile;
 
       if (cell.hasBox) {
         renderList.push({
           type: 'box',
           y: py,
-          draw: () => draw3DBox(px, py, tileSize, cell.isGoal)
+          draw: () => draw3DBox(px, py, curTile, cell.isGoal)
         });
       }
     }
   }
 
-  const playerPx = offsetX + player.x * tileSize;
-  const playerPy = offsetY + player.y * tileSize;
+  const playerPx = curOffsetX + player.x * curTile;
+  const playerPy = curOffsetY + player.y * curTile;
   renderList.push({
     type: 'player',
     y: playerPy,
-    draw: () => drawPixelCharacter(playerPx, playerPy, tileSize, player.facing, player.animFrame)
+    draw: () => drawPixelCharacter(playerPx, playerPy, curTile, player.facing, player.animFrame)
   });
 
   renderList.sort((a, b) => a.y - b.y);
   renderList.forEach(item => item.draw());
 
   drawParticles();
+  ctx.restore();
 }
 
 // 🧱 이동 불가 구역 벽 블록
 function drawCustomWall(x, y, size) {
-  ctx.fillStyle = '#0c1017';
+  const isDeepZone = currentStageIndex >= 15;
+  ctx.fillStyle = isDeepZone ? '#080d0e' : '#0c1017';
   ctx.fillRect(x, y, size, size);
 
   const topH = Math.floor(size * 0.44);
@@ -2605,26 +3551,30 @@ function drawCustomWall(x, y, size) {
   const halfW = Math.floor((size - margin * 3) / 2);
   const panelH = topH - margin * 2;
 
-  ctx.fillStyle = '#394354';
+  // 1. 상단 메탈 패널 (지하 10층: 다크 틸 메탈)
+  ctx.fillStyle = isDeepZone ? '#283c42' : '#394354';
   ctx.fillRect(x + margin, y + margin, halfW, panelH);
   ctx.fillRect(x + margin * 2 + halfW, y + margin, halfW, panelH);
 
-  ctx.fillStyle = '#4c5970';
+  // 2. 상단 하이라이트 라인
+  ctx.fillStyle = isDeepZone ? '#3b545c' : '#4c5970';
   ctx.fillRect(x + margin + 1, y + margin + 1, halfW - 2, 2);
   ctx.fillRect(x + margin * 2 + halfW + 1, y + margin + 1, halfW - 2, 2);
 
-  ctx.fillStyle = '#1c2330';
+  // 3. 패널 사이 분할 홈 섀도우
+  ctx.fillStyle = isDeepZone ? '#141f22' : '#1c2330';
   ctx.fillRect(x + margin + halfW, y + margin, margin, panelH);
 
+  // 4. 하단 베이스 블록
   const bottomY = y + topH;
   const bottomH = size - topH - margin;
-  ctx.fillStyle = '#262f40';
+  ctx.fillStyle = isDeepZone ? '#1d2c30' : '#262f40';
   ctx.fillRect(x + margin, bottomY, size - margin * 2, bottomH);
 
-  ctx.fillStyle = '#171c26';
+  ctx.fillStyle = isDeepZone ? '#10181a' : '#171c26';
   ctx.fillRect(x + margin, y + size - 4, size - margin * 2, 3);
 
-  ctx.strokeStyle = '#0b0f16';
+  ctx.strokeStyle = isDeepZone ? '#06090a' : '#0b0f16';
   ctx.lineWidth = 1;
   ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
 }
@@ -2948,7 +3898,21 @@ function drawParticles() {
 /* =====================================================================
    7. 입력 핸들러 & UI 이벤트
    ===================================================================== */
-window.addEventListener('keydown', (e) => {
+  // 📱 화면 튕김만 차단 (슬라이더/모달 터치는 100% 허용)
+  document.addEventListener('touchmove', (e) => {
+    if (e.target.closest('#stageModalNav') || e.target.closest('#volSlider')) {
+      return;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener('touchmove', (e) => {
+  if (!e.target.closest('#stageModalNav')) {
+    e.preventDefault();
+  }
+  }, { passive: false });
+  
+   window.addEventListener('keydown', (e) => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
     e.preventDefault();
   }
@@ -2968,6 +3932,7 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (isCleared && (e.code === 'Space' || e.code === 'Enter')) {
+    e.preventDefault();
     nextStage();
     return;
   }
@@ -3002,82 +3967,180 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-canvas.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  const rect = canvas.getBoundingClientRect();
-  const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
+let touchStartX = 0;
+let touchStartY = 0;
+let touchMoved = false;
 
-  if (gameState === 'TITLE') {
-    const hasClearedAny = clearedStages.size >= 1;
+// 📱 터치 모드 UI 갱신 함수
+function updateTouchModeUI() {
+  const pad = document.querySelector('.gamepad-container');
+  if (pad) {
+    pad.classList.toggle('touch-only-mode', isTouchMode);
+  }
+}
 
-    // 0. 개발자 모드 버튼 클릭 (비밀번호: 1029)
-    const d = devModeBtnRect;
-    if (clickX >= d.x && clickX <= d.x + d.w && clickY >= d.y && clickY <= d.y + d.h) {
-      if (devModeActive) {
-        if (confirm('개발자 모드를 해제하시겠습니까?')) {
-          devModeActive = false;
-          renderNav();
-          updateUI();
-        }
-      } else {
-        const pw = prompt('개발자 모드 암호를 입력하세요:');
-        if (pw === '1029') {
-          devModeActive = true;
-          alert('🔓 개발자 모드가 활성화되었습니다!\n모든 스테이지를 자유롭게 선택할 수 있습니다.');
-          renderNav();
-          updateUI();
-        } else if (pw !== null) {
-          alert('❌ 암호가 올바르지 않습니다.');
-        }
-      }
-      return;
-    }
+// 📱 게임 화면 + 하단 컨트롤러 영역 전체 스와이프(슬라이드) 방향전환
+let globalTouchStartX = 0;
+let globalTouchStartY = 0;
 
-    // 1. PUSH START 버튼 클릭
-    const b = pushStartBtnRect;
-    if (clickX >= b.x && clickX <= b.x + b.w && clickY >= b.y && clickY <= b.y + b.h) {
-      onTitlePushStart();
-      return;
-    }
+window.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('button')) return; // 버튼 누를 땐 스와이프 제외
+  globalTouchStartX = e.clientX;
+  globalTouchStartY = e.clientY;
+}, { passive: true });
 
-    // 2. 스토리 보기 버튼 클릭 (1개 이상 클리어 시)
-    if (hasClearedAny) {
-      const s = storyReplayBtnRect;
-      if (clickX >= s.x && clickX <= s.x + s.w && clickY >= s.y && clickY <= s.y + s.h) {
-        startStory();
-        return;
-      }
+window.addEventListener('pointerup', (e) => {
+  if (gameState !== 'PLAYING' || isCleared) return;
+  if (e.target.closest('button')) return;
 
-      const r = resetProgressBtnRect;
-      if (clickX >= r.x && clickX <= r.x + r.w && clickY >= r.y && clickY <= r.y + r.h) {
-        clearProgress();
-        return;
-      }
+  const dx = e.clientX - globalTouchStartX;
+  const dy = e.clientY - globalTouchStartY;
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+
+  // 10px만 스쳐도 즉시 1칸 이동 (화면 + 하단패드 어디든 작동)
+  if (Math.max(absX, absY) > 10) {
+    if (absX > absY) {
+      if (dx > 0) tryMove(1, 0, 'right');
+      else tryMove(-1, 0, 'left');
     } else {
-      const r = singleResetBtnRect;
-      if (clickX >= r.x && clickX <= r.x + r.w && clickY >= r.y && clickY <= r.y + r.h) {
-        clearProgress();
-        return;
-      }
+      if (dy > 0) tryMove(0, 1, 'down');
+      else tryMove(0, -1, 'up');
     }
+  }
+}, { passive: true });
 
-    // 그 외 영역 클릭 시 기본 PUSH START 실행
-    onTitlePushStart();
+function handleTitleClick(x, y) {
+   // 모달 열려있을 때
+  if (showStorySelectModal) {
+    const my = canvas.height / 2 - 110; // 660 / 2 - 110 = 220
+    const mx = canvas.width / 2 - 130;  // 600 / 2 - 130 = 170
+
+    // 1. 스토리 1 버튼 (Y: 265 ~ 320)
+    if (x >= 150 && x <= 450 && y >= my + 45 && y <= my + 95) {
+      sound.init(); sound.playTalk();
+      showStorySelectModal = false;
+      startStory(1, 'replay');
+      return;
+    }
+    // 2. 스토리 2 버튼 (Y: 320 ~ 375)
+    if (x >= 150 && x <= 450 && y >= my + 98 && y <= my + 150) {
+      const ch2Unlocked = clearedStages.has(14) || chapter2Seen || devModeActive;
+      if (ch2Unlocked) {
+        sound.init(); sound.playTalk();
+        showStorySelectModal = false;
+        startStory(2, 'replay');
+      } else {
+        alert('🔒 스토리 2는 15단계를 클리어하거나 개발자 모드에서 감상할 수 있습니다.');
+      }
+      return;
+    }
+    // 3. 닫기 버튼 or 바깥 터치 (모달 닫기)
+    showStorySelectModal = false;
     return;
   }
 
-  if (gameState === 'STORY') {
-    if (clickX >= canvas.width - 95 && clickY <= 45) {
-      skipStory();
+  // 1. 개발자 버튼 (판정 범위 대폭 확장)
+  const d = devModeBtnRect;
+  if (x >= d.x - 12 && x <= d.x + d.w + 12 && y >= d.y - 12 && y <= d.y + d.h + 12) {
+    if (devModeActive) {
+      if (confirm('개발자 모드를 해제하시겠습니까?')) {
+        devModeActive = false;
+        renderNav();
+        updateUI();
+      }
     } else {
-      advanceStory();
+      const pw = prompt('개발자 모드 암호를 입력하세요:');
+      if (pw === '1029') {
+        devModeActive = true;
+        alert('🔓 개발자 모드 활성화!');
+        renderNav();
+        updateUI();
+      } else if (pw !== null) alert('❌ 암호 불일치');
     }
+    return;
+  }
+
+  // 2. 스토리 보기 버튼 (판정 범위 ±12px 확장)
+  const s = storyReplayBtnRect;
+  if (x >= s.x - 12 && x <= s.x + s.w + 12 && y >= s.y - 12 && y <= s.y + s.h + 12) {
+    sound.init();
+    sound.playTalk();
+    showStorySelectModal = true;
+    return;
+  }
+
+  // 3. 기록 초기화 버튼 (판정 범위 ±12px 확장)
+  const r = resetProgressBtnRect;
+  if (x >= r.x - 12 && x <= r.x + r.w + 12 && y >= r.y - 12 && y <= r.y + r.h + 12) {
+    clearProgress();
+    return;
+  }
+
+  // 👆 터치 모드 토글 버튼 클릭
+  const t = touchModeBtnRect;
+  if (x >= t.x - 10 && x <= t.x + t.w + 10 && y >= t.y - 10 && y <= t.y + t.h + 10) {
+    sound.init(); sound.playPush();
+    isTouchMode = !isTouchMode;
+    localStorage.setItem('kimdaeri_touch_mode', isTouchMode ? 'true' : 'false');
+    updateTouchModeUI();
+    return;
+  }
+
+  // 4. PUSH START 버튼
+  const b = pushStartBtnRect;
+  if (x >= b.x - 10 && x <= b.x + b.w + 10 && y >= b.y - 10 && y <= b.y + b.h + 10) {
+    onTitlePushStart();
+    return;
+  }
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  sound.init();
+  if (sound.ctx && sound.ctx.state === 'suspended') sound.ctx.resume();
+  e.preventDefault();
+
+  // 🎯 클리어 상태면 화면 터치 즉시 다음 판
+  if (isCleared) {
+    nextStage();
+    return;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  touchStartX = (e.clientX - rect.left) * (canvas.width / rect.width);
+  touchStartY = (e.clientY - rect.top) * (canvas.height / rect.height);
+  touchMoved = false;
+
+  // 타이틀 화면 클릭 처리
+  if (gameState === 'TITLE') {
+    handleTitleClick(touchStartX, touchStartY);
+    return;
+  }
+  if (gameState === 'STORY') {
+    if (touchStartX >= canvas.width - 95 && touchStartY <= 45) skipStory();
+    else advanceStory();
   }
 });
 
+
+
+
 function nextStage() {
+  // 1. 배너 닫기
+  const banner = document.getElementById('clearBanner');
+  if (banner) banner.classList.remove('active');
+
+  isCleared = false;
+
+  // 2. 15단계면 스토리 2로 전환
+  if (currentStageIndex === 14) {
+    startStory(2, 'gameplay');
+    return;
+  }
+
+  // 3. 다음 스테이지 또는 타이틀
   if (currentStageIndex + 1 < STAGES.length) {
+    gameState = 'PLAYING';
     initStage(currentStageIndex + 1);
   } else {
     showTitleScreen();
@@ -3093,11 +4156,12 @@ function showHint() {
     return;
   }
   
-  if (hintRemaining <= 0) return;
+  if (globalHintRemaining <= 0) return;
   
   sound.init();
   sound.playTalk();
-  hintRemaining--;
+  globalHintRemaining--;
+  saveProgress();
   if (hintEl) {
     hintEl.innerHTML = STAGES[currentStageIndex].hint;
     hintEl.style.display = 'flex';
@@ -3115,7 +4179,27 @@ if (hintBtnEl) {
 }
 document.getElementById('undoBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); undo(); });
 document.getElementById('resetBtn').addEventListener('pointerdown', (e) => { e.preventDefault(); resetStage(); });
-document.getElementById('nextStageBtn').addEventListener('click', nextStage);
+// 🎯 클리어 버튼 터치/클릭 즉시 다음 스테이지 진행
+const nextBtn = document.getElementById('nextStageBtn');
+if (nextBtn) {
+  const goNext = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    nextStage();
+  };
+  nextBtn.addEventListener('click', goNext);
+  nextBtn.addEventListener('touchend', goNext);
+}
+
+const clearBannerEl = document.getElementById('clearBanner');
+if (clearBannerEl) {
+  clearBannerEl.addEventListener('click', (e) => {
+    if (e.target === clearBannerEl) {
+      e.preventDefault();
+      nextStage();
+    }
+  });
+}
 
 document.querySelectorAll('.dpad-btn').forEach(btn => {
   const dir = btn.getAttribute('data-dir');
@@ -3129,6 +4213,10 @@ document.querySelectorAll('.dpad-btn').forEach(btn => {
       advanceStory();
       return;
     }
+    if (isCleared) {
+      nextStage();
+      return;
+    }
     if (dir === 'up') tryMove(0, -1, 'up');
     if (dir === 'down') tryMove(0, 1, 'down');
     if (dir === 'left') tryMove(-1, 0, 'left');
@@ -3136,63 +4224,78 @@ document.querySelectorAll('.dpad-btn').forEach(btn => {
   });
 });
 
-// BGM 음소거(ON/OFF) 및 5단계 볼륨 조절 이벤트
-const bgmVolumeSteps = [0.05, 0.15, 0.30, 0.60, 1.00];
-const bgmVolumeLabels = ['5%', '15%', '30%', '60%', '100%'];
-let currentBgmStepIdx = 2; // 기본값: 30%
+// BGM 볼륨 슬라이더 및 자동 재생 언락
 let isBgmMuted = false;
 
-function updateBgmControlUI() {
-  const muteBtn = document.getElementById('bgmMuteBtn');
-  const stepBtn = document.getElementById('bgmVolumeStepBtn');
-  const vol = bgmVolumeSteps[currentBgmStepIdx];
-  const label = bgmVolumeLabels[currentBgmStepIdx];
+const volSlider = document.getElementById('volSlider');
 
-  if (muteBtn) {
-    muteBtn.innerText = isBgmMuted ? '🔇' : '🎵';
-    muteBtn.style.opacity = isBgmMuted ? '0.45' : '1.0';
-  }
-  if (stepBtn) {
-    stepBtn.innerText = isBgmMuted ? 'OFF' : label;
-    stepBtn.style.color = isBgmMuted ? '#9ca3af' : '#f59e0b';
-  }
+// 📱 모바일 ◀ 볼륨수치 ▶ 터치 조작 (10% 단위 증감)
+let currentVolPercent = 100; // 기본 100%
 
-  sound.setBgmVolume(isBgmMuted ? 0 : vol);
+function applyVolume(percent) {
+  currentVolPercent = Math.max(0, Math.min(100, percent));
+  const val = currentVolPercent / 100;
+  
+  sound.init();
+  sound.setBgmVolume(val);
+  
+  // UI 텍스트 갱신
+  const txt = document.getElementById('volTextDisplay');
+  if (txt) txt.innerText = currentVolPercent === 0 ? 'OFF' : `${currentVolPercent}%`;
+  
+  // 슬라이더와 동기화
+  const slider = document.getElementById('volSlider');
+  if (slider) slider.value = val;
+
+  if (val > 0 && gameState === 'PLAYING' && !sound.bgmPlaying) {
+    sound.startBGM();
+  }
 }
 
-const muteBtnEl = document.getElementById('bgmMuteBtn');
-if (muteBtnEl) {
-  muteBtnEl.addEventListener('click', (e) => {
+const vDown = document.getElementById('volDownBtn');
+if (vDown) {
+  const onDown = (e) => { e.preventDefault(); e.stopPropagation(); sound.playPush(); applyVolume(currentVolPercent - 10); };
+  vDown.addEventListener('pointerdown', onDown);
+  vDown.addEventListener('click', onDown);
+}
+
+const vUp = document.getElementById('volUpBtn');
+if (vUp) {
+  const onUp = (e) => { e.preventDefault(); e.stopPropagation(); sound.playPush(); applyVolume(currentVolPercent + 10); };
+  vUp.addEventListener('pointerdown', onUp);
+  vUp.addEventListener('click', onUp);
+}
+
+if (volSlider) {
+  volSlider.addEventListener('input', (e) => {
     e.stopPropagation();
     sound.init();
-    isBgmMuted = !isBgmMuted;
-    updateBgmControlUI();
-    if (!isBgmMuted && gameState === 'PLAYING') {
+    sound.setBgmVolume(parseFloat(e.target.value));
+    if (sound.bgmVolume > 0 && gameState === 'PLAYING' && !sound.bgmPlaying) {
       sound.startBGM();
     }
   });
 }
 
-const stepBtnEl = document.getElementById('bgmVolumeStepBtn');
-if (stepBtnEl) {
-  stepBtnEl.addEventListener('click', (e) => {
-    e.stopPropagation();
-    sound.init();
-    if (isBgmMuted) {
-      isBgmMuted = false;
-    } else {
-      currentBgmStepIdx = (currentBgmStepIdx + 1) % bgmVolumeSteps.length;
-    }
-    updateBgmControlUI();
-    if (gameState === 'PLAYING') {
-      sound.startBGM();
-    }
-  });
-}
+// 🔊 화면 어디든 누르는 즉시 브라우저 오디오 보안 잠금 해제 (최우선 감지)
+const unlockAudio = () => {
+  sound.init();
+  if (sound.ctx && sound.ctx.state === 'suspended') {
+    sound.ctx.resume();
+  }
+  if (gameState === 'PLAYING' && !sound.bgmPlaying && sound.bgmVolume > 0) {
+    sound.startBGM();
+  }
+};
+['pointerdown', 'mousedown', 'touchstart', 'keydown'].forEach(evt => {
+  window.addEventListener(evt, unlockAudio, { capture: true, passive: true });
+});
 
 function renderNav() {
-  const nav = document.getElementById('levelNav');
-  nav.innerHTML = '';
+  const modalNav = document.getElementById('stageModalNav');
+  if (!modalNav) return;
+  modalNav.innerHTML = '';
+
   STAGES.forEach((stg, idx) => {
     const dot = document.createElement('div');
     const unlocked = idx === 0 || clearedStages.has(idx - 1) || devModeActive;
@@ -3206,6 +4309,7 @@ function renderNav() {
       dot.style.cursor = 'pointer';
       dot.addEventListener('click', () => {
         sound.init();
+        closeStageModal();
         gameState = 'PLAYING';
         initStage(idx);
       });
@@ -3216,9 +4320,57 @@ function renderNav() {
       dot.style.opacity = '0.35';
       dot.style.cursor = 'not-allowed';
     }
-    nav.appendChild(dot);
+
+    modalNav.appendChild(dot);
   });
 }
+
+// 📂 스테이지 팝업 모달 열기 / 닫기
+function openStageModal() {
+  const modal = document.getElementById('stageSelectModal');
+  if (modal) {
+    renderNav();
+    modal.style.display = 'flex';
+  }
+}
+
+function closeStageModal() {
+  const modal = document.getElementById('stageSelectModal');
+  if (modal) modal.style.display = 'none';
+}
+
+const stageBtn = document.getElementById('stageSelectBtn');
+if (stageBtn) stageBtn.addEventListener('click', openStageModal);
+
+const closeStageBtn = document.getElementById('closeStageModalBtn');
+if (closeStageBtn) closeStageBtn.addEventListener('click', closeStageModal);
+
+// 모달 바깥 어두운 배경 클릭 시 닫기
+const stageModalBackdrop = document.getElementById('stageSelectModal');
+if (stageModalBackdrop) {
+  stageModalBackdrop.addEventListener('click', (e) => {
+    if (e.target === stageModalBackdrop) closeStageModal();
+  });
+}
+
+// 📱 모바일 스테이지 팝업 창 열기 / 닫기 함수
+function openMobileStageModal() {
+  const modal = document.getElementById('mobileStageModal');
+  if (modal) {
+    renderNav();
+    modal.style.display = 'flex';
+  }
+}
+function closeMobileStageModal() {
+  const modal = document.getElementById('mobileStageModal');
+  if (modal) modal.style.display = 'none';
+}
+
+const mobileStageBtn = document.getElementById('mobileStageSelectBtn');
+if (mobileStageBtn) mobileStageBtn.addEventListener('click', openMobileStageModal);
+
+const closeMobileStageBtn = document.getElementById('closeMobileStageModalBtn');
+if (closeMobileStageBtn) closeMobileStageBtn.addEventListener('click', closeMobileStageModal);
 
 // 브라우저 오디오 정책 완벽 해제 (첫 터치/키 입력 시 AudioContext 즉시 활성화)
 ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach(evt => {
@@ -3229,6 +4381,88 @@ function renderNav() {
     }
   }, { passive: true });
 });
+// ⇄ 좌우 반전 토글 (단 1회 등록 -> 첫 터치 칼반응)
+const swapBtn = document.getElementById('swapCtrlBtn');
+const gamepadContainer = document.querySelector('.gamepad-container');
+
+if (localStorage.getItem('kimdaeri_ctrl_swapped') === 'true' && gamepadContainer) {
+  gamepadContainer.classList.add('swapped');
+}
+
+if (swapBtn && gamepadContainer) {
+  swapBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    sound.init();
+    sound.playPush();
+    const isSwapped = gamepadContainer.classList.toggle('swapped');
+    localStorage.setItem('kimdaeri_ctrl_swapped', isSwapped ? 'true' : 'false');
+  });
+}
+// 📱 화면 끄거나 다른 앱 전환 시 오디오 자동 일시정지 / 복귀 시 자동 재생
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    // 화면 꺼짐 or 다른 앱 전환: BGM 즉시 일시정지
+    if (sound.bgmAudio && !sound.bgmAudio.paused) {
+      sound.bgmAudio.pause();
+    }
+    if (sound.ctx && sound.ctx.state === 'running') {
+      sound.ctx.suspend().catch(() => {});
+    }
+  } else {
+    // 게임 복귀: 게임 중이었으면 BGM 즉시 이어 재생
+    if (gameState === 'PLAYING' && sound.bgmVolume > 0) {
+      if (sound.ctx && sound.ctx.state === 'suspended') {
+        sound.ctx.resume().catch(() => {});
+      }
+      if (sound.bgmAudio && sound.bgmPlaying) {
+        sound.bgmAudio.play().catch(() => {});
+      }
+    }
+  }
+});
+updateTouchModeUI(); // 👈 이 줄 추가 (시작 즉시 실제 십자키 유무와 버튼 상태 100% 동기화)
+
+// 🎵 BGM 선택 팝업 모달 이벤트
+const bgmModal = document.getElementById('bgmSelectModal');
+const openBgmBtn = document.getElementById('bgmSelectBtn');
+const closeBgmBtn = document.getElementById('closeBgmModalBtn');
+
+function openBgmModal() {
+  if (bgmModal) bgmModal.style.display = 'flex';
+  const saved = localStorage.getItem('kimdaeri_bgm_track') || '1';
+  document.querySelectorAll('.bgm-pick-btn').forEach(btn => {
+    const active = btn.getAttribute('data-track') === saved;
+    btn.style.borderColor = active ? '#f59e0b' : '#36425c';
+    btn.style.color = active ? '#f59e0b' : '#fff';
+    btn.style.background = active ? 'rgba(245, 158, 11, 0.15)' : '#1e2536';
+  });
+}
+
+function closeBgmModal() {
+  if (bgmModal) bgmModal.style.display = 'none';
+}
+
+if (openBgmBtn) openBgmBtn.addEventListener('click', openBgmModal);
+if (closeBgmBtn) closeBgmBtn.addEventListener('click', closeBgmModal);
+if (bgmModal) {
+  bgmModal.addEventListener('click', (e) => {
+    if (e.target === bgmModal) closeBgmModal();
+  });
+}
+
+document.querySelectorAll('.bgm-pick-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const track = btn.getAttribute('data-track');
+    sound.setTrack(track);
+    closeBgmModal();
+  });
+});
+
+// 저장된 트랙 복원
+const savedTrack = localStorage.getItem('kimdaeri_bgm_track');
+if (savedTrack) sound.setTrack(savedTrack);
 
 showTitleScreen();
 renderNav();
