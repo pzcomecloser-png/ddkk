@@ -66,7 +66,7 @@
     margin-top: 4px;
   }
 
-  /* ══ 게임 리스트 (원래 큼직한 카드 사이즈 유지 & 자연스러운 세로 스크롤) ══ */
+  /* ══ 게임 리스트 ══ */
   .card-list {
     display: flex; flex-direction: column; gap: 12px;
     width: 100%; max-width: 380px;
@@ -142,7 +142,7 @@
     <div class="page-title">✦ SELECT CARTRIDGE ✦</div>
   </div>
 
-  <!-- 전체 게임 카트리지 목록 (시원시원한 원래 크기 & 스크롤 지원) -->
+  <!-- 전체 게임 카트리지 목록 -->
   <div class="card-list">
     <!-- 1. 나 키우기 -->
     <a class="game-card" href="naup.html">
@@ -175,7 +175,7 @@
     </a>
 
     <!-- 4. 선협전 -->
-    <a class="game-card" href="선협전 v0.0.3.html">
+    <a class="game-card" href="선협전 v0.0.3.html">
       <div class="icon-frame"><canvas id="iconSeonhyeop" width="24" height="24"></canvas></div>
       <div class="card-text">
         <div class="card-title">선협전</div>
@@ -224,12 +224,22 @@
       <div class="card-arrow">▶</div>
     </a>
 
-    <!-- 9. REWIND (NEW) -->
+    <!-- 9. REWIND -->
     <a class="game-card" href="rewind.html">
       <div class="icon-frame"><canvas id="iconRewind" width="24" height="24"></canvas></div>
       <div class="card-text">
         <div class="card-title">REWIND — 아까의 나야 도와줘</div>
         <div class="card-desc">시간 되감기 협력 퍼즐</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 10. 창고담당 김대리 (NEW) -->
+    <a class="game-card" href="warehouse_kim.html">
+      <div class="icon-frame"><canvas id="iconKim" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">창고담당 김대리</div>
+        <div class="card-desc">레트로 창고 퍼즐</div>
       </div>
       <div class="card-arrow">▶</div>
     </a>
@@ -243,7 +253,7 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  딸깍 게임즈 로고 & 픽셀아트 아이콘 렌더러 (총 8개)
+//  딸깍 게임즈 로고 & 픽셀아트 아이콘 렌더러 (총 10개)
 // ═══════════════════════════════════════════════════════════════
 
 // 0. 딸깍 게임스 로고
@@ -508,7 +518,8 @@ function drawSaveWorld2Icon(id) {
   ctx.fillStyle = '#ffd700'; ctx.fillRect(17, 17, 6, 6);
   ctx.fillStyle = '#102238';
   ctx.fillRect(18, 18, 4, 1); ctx.fillRect(21, 19, 1, 1);
-  ctx.fillRect(18, 20, 4, 1); ctx.fillRect(18, 21, 1, 1); ctx.fillRect(18, 22, 4, 1);
+  ctx.fillRect(18, 20, 4, 1); ctx.fillRect(18, 21, 1, 1);
+  ctx.fillRect(18, 22, 4, 1);
 }
 
 // 9. REWIND (되감기 아이콘)
@@ -519,7 +530,6 @@ function drawRewindIcon(id) {
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, 24, 24);
 
-  // 배경 (시간의 소용돌이 느낌의 다크 네이비)
   ctx.fillStyle = '#0a0a14';
   ctx.fillRect(0, 0, 24, 24);
   ctx.fillStyle = '#171735';
@@ -534,8 +544,7 @@ function drawRewindIcon(id) {
   ctx.fillRect(16, 5, 2, 1);
   ctx.fillRect(17, 8, 1, 4);
 
-  // 두 갈래로 나뉘는 캐릭터 (현재와 과거)
-  // 왼쪽: 과거의 나 (하늘색 반투명)
+  // 과거의 나 (하늘색)
   ctx.fillStyle = '#a8d8f0';
   ctx.fillRect(4, 10, 6, 8);
   ctx.fillRect(5, 18, 1, 2);
@@ -544,7 +553,7 @@ function drawRewindIcon(id) {
   ctx.fillRect(5, 12, 1, 1);
   ctx.fillRect(8, 12, 1, 1);
 
-  // 오른쪽: 현재의 나 (진한 주황색)
+  // 현재의 나 (주황색)
   ctx.fillStyle = '#ff9f43';
   ctx.fillRect(10, 10, 6, 8);
   ctx.fillRect(11, 18, 1, 2);
@@ -553,13 +562,13 @@ function drawRewindIcon(id) {
   ctx.fillRect(11, 12, 1, 1);
   ctx.fillRect(14, 12, 1, 1);
 
-  // 되감기 궤적 선 (점선)
+  // 되감기 궤적 선
   ctx.fillStyle = '#8ecdf7';
   ctx.fillRect(6, 8, 2, 1);
   ctx.fillRect(9, 7, 2, 1);
   ctx.fillRect(12, 8, 2, 1);
 
-  // 하단 REWIND 재생/되감기 버튼 기호
+  // 하단 REWIND 재생 기호
   ctx.fillStyle = '#8ecdf7';
   ctx.beginPath();
   ctx.moveTo(11, 21); ctx.lineTo(15, 19); ctx.lineTo(15, 23);
@@ -567,6 +576,88 @@ function drawRewindIcon(id) {
   ctx.beginPath();
   ctx.moveTo(7, 21); ctx.lineTo(11, 19); ctx.lineTo(11, 23);
   ctx.fill();
+}
+
+// 10. 창고담당 김대리 (첨부 도트 캐릭터 반영)
+function drawKimIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // 배경 (창고 분위기의 다크 차콜)
+  ctx.fillStyle = '#16141a';
+  ctx.fillRect(0, 0, 24, 24);
+
+  // 발밑 그림자 타원
+  ctx.fillStyle = '#09080c';
+  ctx.fillRect(6, 21, 11, 2);
+  ctx.fillRect(5, 22, 13, 1);
+
+  // 1. 머리카락 (갈색)
+  ctx.fillStyle = '#4e342e';
+  ctx.fillRect(6, 2, 11, 5);
+  ctx.fillRect(5, 4, 1, 3);
+  ctx.fillRect(17, 4, 1, 3);
+  // 앞머리 바운스
+  ctx.fillRect(6, 7, 2, 1);
+  ctx.fillRect(10, 7, 3, 1);
+  ctx.fillRect(15, 7, 2, 1);
+
+  // 2. 얼굴 피부톤
+  ctx.fillStyle = '#ffdfc4';
+  ctx.fillRect(6, 7, 11, 5);
+  ctx.fillRect(8, 7, 2, 1); // 이마 노출
+  ctx.fillRect(13, 7, 2, 1);
+
+  // 눈 (큰 픽셀 눈동자 + 반사광)
+  ctx.fillStyle = '#151528';
+  ctx.fillRect(8, 8, 2, 2);
+  ctx.fillRect(13, 8, 2, 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(8, 8, 1, 1);
+  ctx.fillRect(13, 8, 1, 1);
+
+  // 볼터치 (분홍)
+  ctx.fillStyle = '#ff8a9e';
+  ctx.fillRect(6, 9, 2, 2);
+  ctx.fillRect(15, 9, 2, 2);
+
+  // 입 (미소)
+  ctx.fillStyle = '#793a26';
+  ctx.fillRect(10, 10, 3, 1);
+
+  // 3. 몸통 & 옷 (파란색 티셔츠)
+  ctx.fillStyle = '#3b82f6';
+  ctx.fillRect(7, 12, 9, 6);
+
+  // 왼손
+  ctx.fillStyle = '#ffdfc4';
+  ctx.fillRect(4, 13, 3, 2);
+
+  // 오른손 (따봉 👍)
+  ctx.fillRect(16, 13, 2, 2);
+  ctx.fillRect(18, 10, 2, 4); // 엄지 척
+  ctx.fillRect(17, 12, 1, 2);
+
+  // 사원증 목걸이 줄 (주황) & 사원증 본체 (흰색 카드)
+  ctx.fillStyle = '#f97316';
+  ctx.fillRect(11, 12, 1, 1);
+  ctx.fillRect(10, 13, 3, 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(10, 14, 3, 3);
+
+  // 4. 하의 (남색 바지)
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(8, 18, 7, 2);
+  ctx.fillRect(8, 20, 3, 1);
+  ctx.fillRect(12, 20, 3, 1);
+
+  // 5. 신발 (갈색 구두)
+  ctx.fillStyle = '#8d4f27';
+  ctx.fillRect(7, 21, 4, 2);
+  ctx.fillRect(12, 21, 4, 2);
 }
 
 // 전체 렌더링
@@ -580,6 +671,7 @@ drawBattleshipIcon('iconBattleship');
 drawSaveWorldIcon('iconSaveWorld');
 drawSaveWorld2Icon('iconSaveWorld2');
 drawRewindIcon('iconRewind');
+drawKimIcon('iconKim');
 </script>
 </body>
 </html>
