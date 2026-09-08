@@ -342,139 +342,243 @@
       flex-direction: row-reverse;
     }
 
-    /* ⇄ 중앙 작은 전환 버튼 */
+    /* ⇄ 중앙 얇고 긴 바 형태 전환 버튼 (재시작 버튼 폭 대응) */
     .swap-ctrl-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: #1e2536;
+      width: 54px;
+      height: 20px;
+      border-radius: 10px;
+      background: #161b26;
       border: 1px solid #36425c;
       color: #38bdf8;
-      font-size: 16px;
-      font-weight: 900;
+      font-size: 11px;
+      font-weight: 800;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
       user-select: none;
       -webkit-tap-highlight-color: transparent;
       flex-shrink: 0;
+      letter-spacing: -0.5px;
+      line-height: 1;
     }
     .swap-ctrl-btn:active {
       background: #38bdf8;
-      color: #000;
-      transform: scale(0.92);
+      color: #0b0d14;
+      transform: scale(0.94);
     }
 
-    /* PC에서는 가상 십자키와 반전버튼 숨김 (키보드로 조작) */
+     /* PC에서는 가상 십자키와 반전버튼 숨김 (키보드로 조작) */
     .dpad-cross,
     .swap-ctrl-btn {
       display: none !important;
     }
 
-    .dpad-btn {
-      background: linear-gradient(180deg, #242d40, #1b2232);
-      border: 1px solid #36425c;
-      color: var(--text-main);
-      border-radius: 10px;
-      font-size: 22px;
-      font-weight: bold;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
-      transition: all 0.1s;
+    /* 🎮 일체형 Retro Pixel Art 십자키 (+) - 150px 미세 조정 */
+    .dpad-cross {
+      display: grid;
+      grid-template-columns: repeat(3, 50px);
+      grid-template-rows: repeat(3, 50px);
+      width: 150px;
+      height: 150px;
+      position: relative;
       user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    /* 십자키 날개 공통 스타일 */
+    .dpad-btn {
+      background-color: #383435;
+      border: none;
+      position: relative;
+      cursor: pointer;
+      outline: none;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 2;
       -webkit-tap-highlight-color: transparent;
     }
 
-    .dpad-btn:active {
-      background: var(--accent-color);
-      color: #000;
-      transform: translateY(2px);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    /* 터치 범위 확장 히트박스 */
+    .dpad-btn::before {
+      content: '';
+      position: absolute;
+      top: -10px;
+      left: -10px;
+      right: -10px;
+      bottom: -10px;
+      z-index: 10;
     }
 
-    .dpad-up    { grid-column: 2; grid-row: 1; }
-    .dpad-left  { grid-column: 1; grid-row: 2; }
-    .dpad-center{ grid-column: 2; grid-row: 2; background: #151a26; border: 1px solid #273044; border-radius: 6px; }
-    .dpad-right { grid-column: 3; grid-row: 2; }
-    .dpad-down  { grid-column: 2; grid-row: 3; }
+    /* 일체형 십자키 중앙 블록 */
+    .dpad-center {
+      grid-column: 2;
+      grid-row: 2;
+      background-color: #383435;
+      z-index: 1;
+    }
 
+    /* 각 방향별 외곽 검은선 + 브라운 베벨 테두리 (안쪽은 터서 일체화) */
+    .dpad-up {
+      grid-column: 2; grid-row: 1;
+      box-shadow: 
+        inset 0 4px 0 #5a5350, inset 4px 0 0 #5a5350, inset -4px 0 0 #5a5350,
+        0 -4px 0 #000, -4px 0 0 #000, 4px 0 0 #000;
+    }
+    .dpad-down {
+      grid-column: 2; grid-row: 3;
+      box-shadow: 
+        inset 0 -4px 0 #232021, inset 4px 0 0 #5a5350, inset -4px 0 0 #232021,
+        0 4px 0 #000, -4px 0 0 #000, 4px 0 0 #000;
+    }
+    .dpad-left {
+      grid-column: 1; grid-row: 2;
+      box-shadow: 
+        inset 4px 0 0 #5a5350, inset 0 4px 0 #5a5350, inset 0 -4px 0 #232021,
+        -4px 0 0 #000, 0 -4px 0 #000, 0 4px 0 #000;
+    }
+    .dpad-right {
+      grid-column: 3; grid-row: 2;
+      box-shadow: 
+        inset -4px 0 0 #232021, inset 0 4px 0 #5a5350, inset 0 -4px 0 #232021,
+        4px 0 0 #000, 0 -4px 0 #000, 0 4px 0 #000;
+    }
+
+    /* 누를 때 픽셀 눌림 피드백 */
+    .dpad-btn:active {
+      background-color: #2b2829;
+    }
+    .dpad-btn:active .pixel-arrow {
+      transform: translate(2px, 2px);
+    }
+
+    /* 계단식 픽셀 도트 화살표 (Retro Pixel Art) */
+    .pixel-arrow {
+      width: 24px;
+      height: 24px;
+      display: block;
+      pointer-events: none;
+      background-repeat: no-repeat;
+    }
+    /* 위 화살표 ▲ */
+    .dpad-up .pixel-arrow {
+      background-image: 
+        linear-gradient(#fff, #fff), linear-gradient(#fff, #fff),
+        linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
+      background-size: 4px 4px, 12px 4px, 20px 4px, 8px 6px;
+      background-position: 10px 2px, 6px 6px, 2px 10px, 8px 14px;
+    }
+    /* 아래 화살표 ▼ */
+    .dpad-down .pixel-arrow {
+      background-image: 
+        linear-gradient(#fff, #fff), linear-gradient(#fff, #fff),
+        linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
+      background-size: 8px 6px, 20px 4px, 12px 4px, 4px 4px;
+      background-position: 8px 4px, 2px 10px, 6px 14px, 10px 18px;
+    }
+    /* 왼쪽 화살표 ◀ */
+    .dpad-left .pixel-arrow {
+      background-image: 
+        linear-gradient(#fff, #fff), linear-gradient(#fff, #fff),
+        linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
+      background-size: 4px 4px, 4px 12px, 4px 20px, 6px 8px;
+      background-position: 2px 10px, 6px 6px, 10px 2px, 14px 8px;
+    }
+    /* 오른쪽 화살표 ▶ */
+    .dpad-right .pixel-arrow {
+      background-image: 
+        linear-gradient(#fff, #fff), linear-gradient(#fff, #fff),
+        linear-gradient(#fff, #fff), linear-gradient(#fff, #fff);
+      background-size: 6px 8px, 4px 20px, 4px 12px, 4px 4px;
+      background-position: 4px 8px, 10px 2px, 14px 6px, 18px 10px;
+    }
+
+
+    /* ====================================================
+       3D Pseudo-Isometric 액션 버튼 (되돌리기 / 재시작)
+       ==================================================== */
     .action-circle-group {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
+    /* 1. 음각 베이스 홈 */
     .circle-btn-wrapper {
+      background: #151821;
+      padding: 4px;
+      border-radius: 50%;
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.7);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 3px;
+      position: relative;
     }
 
-    .key-badge {
-      font-size: 10px;
-      font-weight: 800;
-      color: #94a3b8;
-      background: rgba(0, 0, 0, 0.45);
-      padding: 1px 7px;
-      border-radius: 4px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      font-family: monospace;
-      letter-spacing: 0.5px;
-    }
-
+    /* 2. 3D 입체 공통 */
     .circle-btn {
-      width: 62px; /* 👈 52 -> 62px 확대 */
-      height: 62px;
+      width: 56px;
+      height: 56px;
+      border: none;
       border-radius: 50%;
-      border: 2px solid;
-      background: #1a202e;
-      color: #fff;
+      color: #ffffff;
+      cursor: pointer;
+      position: relative;
+      top: -5px;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-      transition: all 0.12s ease;
-      position: relative;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
+      transition: all 0.05s ease;
     }
 
-    .circle-btn:active {
-      transform: scale(0.92) translateY(2px);
+    .circle-btn .btn-text {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      line-height: 1.1;
     }
 
-    .circle-btn.hint {
-      border-color: #f59e0b;
-      background: linear-gradient(145deg, #b45309, #78350f);
-    }
-    .circle-btn.hint:active {
-      background: #f59e0b;
-      box-shadow: 0 0 14px rgba(245, 158, 11, 0.6);
-    }
-
+    /* 3. 되돌리기 (파스텔 블루) */
     .circle-btn.undo {
-      border-color: #3b82f6;
-      background: linear-gradient(145deg, #1d4ed8, #172554);
+      background: #70a1ff;
+      box-shadow: 0 5px 0 #3b6ecc, 0 7px 10px rgba(0, 0, 0, 0.45);
     }
     .circle-btn.undo:active {
-      background: #3b82f6;
-      box-shadow: 0 0 14px rgba(59, 130, 246, 0.6);
+      top: 0px;
+      box-shadow: 0 0 0 #3b6ecc, 0 2px 4px rgba(0, 0, 0, 0.4);
     }
 
+    /* 4. 재시작 (파스텔 레드) */
     .circle-btn.reset {
-      border-color: #ef4444;
-      background: linear-gradient(145deg, #b91c1c, #450a0a);
+      background: #ff7675;
+      box-shadow: 0 5px 0 #d63031, 0 7px 10px rgba(0, 0, 0, 0.45);
     }
     .circle-btn.reset:active {
-      background: #ef4444;
-      box-shadow: 0 0 14px rgba(239, 68, 68, 0.6);
+      top: 0px;
+      box-shadow: 0 0 0 #d63031, 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    /* 단축키 뱃지 */
+    .key-badge {
+      position: absolute;
+      bottom: -6px;
+      font-size: 9px;
+      font-weight: 800;
+      color: #cbd5e1;
+      background: rgba(15, 23, 42, 0.9);
+      padding: 0 5px;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      font-family: monospace;
+      pointer-events: none;
     }
 
     .circle-btn .btn-text {
@@ -595,39 +699,44 @@
         display: block;
       }
 
-      /* 📱 하단 패드: 가로 100% 꽉 채우고 십자키와 버튼을 양 끝 벽으로 강제 분산 */
+      /* 📱 하단 패드: 십자키 오른쪽 버튼(Row 2)과 수평 중심선 1:1 일치 */
       .gamepad-container {
         width: 100% !important;
         max-width: 100% !important;
         box-sizing: border-box !important;
         display: flex !important;
-        justify-content: space-between !important; /* 👈 좌측 끝 / 우측 끝 강제 밀착 */
-        align-items: center !important;
-        padding: 0 10px 4px 10px !important;
+        justify-content: space-between !important;
+        align-items: flex-end !important; /* 바닥 기준 정렬 */
+        padding: 0 10px env(safe-area-inset-bottom, 2px) 10px !important;
         margin-bottom: 0 !important;
         flex-shrink: 0 !important;
+        height: 172px !important; /* 십자키 높이(168px) + 여유 */
       }
 
-      /* 🔄 좌우 반전 시에도 양 끝 정렬 유지 */
-      .gamepad-container.swapped {
-        flex-direction: row-reverse !important;
-        justify-content: space-between !important;
-      }
-
+      /* 십자키 150px로 축소 및 바닥 밀착 */
       .dpad-cross {
-        grid-template-columns: repeat(3, 46px);
-        grid-template-rows: repeat(3, 38px);
-        gap: 2px;
-      }
-      .dpad-btn {
-        font-size: 17px;
+        grid-template-columns: repeat(3, 50px) !important;
+        grid-template-rows: repeat(3, 50px) !important;
+        width: 150px !important;
+        height: 150px !important;
+        gap: 0 !important;
+        margin-bottom: 0 !important;
+        align-self: flex-end !important;
       }
 
-      .circle-btn {
-        width: 52px;
-        height: 52px;
+      /* ⇄ 중앙 반전 버튼: 십자키 오른쪽 버튼 중심(바닥에서 75px)과 일치 */
+      .swap-ctrl-btn {
+        align-self: flex-end !important;
+        margin-bottom: 64px !important;
       }
-    }
+
+      /* 🎯 우측 액션 버튼: 십자키 오른쪽 버튼(Row 2: 50~100px)과 수평 정렬 */
+      .action-circle-group {
+        align-self: flex-end !important;
+        margin-bottom: 47px !important;
+      }
+
+
   </style>
 </head>
 <body>
@@ -734,24 +843,30 @@
 
   <!-- 🎮 모바일 터치 컨트롤 (왼쪽 D-Pad / 오른쪽 동그란 액션 버튼) -->
   <div class="gamepad-container">
-    <!-- 좌측 D-PAD -->
+    <!-- 좌측 D-PAD (일체형 Retro Pixel Art) -->
     <div class="dpad-cross">
-      <button class="dpad-btn dpad-up" data-dir="up" aria-label="위로">▲</button>
-      <button class="dpad-btn dpad-left" data-dir="left" aria-label="왼쪽">◀</button>
+      <div></div>
+      <button class="dpad-btn dpad-up" data-dir="up" aria-label="위로"><span class="pixel-arrow"></span></button>
+      <div></div>
+
+      <button class="dpad-btn dpad-left" data-dir="left" aria-label="왼쪽"><span class="pixel-arrow"></span></button>
       <div class="dpad-center"></div>
-      <button class="dpad-btn dpad-right" data-dir="right" aria-label="오른쪽">▶</button>
-      <button class="dpad-btn dpad-down" data-dir="down" aria-label="아래로">▼</button>
+      <button class="dpad-btn dpad-right" data-dir="right" aria-label="오른쪽"><span class="pixel-arrow"></span></button>
+
+      <div></div>
+      <button class="dpad-btn dpad-down" data-dir="down" aria-label="아래로"><span class="pixel-arrow"></span></button>
+      <div></div>
     </div>
 
     <!-- ⇄ 중앙 좌우 전환 버튼 -->
-    <button id="swapCtrlBtn" class="swap-ctrl-btn" title="조작키 좌우 반전">⇄</button>
+    <button id="swapCtrlBtn" class="swap-ctrl-btn" title="조작키 좌우 반전">⇄ 반전</button>
 
     <!-- 우측 원형 액션 버튼 (되돌리기 / 재시작) -->
     <div class="action-circle-group">
       <!-- 되돌리기 (Undo, 최대 3회, 단축키 Z) -->
       <div class="circle-btn-wrapper">
         <button class="circle-btn undo" id="undoBtn" title="되돌리기 (단축키: Z)">
-          <span class="btn-text">되돌리기 (3)</span>
+          <span class="btn-text">되돌리기</span>
         </button>
         <span class="key-badge">Z</span>
       </div>
@@ -759,7 +874,7 @@
        <!-- 재시작 (Reset, 단축키 R) -->
       <div class="circle-btn-wrapper">
         <button class="circle-btn reset" id="resetBtn" title="재시작 (단축키: R)">
-          <span class="btn-text">재시작 (0)</span>
+          <span class="btn-text">재시작</span>
         </button>
         <span class="key-badge">R</span>
       </div>
