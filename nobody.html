@@ -199,6 +199,12 @@
     padding:13px 30px;letter-spacing:2px;cursor:pointer}
   #overlay button:active{background:#d8d2c6;color:#000}
 
+  #skipBtn{position:absolute;top:10px;right:12px;z-index:96;
+    background:rgba(0,0,0,.6);color:#8a8479;border:1px solid #55504a;
+    font-family:inherit;font-size:12px;font-weight:700;letter-spacing:2px;
+    padding:7px 13px;cursor:pointer}
+  #skipBtn:active{background:#8a8479;color:#000}
+
   #sndBtn{position:absolute;bottom:4px;right:6px;z-index:95;
     background:rgba(0,0,0,.75);color:#6a6a6a;border:1px solid #3a3a3a;
     font-family:inherit;font-size:10px;padding:4px 8px;cursor:pointer}
@@ -209,6 +215,7 @@
 
   <!-- ══ 프롤로그 ══ -->
   <div class="scene on" id="prologue">
+    <button id="skipBtn" onclick="event.stopPropagation();skipPro()">SKIP ▶</button>
     <div id="proText"></div>
     <div id="proStage"><pre id="proArt"></pre></div>
     
@@ -257,7 +264,7 @@
     <h1 id="ovTitle"></h1>
     <p id="ovBody"></p>
     <div class="sub" id="ovSub"></div>
-    <button onclick="location.reload()">다시 시작</button>
+    <button onclick="restart()">다시 시작</button>
   </div>
   <button id="sndBtn" onclick="SND.toggle()">소리 ON</button>
 </div>
@@ -967,59 +974,139 @@ function scheduleEye(){eyeX=(Math.random()-0.5)*1.30;eyeTimer=0;eyePhase=0.0001;
 /* ══════════════════════════════════════════════════════════════
    프롤로그 아트 — 옥수수를 헤치고 들어가는 1인칭
    ══════════════════════════════════════════════════════════════ */
-const PCOLS=124,PROWS=74;
+const PCOLS=142,PROWS=86;
 let pt=0,parted=0;
 
 function proLum(px,py){
   let L=0;
-  if(py<0.30) L+=Math.max(0,(0.30-py))*0.72;
-  L+=0.34*Math.max(0,fbm(px*2.6+pt*0.02,py*5.0)-0.50);
-  const gapW=0.055+parted*0.115;
-  const gapCore=Math.max(0,1-Math.abs(px)/gapW);
-  if(py>0.18&&py<0.62) L+=gapCore*gapCore*(0.30+parted*0.85);
+  const O=parted;                       /* 0 = 닫힘, 1 = 완전히 벌어짐 */
 
+  /* ══ 저 멀리 트인 하늘 — 갈라진 틈으로 드러난다 ══ */
+  const gapW=0.045+O*0.185;
+  const gapCore=Math.max(0,1-Math.abs(px)/gapW);
+  const sky=gapCore*gapCore;
+  if(py<0.66){
+    /* 위쪽이 밝고 아래로 갈수록 어둡다 */
+    const v=Math.max(0,(0.66-py)/0.66);
+    L+=sky*(0.26+O*0.92)*(0.35+v*0.85);
+    /* 구름 결 */
+    L+=sky*0.30*Math.max(0,fbm(px*3.4+pt*0.018,py*5.2)-0.48);
+  }
+
+  /* ══ 좌우 옥수수 벽 ══
+     겹겹의 잎사귀가 카메라 앞을 막고 있다.
+     O가 커지면 좌우로 물러난다. 세 겹으로 깊이를 만든다. */
   for(const side of [-1,1]){
-    const base=0.085+parted*0.30;
-    const edge=base+Math.pow(Math.max(0,py-0.20),1.5)*0.30
-                   +Math.sin(py*11+side*1.7+pt*0.05)*0.016;
-    const d=side>0?px-edge:-px-edge;
-    if(d>0){
-      const vein=fbm((px*side*13+py*7)+side*4,py*9-d*4);
-      L+=0.30+vein*0.62;
-      const st=((px*side)*(30+d*40)+py*3);
-      if(st-Math.floor(st)<0.20) L+=0.34;
-      if(d<0.022) L+=0.55*(1-d/0.022);
-      L-=Math.max(0,d-0.10)*0.9;
+    for(let layer=0; layer<3; layer++){
+      const lz=layer/2;                            /* 0 = 가까움, 1 = 멀다 */
+      /* 벽의 내측 경계 — 아래로 갈수록 두툼하고, 레이어마다 어긋난다 */
+      const push=(0.055+O*(0.30+lz*0.16))+lz*0.075;
+      const belly=Math.pow(Math.max(0,py-0.10),1.35)*(0.34-lz*0.09);
+      const wob=Math.sin(py*(9+layer*4)+side*(1.7+layer)+pt*0.045)*(0.020-lz*0.006);
+      const edge=push+belly+wob;
+      const d=(side>0?px:-px)-edge;                /* 벽 안쪽으로의 깊이 */
+      if(d<=0) continue;
+
+      /* 이 레이어의 기본 밝기 — 멀수록 어둡다 */
+      const dim=1.0-lz*0.42;
+
+      /* 잎사귀 — 안쪽에서 바깥 아래로 비스듬히 흐른다 */
+      const u=(px*side)*(9+layer*5)+py*6.5-lz*3;
+      const v2=py*(7+layer*3)-d*3.4+layer*11;
+      const blade=fbm(u,v2);
+      L+=(0.16+blade*0.62)*dim;
+
+      /* 잎맥 — 밝은 선 하나가 잎을 가로지른다 */
+      const rib=Math.abs(((u*1.9+v2*0.55)%2.0)-1.0);
+      if(rib<0.085) L+=(0.42-rib*3.0)*dim;
+
+      /* 줄기 — 세로로 곧게 선 굵은 선 */
+      const st=(px*side)*(21+d*26+layer*7)+py*1.6;
+      const sf=st-Math.floor(st);
+      if(sf<0.13) L+=0.40*dim;
+      if(sf>0.13&&sf<0.17) L+=0.16*dim;            /* 줄기 옆 그늘 */
+
+      /* 마른 이삭 — 드문드문 밝게 뭉친다 */
+      const ear=fbm(u*2.3+7, v2*1.7+3);
+      if(ear>0.70) L+=(ear-0.70)*3.4*dim;
+
+      /* 안쪽 윤곽이 밝게 선다 — 빛을 등지고 있다 */
+      if(d<0.026) L+=(0.62-d*18)*dim;
+
+      /* 깊이 감쇠 */
+      L-=Math.max(0,d-0.085)*(1.15+lz*0.5);
     }
   }
-  for(const side of [-1,1]){
-    const hx=side*(0.185+parted*0.20);
-    const hy=0.735+Math.sin(pt*0.06+side)*0.006;
-    const hd=Math.hypot((px-hx)/0.072,(py-hy)/0.052);
-    if(hd<1.0){L+=0.62+fbm(px*30,py*30)*0.24;if(hd>0.84)L+=0.30;}
-    for(let f=0;f<4;f++){
-      const fl=0.070+((f*3)%3)*0.011;
-      const rr=Math.hypot(px-hx,py-hy);
-      const ang=Math.atan2(-(py-hy),(px-hx)*side);
-      if(rr<fl&&Math.abs(ang-(1.15-f*0.42))<0.055/(rr*8+0.4)) L+=0.72;
+
+  /* ══ 화면 최전면 — 얼굴을 스치는 잎 하나 ══
+     아주 가까이 있어 흐릿하고 크게, 위에서 아래로 드리운다 */
+  {
+    const fx=px+0.30-O*0.16;
+    const fy=py-0.02;
+    const t2=fy/0.72;
+    if(t2>0&&t2<1){
+      const cx2=fx-Math.sin(t2*2.1)*0.10-t2*0.055;
+      const w=0.052-t2*0.020+Math.sin(t2*5.0)*0.008;
+      if(Math.abs(cx2)<w){
+        L+=0.34+fbm(px*8,py*11)*0.30;
+        if(Math.abs(cx2)<0.006) L+=0.30;           /* 중앙 잎맥 */
+        if(Math.abs(Math.abs(cx2)-w)<0.007) L+=0.26;
+      }
     }
-    if(Math.abs(px-(hx+side*0.045))<0.048&&py>hy+0.03) L+=0.42+fbm(px*22,py*18)*0.20;
   }
-  if(py>0.86){
-    const d=(py-0.86)/0.14;
-    const lf=fbm(px*24,py*30);
-    L+=0.22+d*0.30;
-    if(lf>0.56) L+=(lf-0.56)*3.0;
+  {
+    /* 반대쪽에도 하나 */
+    const fx=px-0.36+O*0.18;
+    const t2=(py+0.06)/0.66;
+    if(t2>0&&t2<1){
+      const cx2=fx+Math.sin(t2*1.7)*0.09+t2*0.048;
+      const w=0.044-t2*0.017;
+      if(Math.abs(cx2)<w){
+        L+=0.30+fbm(px*9,py*12)*0.26;
+        if(Math.abs(cx2)<0.005) L+=0.26;
+      }
+    }
   }
-  if(parted>0.70&&gapCore>0.30){
-    const a=(parted-0.70)/0.30, gx=0.012, gS=0.30;
-    if(py>0.300&&py<0.300+0.26*gS&&Math.abs(px-gx)<0.026*gS) L+=0.40*a;
-    if(Math.abs(py-0.322)<0.004&&Math.abs(px-gx)<0.070*gS) L+=0.34*a;
-    if(Math.hypot((px-gx)/(0.020*gS),(py-0.292)/(0.024*gS))<1.0) L+=0.38*a;
+
+  /* ══ 발밑 — 마른 잎이 두껍게 깔려 있다 ══ */
+  if(py>0.80){
+    const d=(py-0.80)/0.20;
+    L+=0.14+d*0.30;
+    /* 겹쳐 쌓인 잎 조각 */
+    const lf=fbm(px*17,py*24);
+    if(lf>0.54) L+=(lf-0.54)*3.2;
+    const lf2=fbm(px*31+5,py*38+9);
+    if(lf2>0.66) L+=(lf2-0.66)*2.6;
+    /* 아래로 갈수록 어둡다 */
+    L-=Math.max(0,py-0.94)*2.2;
   }
+
+  /* ══ 갈라진 틈 사이, 아주 멀리 ══
+     O가 0.62를 넘어야 겨우 형체가 보인다 */
+  if(O>0.62&&gapCore>0.24){
+    const a=Math.min(1,(O-0.62)/0.38)*Math.min(1,(gapCore-0.24)/0.36);
+    const gx=0.014, gS=0.26;
+    const SH=0.335;
+    /* 기둥 */
+    if(Math.abs(px-gx)<0.010*gS&&py>0.305&&py<0.305+0.30*gS) L+=0.52*a;
+    /* 수평으로 뻗은 팔 */
+    if(Math.abs(py-SH)<0.006&&Math.abs(px-gx)<0.115*gS) L+=0.48*a;
+    /* 코트 */
+    const cT=(py-SH)/(0.24*gS);
+    if(cT>0&&cT<1){
+      const half=(0.030+Math.pow(cT,1.5)*0.048)*gS;
+      if(Math.abs(px-gx)<half) L+=0.30*a;
+    }
+    /* 머리 */
+    if(Math.hypot((px-gx)/(0.024*gS),(py-0.318)/(0.028*gS))<1.0) L+=0.46*a;
+    /* 모자 챙 */
+    if(Math.abs(py-0.306)<0.0035&&Math.abs(px-gx)<0.058*gS) L+=0.40*a;
+  }
+
+  /* ══ 비네팅 — 시야가 좁다 ══ */
+  L-=Math.max(0,(Math.abs(px)-0.86))*2.4;
   return L;
 }
-
 /* ══════════════════════════════════════════════════════════════
    엔딩 아트
    ══════════════════════════════════════════════════════════════ */
@@ -2038,7 +2125,7 @@ const PRO=[
   {go:true},
 ];
 
-let proIdx=0,proArtOn=false,proBusy=false;
+let proIdx=0,proArtOn=false,proBusy=false,proIv=null;
 
 function proNext(){
   if(proBusy) return;
@@ -2064,11 +2151,12 @@ function proNext(){
       SND.fx('push',1);
       SND.bgm('field');
       let k=0;
-      const iv=setInterval(()=>{
-        k++; parted=Math.min(1,k/34);
-        if(k===12||k===24) SND.fx('rustle',0.6);
-        if(k===8||k===20||k===30) SND.fx('step',0.5);
-        if(parted>=1) clearInterval(iv);
+      clearInterval(proIv);
+      proIv=setInterval(()=>{
+        k++; parted=Math.min(1,k/44);
+        if(k===14||k===30) SND.fx('rustle',0.6);
+        if(k===9||k===24||k===38) SND.fx('step',0.5);
+        if(parted>=1) clearInterval(proIv);
       },95);
       setTimeout(()=>{proBusy=false;proNext();},3900);
     },650);
@@ -2180,6 +2268,37 @@ function runEnd(i){
     break;
   }
   setTimeout(()=>runEnd(i+1),s.d);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   다시 시작 — 리로드 없이 상태를 초기화한다
+   ══════════════════════════════════════════════════════════════ */
+function restart(){
+  /* 모든 오버레이·연출 초기화 */
+  $('overlay').classList.remove('on');
+  $('redOut').classList.remove('go');
+  $('deathOut').classList.remove('go');
+  $('deathText').innerHTML='';
+  $('endText').innerHTML='';
+  dp=0; dt=0; embrace=0; wrongSky=0; et=0;
+  document.querySelector('.cabinet').style.background='#000';
+
+  /* 게임 화면으로 */
+  document.querySelectorAll('.scene').forEach(x=>x.classList.remove('on'));
+  $('game').classList.add('on');
+
+  SND.stopAll(0.6);
+  setTimeout(()=>{ newGame(); fitAll(); },120);
+}
+
+/* 프롤로그 스킵 */
+function skipPro(){
+  proBusy=true;
+  clearInterval(proIv);
+  document.querySelectorAll('.scene').forEach(x=>x.classList.remove('on'));
+  $('game').classList.add('on');
+  SND.init(); SND.stopAll(0.4);
+  setTimeout(()=>{ proBusy=false; newGame(); fitAll(); },140);
 }
 
 /* ══════════════════════════════════════════════════════════════
