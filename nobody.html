@@ -626,11 +626,14 @@ const COND={
   crow:{type:'wait',p:{crowOn:true},
     txt:['까마귀 한 마리가 날아와 모자 위에 앉았다.','날개를 접고, 이쪽을 본다.'],
     ok:'까마귀가 날개를 펴고 사라졌다.',
+    dieP:{scale:2.60,camPitch:.70,camFov:.72,horizon:.580,cornH:.650,posX:0,
+          headYaw:'front',crowOn:false},
     die:['까마귀가 귀를 찢는 소리로 날아올랐다.','허수아비가 풀숲을 가르며 이쪽으로 달려온다.'],
     snd:'crow'},
   faceFront:{type:'wait',p:{headYaw:'front'},
     txt:['허수아비가 고개를 돌렸다.','눈구멍 두 개가 정확히 이쪽을 향한다.'],
     ok:'고개가 다시 옆으로 돌아갔다.',
+    dieP:{scale:3.20,camPitch:.95,camFov:.60,horizon:.620,cornH:.700,posX:0},
     die:['화면이 그것의 얼굴로 가득 찬다.'],snd:'creak'},
   flies:{type:'wait',p:{grain:.34},
     txt:['파리 소리가 들린다.','여름은 지났는데.'],
@@ -644,12 +647,16 @@ const COND={
   /* ── 이탈형: 5초 안에 이동 ── */
   faceSide:{type:'flee',p:{headYaw:'left'},
     txt:['허수아비가 다른 곳을 보고 있다.','눈구멍이 하나만 보인다. 지금은.'],
+    dieP:{headYaw:'front',scale:2.90,camPitch:.85,camFov:.64,horizon:.600,cornH:.680,posX:0},
     die:['고개가 천천히 돌아왔다.'],snd:'creak'},
   closer:{type:'flee',p:{scale:2.30,camPitch:.62,camFov:.80,horizon:.560,cornH:.620,posX:0},
     txt:['허수아비가 아까보다 가까워져 있다.','고개를 들어야 얼굴이 보인다.','나는 뒤로 오지 않았다.'],
-    die:['한 걸음 더 가까워졌다. 그리고 한 걸음 더.'],snd:'heart'},
+    /* 죽는 순간 한 단계 더 다가온다 */
+    dieP:{scale:3.40,camPitch:1.05,camFov:.62,horizon:.640,cornH:.720,posX:0,headYaw:'front'},
+    die:['한 걸음 더 가까워졌다.','그리고 한 걸음 더.'],snd:'heart'},
   behind:{type:'flee',p:{headYaw:'back'},
     txt:['허수아비가 등을 보이고 있다.','처음이다. 매듭이 목 뒤에 있다.'],
+    dieP:{headYaw:'front',scale:2.70,camPitch:.78,camFov:.66,horizon:.590,cornH:.670,posX:0},
     die:['돌아본다.'],snd:'creak'},
   absent:{type:'flee',p:{absent:true},
     txt:['허수아비가 보이지 않는다.','이정표가 사라졌다.'],
@@ -696,8 +703,9 @@ const COND={
   thirdEye:{type:'choice',p:{mouthState:'eye'},
     txt:['입이 있던 자리에 눈이 있다.','셋 다 이쪽을 본다.'],
     a:'눈을 감는다',b:'계속 본다',good:1,
+    dieP:{headYaw:'front',scale:3.00,camPitch:.90,camFov:.62,horizon:.610,cornH:.690,posX:0},
     die:['감은 사이에 가까워졌다.']},
-  footprint:{type:'choice',p:{cornDens:1.25},
+  footprint:{type:'choice',p:{cornDens:1.45},
     txt:['눌린 풀이 있다.','누군가 여기 서 있었다. 방금까지.'],
     a:'흔적을 살핀다',b:'지운다',good:1,
     die:['흔적은 원을 그리고 있었다.','내 발자국이다.']},
@@ -706,6 +714,7 @@ const COND={
   smile:{type:'clock',p:{headYaw:'front',mouthState:'torn'},
     txt:['입이 찢어져 있다.','실이 끊어졌다.','웃는 것처럼.'],
     a:'눈을 감는다',b:'계속 본다',
+    dieP:{scale:3.60,camPitch:1.10,camFov:.58,horizon:.650,cornH:.730,posX:0},
     die:['찢어진 입이 화면 전체로 벌어진다.','안쪽에 옥수수밭이 보인다. 같은 밭이다.']},
 };
 
@@ -899,19 +908,26 @@ function luminance(sx,sy){
     if(P.headYaw!=='back'){
       let eyes=[];
       if(P.headYaw==='front'){
+        /* 정면 — 두 눈이 크게, 대칭으로 이쪽을 향한다 */
         eyes=[[-0.027,-0.013,0.0175,0.0205],[0.021,-0.016,0.0142,0.0165]];
       } else if(P.headYaw==='left'){
+        /* 측면 — 하나만 보인다 */
         eyes=[[-0.030,-0.013,0.0165,0.0200]];
-      } else {
+      } else if(P.headYaw==='right'){
         eyes=[[0.030,-0.013,0.0165,0.0200]];
+      } else {
+        /* idle — 평소 상태. 고개를 살짝 숙여 눈구멍이 좁고 어둡다 */
+        eyes=[[-0.026,-0.004,0.0120,0.0105],[0.020,-0.006,0.0104,0.0092]];
       }
       if(P.mouthState==='eye') eyes.push([0.000,0.030,0.0150,0.0180]);
+      const idle=(P.headYaw==='idle');
       for(const[ex,ey,erx,ery]of eyes){
         const ed=Math.hypot((fx-ex)/erx,(fy-ey)/ery);
         if(ed<1.0) L-=2.6;
         if(ed<1.24&&ed>1.0) L-=0.85;
+        /* 젖은 반사광 — 이쪽을 볼 때만 뚜렷하다 */
         const gd=Math.hypot((fx-ex)/0.0052,(fy-(ey+ery*0.30))/0.0060);
-        if(gd<1.0) L+=2.9;
+        if(gd<1.0) L+=idle?0.9:2.9;
         if(Math.abs(fx-ex)<0.0035&&fy>ey+ery&&fy<ey+0.048) L-=1.5;}
 
       if(P.mouthState==='sewn'){
@@ -1294,7 +1310,11 @@ function placeEvents(){
   const dist=GS.maze.dist;
   const cells=[];
   for(let y=0;y<N;y++)for(let x=0;x<N;x++){
-    if(x===CX&&y===CY) continue;              /* 시작 칸은 비운다 */
+    if(x===CX&&y===CY) continue;                      /* 시작 칸은 비운다 */
+    if(x===GS.maze.ex&&y===GS.maze.ey) continue;      /* 출구 칸도 비운다 —
+                                                         빛 버튼을 누르는 것이
+                                                         '이동'으로 판정돼
+                                                         죽는 것을 막는다 */
     const d=dist[x+','+y];
     if(d===undefined) continue;
     cells.push({x,y,d});
@@ -1430,31 +1450,46 @@ function enterCell(first=false){
 function narrate(first){
   const h=(k)=>hash(GS.x*13.1+GS.y*7.7+k*53.3, GS.seed*0.001+k*3.1);
   const lines=[];
+
   if(first){
     lines.push('옥수수 사이에 허수아비가 서 있다.');
     lines.push('아까 본 그 허수아비다. 이정표로 삼자.');
   }
-  lines.push(groundLine(P,h(1)));
-  lines.push(windLine(P));
-  if(h(2)<0.55) lines.push(skyLine(P,h(3)));
-  else lines.push(lifeLine(P,h(4)));
 
+  /* 출구 칸은 전용 문장으로 덮는다 */
   if(GS.atExit){
-    lines.length=0;
-    lines.push('옥수수 사이로 <span class="light">빛</span>이 보인다.');
-    lines.push('밭의 끝이다.');
-    lines.push('저 밖에 무엇이 있는지는 모른다.');
-    lines.push('<b>' + DIRKO[GS.maze.ed] + '쪽이다.</b>');
+    $('narr').innerHTML=
+      '옥수수 사이로 <span class="light">빛</span>이 보인다.<br>'+
+      '밭의 끝이다.<br>'+
+      '저 밖에 무엇이 있는지는 모른다.<br>'+
+      '<b>'+DIRKO[GS.maze.ed]+'쪽이다.</b>';
+    return;
   }
 
-  /* 독백 — 3칸마다 */
+  /* ── 1행: 지형 ── */
+  lines.push(groundLine(P,h(1)));
+
+  /* ── 2행: 바람 / 하늘 — 접속어로 앞줄과 이어 붙인다 ── */
+  const wind=windLine(P);
+  const sky =skyLine(P,h(3));
+  const life=lifeLine(P,h(4));
+
+  /* 연결어 — 문장이 나열이 아니라 흐름처럼 읽히게 한다 */
+  const LINK=['','그리고 ','다만 ','한편 ','그 위로 '];
+  const lk=LINK[Math.floor(h(6)*LINK.length)%LINK.length];
+
+  lines.push(wind);
+  lines.push(lk + (h(2)<0.55 ? sky : life));
+
+  /* ── 독백 — 3칸마다 ── */
   GS.monoCount++;
-  if(GS.monoCount%3===0&&!GS.atExit){
+  if(GS.monoCount%3===0){
     const bucket = GS.remain>480?'early' : GS.remain>240?'mid'
                  : GS.remain>60?'late' : 'last';
     const arr=MONO[bucket];
     lines.push('<b>「'+arr[Math.floor(h(5)*arr.length)%arr.length]+'」</b>');
   }
+
   $('narr').innerHTML=lines.join('<br>');
 }
 
@@ -1485,6 +1520,7 @@ function armCond(key){
     startBar(FLEE_MS);
     GS.condTimer=setTimeout(()=>{
       if(GS.dead||GS.cond!==key) return;
+      if(C.dieP) Object.assign(P,C.dieP);
       die(C.die, key);
     }, FLEE_MS);
   } else {
@@ -1601,7 +1637,9 @@ function move(d){
   }
   /* 정지형 위반 */
   if(GS.armed&&COND[GS.cond].type==='wait'){
-    die(COND[GS.cond].die, GS.cond);
+    const C=COND[GS.cond];
+    if(C.dieP) Object.assign(P,C.dieP);
+    die(C.die, GS.cond);
     return;
   }
   clearTimeout(GS.armTimer); clearTimeout(GS.condTimer);
@@ -2491,6 +2529,7 @@ function runEnd(i){
         $('ovTitle').textContent='아무도 없는';
         $('ovBody').innerHTML='시선을 잃은 존재들은<br>어디로 가게 되지?';
         $('ovSub').textContent='NOBODY IS HERE';
+        $('ovBtn').textContent='끝';
         $('overlay').classList.add('on');
       },6400);
     },1400);
