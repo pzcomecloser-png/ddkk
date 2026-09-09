@@ -258,6 +258,16 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 12. 아무도 없는.. (NEW) -->
+    <a class="game-card" href="nobody.html">
+      <div class="icon-frame"><canvas id="iconNobody" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">아무도 없는..</div>
+        <div class="card-desc">아스키 호러 게임</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -799,6 +809,69 @@ function drawSlidingIcon(id) {
   ctx.fillRect(16, 19, 1, 1);
 }
 
+// 12. 아무도 없는.. (ASCII 호러 — 문틈에 선 실루엣)
+function drawNobodyIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // 배경: 순수 검정 (터미널)
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, 24, 24);
+
+  // ── ASCII 문자 격자 텍스처 (밝기 3단계로 흩뿌림) ──
+  for (let y = 1; y < 24; y += 2) {
+    for (let x = 1; x < 24; x += 2) {
+      const n = (x * 7 + y * 13) % 5;
+      if (n === 0)      ctx.fillStyle = 'rgba(255,255,255,0.60)';
+      else if (n === 1) ctx.fillStyle = 'rgba(255,255,255,0.32)';
+      else if (n === 2) ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      else continue;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  // ── 문틀 (밝은 ASCII 벽 문자) ──
+  ctx.fillStyle = '#d4d4d4';
+  ctx.fillRect(7, 3, 10, 21);
+  ctx.fillStyle = '#8a8a8a';
+  ctx.fillRect(7, 3, 10, 1);
+
+  // 문 안쪽 어둠
+  ctx.fillStyle = '#121212';
+  ctx.fillRect(8, 4, 8, 20);
+
+  // 문 안 희미한 잔상 (아주 옅은 점 몇 개)
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.fillRect(9, 6, 1, 1);
+  ctx.fillRect(14, 8, 1, 1);
+  ctx.fillRect(11, 19, 1, 1);
+
+  // ── 실루엣 (완전한 검정 — 있는지 없는지 모를 존재) ──
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(10, 8, 4, 4);    // 머리
+  ctx.fillRect(9, 12, 6, 12);   // 몸통
+  ctx.fillRect(8, 13, 1, 6);    // 늘어진 왼팔
+  ctx.fillRect(15, 13, 1, 6);   // 늘어진 오른팔
+
+  // ── 눈 (유일한 흰 점 2개) ──
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(10, 9, 1, 1);
+  ctx.fillRect(13, 9, 1, 1);
+
+  // 발밑으로 새어나오는 빛
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fillRect(8, 22, 8, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
+  ctx.fillRect(8, 23, 8, 1);
+
+  // 스캔라인 (CRT 느낌 — 가로 어두운 줄)
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  for (let y = 0; y < 24; y += 3) ctx.fillRect(0, y, 24, 1);
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -812,6 +885,7 @@ drawSaveWorld2Icon('iconSaveWorld2');
 drawRewindIcon('iconRewind');
 drawKimIcon('iconKim');
 drawSlidingIcon('iconSliding');
+drawNobodyIcon('iconNobody');
 </script>
 </body>
 </html>
