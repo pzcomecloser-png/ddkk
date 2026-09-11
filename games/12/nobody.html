@@ -1784,7 +1784,7 @@ const GS={
   events:{},          // "x,y" -> cond key
   cond:null,          // 현재 발동 조건
   armed:false,        // 조건 발동됨
-  armTimer:null, condTimer:null, tickTimer:null,
+  armTimer:null, condTimer:null, tickTimer:null, pendingArm:null,
   enterAt:0, condAt:0,
   remain:LIMIT, dead:false, moves:0, monoCount:0,
   atExit:false, exitGlowX:0, crowsGone:false,
@@ -1826,7 +1826,7 @@ function newGame(){
   GS.x=CX; GS.y=CY; GS.prev=null;
   GS.remain=LIMIT; GS.dead=false; GS.moves=0; GS.monoCount=0;
   GS.cond=null; GS.armed=false; GS.locked=false;
-  GS.atExit=false; GS.crowsGone=false; GS.visited={};
+  GS.atExit=false; GS.crowsGone=false; GS.visited={}; GS.pendingArm=null;
   placeEvents();
   clearTimers();
   $('titlebar').className='titlebar';
@@ -1840,6 +1840,7 @@ function clearTimers(){
   clearTimeout(GS.armTimer); clearTimeout(GS.condTimer);
   clearInterval(GS.tickTimer);
   GS.armTimer=GS.condTimer=null;
+  GS.pendingArm=null;
 }
 
 /* ══ 타이머 ══ */
@@ -1914,6 +1915,9 @@ function enterCell(first=false){
   hideChoices();
   updateDirs();
 
+  /* 발동 예약을 먼저 걸어둔다 — narrate 안의 typeLines 가 이어받는다 */
+  GS.pendingArm = ck || null;
+
   narrate(first);
 
   /* 출구에 가까워질수록 바람 소리가 커진다 (밭 밖의 바람) */
@@ -1922,10 +1926,6 @@ function enterCell(first=false){
     SND.wind(Math.max(0,1-d/6));      /* 6칸 밖=0, 출구=1 */
   }
 
-  /* 조건 발동 — 서술문 표시가 끝난 뒤(약 1초) 2초 후 */
-  if(ck){
-    GS.armTimer=setTimeout(()=>armCond(ck), NARR_MS + ARM_MS);
-  }
   t+=3;
   render();
 }
@@ -2016,6 +2016,15 @@ function typeLines(lines, onDone){
     if(i>=lines.length){
       clearInterval(typeIv);
       narrBusy=false;
+      /* ── 함정칸이면 서술문이 끝나는 즉시 발동한다 ──
+         빈틈을 주지 않는다. 방향키를 계속 잠근 채로 넘긴다. */
+      if(GS.pendingArm && !GS.dead){
+        const k=GS.pendingArm;
+        GS.pendingArm=null;
+        if(onDone) onDone();
+        armCond(k);
+        return;
+      }
       if(!GS.dead) lockDirs(false);
       if(onDone) onDone();
       return;
