@@ -175,13 +175,20 @@
   pre#jumpArt{font-family:inherit;white-space:pre;margin:0;
     text-align:center;line-height:1;letter-spacing:0;color:#fff;
     text-shadow:0 0 6px rgba(255,240,235,.55),0 0 18px rgba(255,60,50,.30)}
-  #jump.shake{animation:shk .07s steps(2) infinite}
-  @keyframes shk{
+  /* 흔들림 2단계 — 달려올 때 약하게, 덮칠 때 격하게 */
+  #jump.shake1{animation:shk1 .06s steps(2) infinite}
+  @keyframes shk1{
     0%{transform:translate(0,0)}
-    25%{transform:translate(-6px,3px)}
-    50%{transform:translate(5px,-4px)}
-    75%{transform:translate(-4px,-3px)}
-    100%{transform:translate(6px,4px)}
+    50%{transform:translate(-3px,2px)}
+    100%{transform:translate(3px,-2px)}
+  }
+  #jump.shake2{animation:shk2 .05s steps(2) infinite}
+  @keyframes shk2{
+    0%{transform:translate(0,0)}
+    25%{transform:translate(-8px,4px)}
+    50%{transform:translate(7px,-6px)}
+    75%{transform:translate(-6px,-4px)}
+    100%{transform:translate(8px,5px)}
   }
   #jumpFlash{position:absolute;inset:0;pointer-events:none;
     background:#fff;opacity:0}
@@ -338,8 +345,8 @@
         <button class="dir e" id="dE" onclick="move('E')">동 ▶</button>
       </div>
       <div id="choices">
-        <button id="chA" onclick="pick(0)"></button>
-        <button id="chB" onclick="pick(1)"></button>
+        <button id="chA" onclick="chooseOpt(0)"></button>
+        <button id="chB" onclick="chooseOpt(1)"></button>
       </div>
       <div id="timerBar"><i id="timerFill"></i></div>
     </div>
@@ -1110,12 +1117,6 @@ function hintLine(h){
   return pick(HINT,h).replace('{d}',d);
 }
 
-function lifeLine(P,h){
-  if(P.farCrows>=3) return '까마귀들이 하늘을 돈다. 내려오지는 않는다.';
-  if(P.farCrows>=1) return '까마귀 몇 마리가 멀리서 원을 그린다.';
-  return h<0.5?'새 한 마리 보이지 않는다. 그게 더 불안하다.'
-              :'아무 소리도 없다. 내 숨소리뿐이다.';
-}
 /* 출구를 되뇌는 독백 — 목적을 잊지 않게 한다 */
 const GOAL_MONO=[
   '출구를 찾아야 한다. 그것만 생각하자.',
@@ -2083,7 +2084,7 @@ function hideChoices(){
   stopBar();
 }
 
-function pick(i){
+function chooseOpt(i){
   if(GS.dead||!GS.cond) return;
   const C=COND[GS.cond];
   clearTimeout(GS.condTimer);
@@ -2382,111 +2383,438 @@ const DEATH_BGM_FOR={
 };
 
 /* ══════════════════════════════════════════════════════════════
-   점프스케어 아트 — 화면을 가득 채우는 얼굴
-   jz: 0 → 1  (0.35초에 급격히 확대)
+   점프스케어 — 아스키 영상 (2.4초 상당을 1.5초로 압축 재생)
+
+   ┌─ 콘티 ────────────────────────────────────────────┐
+   │ 0.00~0.14  어둠. 저 멀리 흰 점 하나                │
+   │ 0.14~0.42  달려온다. 옥수수를 뚫고 형체가 커진다   │
+   │ 0.42~0.62  얼굴이 드러난다. 머리가 뒤로 흩날린다   │
+   │ 0.62~0.82  화면을 채운다. 고개를 꺾는다            │
+   │ 0.82~1.00  입이 벌어진다 — 턱↓ 눈↑ 코↑           │
+   └───────────────────────────────────────────────────┘
+   jz: 0 → 1 영상 진행 /  jt: 프레임 카운터
    ══════════════════════════════════════════════════════════════ */
-const JCOLS=118;
+const JCOLS=132;
+/* 창백한 얼굴의 미묘한 명암을 살리는 램프 */
+const JRAMP=" .`':,;\"~-_+=<>ilItfjrxnuvcz*#%@";
 let jz=0, jt=0, jumpKind='face';
+function sstep(a,b,x){ const t=Math.max(0,Math.min(1,(x-a)/(b-a))); return t*t*(3-2*t); }
+/* ══ 이 시점의 카메라·형체 상태를 계산한다 ══ */
+function jumpState(t){
+  /* ── 다가오는 거리 — 지수적으로 가속 ── */
+  const rush = Math.pow(t, 2.2);
+  /* 얼굴 크기 — 아주 작게 시작해 화면을 넘는다 */
+  const S = 0.026 + rush*1.05;
+  /* 화면상 위치 — 멀리선 위쪽, 다가오며 중앙으로 */
+  const CY = 0.34 + sstep(0.10,0.70,t)*0.10;
+  /* 좌우 흔들림 — 달려오는 몸의 반동 */
+  const swayX = Math.sin(t*Math.PI*7.2)*0.030*(1-t*0.5);
+  /* 상하 반동 — 발이 땅을 칠 때마다 */
+  const bob = Math.abs(Math.sin(t*Math.PI*5.4))*0.022*(1-t*0.6);
+
+  /* ── 고개 꺾기 — 0.62 이후 급격히 ── */
+  const tilt = sstep(0.60,0.86,t)*22 * (1+Math.sin(t*Math.PI*11)*0.18);
+
+  /* ── 입 벌어짐 — 0.80 이후 ── */
+  const mouth = sstep(0.78,1.00,t);
+
+  /* ── 눈 뜨임 — 0.30 부터 서서히, 끝에 완전히 ── */
+  const eye = sstep(0.28,0.92,t);
+
+  /* ── 머리 흩날림 — 다가오는 속도에 비례 ── */
+  const hair = sstep(0.20,0.80,t);
+
+  /* ── 옥수수 벽 — 형체가 뚫고 나온다 ── */
+  const cornOpen = sstep(0.12,0.52,t);
+
+  return {t,rush,S,CY,swayX,bob,tilt,mouth,eye,hair,cornOpen};
+}
 
 function jumpLum(px,py){
+  const st=jumpState(jz);
   let L=0;
-  const Z=jz;
-  /* 확대율 — 처음부터 크고, 순간적으로 더 커진다 */
-  const S=0.72+Z*0.95;
-  const fx=px/S, fy=(py-0.47)/S;
 
-  /* ── 자루 머리 — 화면을 넘칠 만큼 크다 ── */
-  const hRy=0.62, hRx=0.56-Math.pow(Math.max(0,fy+0.12),2)*0.14;
-  const hd=Math.hypot(fx/hRx,fy/hRy);
-  if(hd<1.0){
-    /* 거친 삼베 — 확대되니 올이 굵게 보인다 */
-    L+=0.38+fbm(px*7/S,py*7/S)*0.44;
-    const stain=fbm(px*3+3,py*2.4+7);
-    if(stain>0.50) L-=(stain-0.50)*2.6;
-    /* 꿰맨 자리들 */
-    const seam=Math.abs(((fx*4.2+fy*2.1)%2.0)-1.0);
-    if(seam<0.055) L-=0.55;
-    if(hd>0.93) L+=0.34;
-  }
+  /* 카메라 흔들림 적용 */
+  const cx = px - st.swayX;
+  const cy = py + st.bob;
 
-  if(jumpKind==='mouth'){
-    /* 입이 화면 전체로 벌어진다 */
-    const open=0.20+Z*0.90;
-    const lipT=0.14-open*0.34, lipB=0.14+open*0.40;
-    const wRatio=Math.sqrt(Math.max(0,1-Math.pow((fy-0.14)/((lipB-lipT)/2),2)));
-    const lipW=(0.34+open*0.52)*wRatio;
-    if(fy>lipT&&fy<lipB&&Math.abs(fx)<lipW){
-      L-=3.2;
-      /* 입 안쪽 — 이빨처럼 늘어선 옥수수 줄기 */
-      const iy=(fy-lipT)/(lipB-lipT);
-      if(iy>0.20&&iy<0.86){
-        const tk=(fx*15);
-        if(tk-Math.floor(tk)<0.30) L+=0.85*Z;
-      }
-      /* 아주 안쪽 — 무언가 걸어온다 */
-      if(Z>0.55){
-        const a=(Z-0.55)/0.45;
-        if(Math.abs(fx)<0.020&&iy>0.36&&iy<0.72) L+=1.2*a;
-        if(Math.hypot(fx/0.045,(iy-0.40)/0.048)<1.0) L+=1.1*a;
-      }
-    }
-    /* 끊긴 실 — 입가에 매달려 있다 */
-    for(const yy of [lipT,lipB]){
-      if(Math.abs(fy-yy)<0.030&&Math.abs(fx)<lipW+0.05){
-        if(Math.abs((fx*22)%3.0)<0.50) L+=2.4;
-      }
+  /* ══════════════════════════════════════════
+     1. 배경 — 옥수수밭. 형체가 다가오며 갈라진다
+     ══════════════════════════════════════════ */
+  {
+    /* 아주 옅은 하늘 */
+    L += 0.028 + Math.max(0,(0.5-cy))*0.045;
+    /* 옥수수 결 — 형체 주변이 갈라진다 */
+    const away = Math.min(1, Math.hypot(cx/0.5,(cy-st.CY)/0.5));
+    const part = st.cornOpen*(1-away);
+    const r = ridge(cx*(10-st.cornOpen*3), cy*2.5 - st.rush*3.2);
+    L -= Math.pow(r,2.8)*0.14*(1-part*0.85);
+    /* 갈라진 자리에서 잎이 튄다 */
+    if(st.cornOpen>0.1){
+      const spray=fbm(cx*24+jt*0.09, cy*19-jt*0.14);
+      if(spray>0.70) L += (spray-0.70)*1.6*st.cornOpen*(1-away*0.6);
     }
   }
 
-  /* ── 눈구멍 — 아주 깊고, 안쪽이 젖어 빛난다 ── */
-  const eyeN = (jumpKind==='third') ? 3 : 2;
-  const eyes = eyeN===3
-    ? [[-0.23,-0.14,0.155,0.185],[0.20,-0.17,0.130,0.155],[0.00,0.26,0.135,0.160]]
-    : [[-0.23,-0.14,0.165,0.198],[0.20,-0.17,0.138,0.165]];
+  /* 얼굴 로컬 좌표 — 고개 꺾기 회전 적용 */
+  const rad=st.tilt*Math.PI/180;
+  const ca=Math.cos(rad), sa=Math.sin(rad);
+  const rx=(cx)/st.S, ry=(cy-st.CY)/st.S;
+  const rfx= rx*ca + ry*sa;
+  const rfy=-rx*sa + ry*ca;
 
-  for(const [ex,ey,erx,ery] of eyes){
-    const ed=Math.hypot((fx-ex)/erx,(fy-ey)/ery);
-    if(ed<1.0) L-=3.4;
-    if(ed<1.30&&ed>1.0) L-=1.1;
-    /* 안쪽 반사광 — Z가 커지면 커지고 밝아진다 */
-    const gr=0.036+Z*0.075;
-    const gd=Math.hypot((fx-ex)/gr,(fy-(ey+ery*0.24))/(gr*1.2));
-    if(gd<1.0) L+=3.4;
-    /* 동공 — 안쪽에 검은 점 */
-    if(gd<0.42) L-=2.0;
-    /* 흘러내린 줄 */
-    if(Math.abs(fx-ex)<0.030&&fy>ey+ery&&fy<ey+0.55) L-=1.8;
+  /* ══════════════════════════════════════════
+     입을 벌리면 얼굴 전체가 변형된다
+     · 턱(아래쪽)이 크게 내려간다
+     · 코·눈(중간)이 들린다
+     · 이마(위쪽)는 거의 고정
+     좌표를 역으로 압축/신장해 이 효과를 만든다
+     ══════════════════════════════════════════ */
+  const M=st.mouth;
+  let fy=rfy, fx=rfx;
+  if(M>0.01){
+    const PIV=-0.16;              /* 회전 축 — 콧대 위쪽 */
+    if(rfy > PIV){
+      /* 축 아래 — 아래로 갈수록 크게 늘어난다 (턱이 빠진다) */
+      const d=(rfy-PIV);
+      /* 정규화 후 지수적으로 늘림 */
+      const n=Math.min(1.6, d/0.66);
+      fy = PIV + d/(1 + M*0.72*Math.pow(n,1.25));
+      /* 좌우도 살짝 좁아진다 (턱이 길어지며 얼굴이 홀쭉해진다) */
+      fx = rfx*(1 + M*0.16*Math.pow(n,1.4));
+    } else {
+      /* 축 위 — 살짝 압축되며 들린다 (눈·코가 위로) */
+      const d=(PIV-rfy);
+      fy = PIV - d*(1 - M*0.20);
+      fx = rfx*(1 - M*0.05);
+    }
   }
+  const ax=Math.abs(fx);
 
-  /* ── 입 (mouth 유형이 아닐 때) ── */
-  if(jumpKind!=='mouth'&&eyeN===2){
-    const mC=0.30+Math.pow(fx*0.9,2)*0.14;
-    if(Math.abs(fy-mC)<0.090&&Math.abs(fx)<0.30){
-      L-=2.6;
-      if(Math.abs((fx*20)%1.6)<0.38) L+=2.6;
+  /* ══════════════════════════════════════════
+     2. 머리 — 뒤로 흩날린다
+        달려오는 속도에 따라 가닥이 벌어진다
+     ══════════════════════════════════════════ */
+  {
+    const spread = 1 + st.hair*0.95;
+    const hRx=0.70*spread, hRy=0.84;
+    /* 아래로 길게 */
+    const stretch = fy>0 ? 1+Math.pow(fy/hRy,1.35)*(1.4+st.hair*1.1) : 1;
+    const hd=Math.hypot(fx/hRx, fy/(hRy*stretch));
+    /* 테두리가 흩날린다 — 시간에 따라 요동 */
+    const frill=fbm(fx*9+jt*0.05, fy*7.5+st.hair*4)*(0.14+st.hair*0.22);
+    if(hd < 1.0+frill){
+      L -= 0.44;
+      /* 흩날리는 가닥 — 바깥으로 뻗는다 */
+      const strandA = Math.atan2(fy*0.8, fx);
+      const strand = ridge(strandA*(9+st.hair*7) + jt*0.03, hd*7.5);
+      L += Math.pow(strand,2.2)*(0.20+st.hair*0.16);
+      if(hd>0.90+frill*0.5) L += 0.30;
+    }
+    /* 흩어진 가닥이 화면 밖으로 뻗는다 */
+    if(st.hair>0.25 && hd>=1.0+frill && hd<1.0+frill+st.hair*0.9){
+      const a=Math.atan2(fy*0.7,fx);
+      const wisp=ridge(a*(11+st.hair*9)+jt*0.04, hd*5.5);
+      if(wisp>0.66) L -= (wisp-0.66)*2.2*st.hair;
     }
   }
 
-  /* ── 코 구멍 ── */
-  if(eyeN===2){
-    for(const sd of [-1,1])
-      if(Math.hypot((fx-0.070*sd)/0.042,(fy-0.11)/0.058)<1.0) L-=2.2;
+  /* ══════════════════════════════════════════
+     3. 얼굴 — 창백하다
+     ══════════════════════════════════════════ */
+  /* 얼굴 외곽 — 입을 벌리면 세로로 늘어난다 */
+  const fRy=0.50*(1+M*0.30);
+  const fT=(fy+fRy)/(fRy*2);
+  /* 턱 쪽이 더 좁아진다 (길어지며 홀쭉) */
+  const fRx=0.335*(1-Math.pow(Math.max(0,fT-0.34)/0.66,1.75)*(0.42+M*0.22));
+  const fd=Math.hypot(fx/fRx, fy/fRy);
+  const inFace = fd<1.0;
+
+  if(inFace){
+    const center=1-fd;
+    /* 다가올수록 밝아진다 (빛에 가까워짐) */
+    L += 0.38 + st.rush*0.14 + Math.pow(center,0.75)*0.44;
+
+    const weave=ridge(fx*52, fy*50);
+    L += Math.pow(weave,3.4)*0.14;
+
+    const stain=fbm(fx*5.2+3, fy*4.4+7);
+    if(stain>0.52) L -= (stain-0.52)*1.50;
+
+    /* 광대·이마 */
+    if(Math.hypot((fx-0.17)/0.13,(fy-0.02)/0.11)<1.0) L += 0.14;
+    if(Math.hypot((fx+0.19)/0.14,(fy-0.00)/0.12)<1.0) L += 0.12;
+    if(Math.hypot(fx/0.20,(fy+0.28)/0.13)<1.0) L += 0.16;
+    /* 뺨이 파였다 */
+    for(const s of [-1,1]){
+      const cd=Math.hypot((fx-0.20*s)/0.11,(fy-0.17)/0.14);
+      if(cd<1.0) L -= (1-cd)*0.36;
+    }
+    if(fd>0.93) L -= (fd-0.93)*3.4;
   }
 
-  /* ── 얼굴을 가로지르는 균열 ── */
-  if(hd<1.0){
-    const cr=Math.abs(fx-(-0.34+(fy+0.50)*0.44));
-    if(cr<0.016) L-=2.2;
+  /* ══════════════════════════════════════════
+     4. 눈 — 서서히 크게 뜬다
+     ══════════════════════════════════════════ */
+  {
+    /* 눈 크기 — eye 값 + 입 벌림에 따른 힘 */
+    const eg=0.72+st.eye*0.55;
+    /* 입을 벌리면 눈에 힘이 들어간다:
+       · 세로로 찡그려 납작해진다
+       · 가로로는 살짝 벌어진다
+       · 위로 당겨 올라간다                        */
+    const sq  = 1 - M*0.34;          /* 세로 압축 */
+    const wide= 1 + M*0.14;          /* 가로 확장 */
+    const up  = -M*0.052;            /* 위로 당김 */
+    const eyes=[
+      [-0.140, -0.075+up, 0.104*eg*wide, 0.120*eg*sq],
+      [ 0.128, -0.098+up, 0.090*eg*wide, 0.102*eg*sq],
+    ];
+    for(const [ex,ey,erx,ery] of eyes){
+      const ed=Math.hypot((fx-ex)/erx,(fy-ey)/ery);
+      if(ed<1.0) L -= 1.60;
+      if(ed<1.30&&ed>1.0) L -= 0.44;
+      /* 안쪽 빛 */
+      const gr=(0.020+st.eye*0.055)*eg;
+      const gd=Math.hypot((fx-ex)/(gr*wide),(fy-(ey+ery*0.22))/(gr*1.12*sq));
+      if(gd<1.0) L += Math.pow(1-gd,1.2)*(2.2+st.eye*1.4+M*0.8);
+      if(gd<0.32) L -= 1.90;
+      if(ed<1.7&&ed>0.95) L += Math.pow((1.7-ed)/0.75,3.0)*(0.24+st.eye*0.22);
+      /* 흘러내린 줄 */
+      const drip=Math.sin(jt*0.16+ex*9)*0.006;
+      if(Math.abs(fx-ex-drip)<0.019 && fy>ey+ery && fy<ey+0.34) L -= 0.90;
+
+      /* ── 눈가 주름 — 힘줄 때 생긴다 ── */
+      if(M>0.15){
+        const side=Math.sign(ex);
+        for(let w=0;w<3;w++){
+          const wy2=ey - ery*(0.9+w*0.32);
+          const wx0=ex - side*erx*0.30;
+          const wl=erx*(0.95-w*0.16);
+          if(Math.abs(fx-wx0)<wl && Math.abs(fy-wy2)<0.007){
+            L -= (M-0.15)/0.85*0.62;
+          }
+        }
+        /* 눈 아래 그늘 — 볼이 당겨 올라간다 */
+        const bd=Math.hypot((fx-ex)/(erx*1.5),(fy-(ey+ery*1.9))/(ery*0.8));
+        if(bd<1.0) L -= (1-bd)*M*0.44;
+      }
+    }
   }
 
-  /* ── 화면 전체를 흔드는 노이즈 스트라이프 ── */
-  const glitch=Math.sin(py*180+jt*3.1);
-  if(glitch>0.972) L+=1.4*Z;
-  if(glitch<-0.978) L-=1.4*Z;
+  /* ══════════════════════════════════════════
+     5. 입 — 실이 끊어지며 벌어진다
+     ══════════════════════════════════════════ */
+  {
+    const m=st.mouth;
+    const mC=0.215;
+    if(m<0.06){
+      /* 아직 꿰매져 있다 */
+      const mc=mC+Math.pow(fx*1.3,2)*0.075;
+      if(Math.abs(fy-mc)<0.044 && ax<0.175){
+        L -= 1.45;
+        const gap=1.3+Math.sin(fx*13)*0.35;
+        if(Math.abs((fx*21)%gap)<0.30) L += 0.80;
+      }
+    } else {
+      /* ══════════════════════════════════════════
+         벌어진다 — 찢어진 구멍. 매끈한 타원이 아니다
+         ══════════════════════════════════════════ */
+      const open=0.10+m*0.78;
+      /* 위아래 경계도 노이즈로 흔들린다 */
+      const tN=fbm(fx*13+7, m*5)*0.055;
+      const bN=fbm(fx*9-3, m*4+11)*0.085;
+      const lipT=mC-open*0.14 - tN*m;
+      const lipB=mC+open*0.62 + bN*m;
 
-  /* ── 비네팅 — 가장자리는 완전히 검다 ── */
-  L-=Math.max(0,(Math.abs(px)-0.94))*4.0;
-  L-=Math.max(0,(Math.abs(py-0.5)-0.47))*4.0;
+      const vt=(fy-lipT)/(lipB-lipT);
+      /* 기본 폭 — 위가 넓고 턱으로 좁아진다 */
+      let lipW=(0.17+open*0.30)
+             * Math.sin(Math.pow(Math.max(0,Math.min(1,vt)),0.72)*Math.PI)
+             * (1-vt*0.30);
+      /* ── 테두리를 찢는다 ── */
+      const sd=Math.sign(fx)||1;
+      /* 큰 요동 — 좌우가 비대칭으로 뜯겨 있다 */
+      lipW *= 1 + (fbm(fy*7.5+sd*13, m*3)-0.5)*0.52*m;
+      /* 잔가시 — 살이 뜯긴 자리 */
+      lipW += (ridge(fy*34+sd*29, m*6)-0.5)*0.026*m;
+      /* 아래턱 한쪽이 더 크게 찢겼다 */
+      if(fx>0) lipW *= 1+m*0.14;
+
+      if(fy>lipT&&fy<lipB&&ax<lipW){
+        /* 안쪽 어둠 — 균일하지 않다 */
+        const cav=fbm(fx*11+31, fy*8+jt*0.012);
+        L -= 1.70 + cav*0.55;
+
+        const iy=vt;
+        /* ── 이빨처럼 늘어선 옥수수 줄기 ──
+           간격이 불규칙하고 길이가 다르다 */
+        if(iy>0.06&&iy<0.94){
+          const slot=fx*15 + fbm(fy*4,7)*2.2;
+          const sf=slot-Math.floor(slot);
+          /* 이 줄기의 길이 (개체마다 다름) */
+          const idx=Math.floor(slot);
+          const len=0.30+hash(idx,3)*0.52;
+          const fromTop = iy < len;
+          const fromBot = iy > 1-len*0.7;
+          if(sf<0.20+hash(idx,11)*0.14 && (fromTop||fromBot)){
+            L += (0.42+hash(idx,7)*0.34)*m;
+          }
+        }
+        /* ── 침 / 실 같은 가닥이 입 안을 가로지른다 ── */
+        for(let k=0;k<3;k++){
+          const y0=0.22+k*0.26;
+          const sag=Math.sin(fx*3.4+k*2.1)*0.055 + Math.sin(jt*0.09+k)*0.012;
+          if(Math.abs(iy-(y0+sag))<0.014 && ax<lipW*0.82){
+            L += 0.50*m*(1-k*0.22);
+          }
+        }
+        /* ── 아주 안쪽에서 뭔가 다가온다 ── */
+        if(m>0.45){
+          const a=(m-0.45)/0.55;
+          const wob=Math.sin(jt*0.11)*0.010;
+          if(Math.abs(fx-wob)<0.016&&iy>0.28&&iy<0.80) L += 0.74*a;
+          const hd2=Math.hypot((fx-wob)/0.034,(iy-0.34)/0.044);
+          if(hd2<1.0){
+            L += 0.70*a;
+            /* 그것의 눈 */
+            for(const s3 of [-1,1]){
+              if(Math.hypot((fx-wob-0.013*s3)/0.006,(iy-0.325)/0.008)<1.0) L -= 1.3*a;
+            }
+          }
+        }
+      }
+
+      /* ══ 끊어진 실 — 입 테두리에 불규칙하게 매달린다 ══ */
+      {
+        /* 위쪽 실 — 아래로 늘어져 흔들린다 */
+        const nT=9;
+        for(let k=0;k<nT;k++){
+          const sx2=(k/(nT-1)-0.5)*2*lipW*0.92;
+          if(hash(k,17)<0.42) continue;               /* 일부는 끊겨 없다 */
+          const hang=0.020+hash(k,23)*0.050;
+          const swing=Math.sin(jt*0.19+k*1.7)*0.009*m;
+          const tx=sx2+swing;
+          if(Math.abs(fx-tx)<0.0042 && fy>lipT && fy<lipT+hang*m) L += 0.82;
+        }
+        /* 아래쪽 실 — 위로 당겨져 있다 */
+        const nB=7;
+        for(let k=0;k<nB;k++){
+          const sx2=(k/(nB-1)-0.5)*2*lipW*0.86;
+          if(hash(k,31)<0.38) continue;
+          const hang=0.018+hash(k,41)*0.042;
+          const swing=Math.sin(jt*0.16+k*2.3)*0.007*m;
+          const tx=sx2+swing;
+          if(Math.abs(fx-tx)<0.0040 && fy<lipB && fy>lipB-hang*m) L += 0.76;
+        }
+        /* 테두리 자체 — 뜯긴 살이 밝게 걸린다 */
+        const tearT=Math.abs(fy-lipT);
+        const tearB=Math.abs(fy-lipB);
+        if(ax<lipW+0.020){
+          if(tearT<0.011) L += 0.44*(1+fbm(fx*40,fy*30)*0.9);
+          if(tearB<0.013) L += 0.40*(1+fbm(fx*36+9,fy*28)*0.9);
+        }
+        /* 입가 양끝이 찢어져 뻗는다 */
+        for(const s3 of [-1,1]){
+          const cx2=s3*lipW;
+          const rip=0.030+m*0.055;
+          const t4=(ax-lipW)/rip;
+          if(t4>0&&t4<1&&Math.abs(fy-mC)<0.030*(1-t4)){
+            L -= 0.90*(1-t4)*m;
+            /* 찢어진 끝에 잔가시 */
+            if(ridge(fx*46,fy*38)>0.62) L += 0.36*m;
+          }
+        }
+      }
+    }
+    /* 입가에서 위로 찢어진 자국 */
+    for(const s of [-1,1]){
+      const rd=Math.hypot((fx-0.175*s)/0.070,(fy-mC)/0.050);
+      if(rd<1.0&&fy<mC) L -= 0.80;
+    }
+  }
+
+  /* ══════════════════════════════════════════
+     6. 코 · 균열 · 목 · 어깨
+     ══════════════════════════════════════════ */
+  if(inFace){
+    /* 코 — 입을 벌리면 들리고 콧구멍이 벌어진다 */
+    const nUp = -M*0.030;                 /* 위로 들림 */
+    const nW  = 1 + M*0.42;               /* 콧구멍 확장 */
+    for(const s of [-1,1]){
+      if(Math.hypot((fx-0.040*s*nW)/(0.024*nW),(fy-0.070+nUp)/(0.034*(1+M*0.20)))<1.0)
+        L -= 1.15+M*0.30;
+    }
+    /* 콧대 — 들리면 짧아지고 주름이 잡힌다 */
+    if(ax<0.022 && fy>-0.05+nUp && fy<0.055+nUp) L += 0.10;
+    if(M>0.20){
+      /* 콧등 주름 (nasolabial) — 코에서 입가로 */
+      for(const s of [-1,1]){
+        const t3=(fy-(0.055+nUp))/0.14;
+        if(t3>0&&t3<1){
+          const wxp=s*(0.048+t3*0.085);
+          if(Math.abs(fx-wxp)<0.009) L -= (M-0.20)/0.80*0.70;
+        }
+      }
+    }
+    const cr=Math.abs(fx-(-0.19+(fy+0.42)*0.34));
+    if(cr<0.009) L -= 1.05;
+    if(cr>=0.009&&cr<0.016) L += 0.26;
+  }
+  /* 목 밧줄 — 턱이 내려가면 함께 아래로 밀린다 */
+  const ropeY = fRy*1.02 + M*0.10;
+  if(Math.abs(fy-ropeY)<0.030 && ax<0.36){
+    L -= 0.85;
+    if(Math.abs((fx*28)%1.8)<0.44) L += 0.40;
+  }
+  /* ── 목이 드러난다 — 입을 벌리면 목이 길어지고 힘줄이 선다 ── */
+  if(M>0.25 && fy>fRy*0.72 && fy<ropeY){
+    const a=(M-0.25)/0.75;
+    if(ax<0.20){
+      /* 목 그늘 */
+      L -= (1-ax/0.20)*a*0.30;
+      /* 힘줄 두 줄 */
+      for(const s of [-1,1]){
+        if(Math.abs(ax-0.075)<0.010) L += a*0.34;
+      }
+    }
+  }
+  if(fy>fRy*1.06){
+    const t2=(fy-fRy*1.06)/0.42;
+    const w=0.40+t2*0.90;
+    const rag=fbm(fx*14+jt*0.03, fy*11);
+    if(ax<w+rag*0.09){
+      L -= 0.52;
+      if(Math.abs(ax-(w+rag*0.09))<0.024) L += 0.34;
+      if(Math.abs((t2*3.2)%1.0)>0.90) L += 0.16;
+    }
+  }
+
+  /* ══════════════════════════════════════════
+     7. 글리치 — 후반에 심해진다
+     ══════════════════════════════════════════ */
+  {
+    const g=Math.pow(jz,1.6);
+    const s1=Math.sin(py*168+jt*3.1);
+    if(s1>0.972) L += 0.80*g;
+    if(s1<-0.976) L -= 0.80*g;
+    const band=Math.floor(py*24+jt*0.6);
+    if(hash(band,7)>0.94-g*0.06) L += (hash(band,21)-0.5)*1.20*g;
+    /* 마지막에 화면이 찢어진다 */
+    if(jz>0.90){
+      const rip=(jz-0.90)/0.10;
+      const b2=Math.floor(py*9+jt*0.4);
+      if(hash(b2,31)>0.72) L += (hash(b2,41)-0.5)*2.0*rip;
+    }
+  }
+
+  /* 그레인 — 후반에 거칠어진다 */
+  L += (hash(px*331+jt*1.3, py*547)-0.5)*(0.07+jz*0.10);
+
+  /* 비네팅 — 다가올수록 좁아진다 */
+  const vig=Math.hypot(px/1.00,(py-0.5)/0.60);
+  L -= Math.max(0,vig-(0.66-jz*0.10))*1.25;
+
   return L;
 }
 
@@ -2834,26 +3162,46 @@ function die(lines,cause){
              : (cause==='thirdEye') ? 'third' : 'face';
     jz=0; jt=0;
     setTimeout(()=>{
-      $('jump').classList.add('on');
-      $('jumpFlash').classList.remove('go');
-      drawFill($('jumpArt'),JCOLS,jumpLum,RAMP,0.075);
-      /* 한 프레임 뒤 섬광 + 괴성 + 흔들림 */
-      requestAnimationFrame(()=>{
-        $('jumpFlash').classList.add('go');
-        $('jump').classList.add('shake');
-        SND.fx('scream',1);
-      });
-      /* 0.35초에 걸쳐 급격히 확대 */
-      let k=0;
-      const jiv=setInterval(()=>{
-        k++; jz=Math.min(1,k/9); jt+=1;
-        drawFill($('jumpArt'),JCOLS,jumpLum,RAMP,0.075);
-        if(jz>=1) clearInterval(jiv);
-      },40);
-      /* 흔들림 정지 → 화면 제거 */
-      setTimeout(()=>$('jump').classList.remove('shake'),620);
-      setTimeout(()=>$('jump').classList.remove('on'),jumpMs-140);
-    },260);
+      const jd=$('jump'), jf=$('jumpFlash');
+      jd.classList.add('on');
+      jd.classList.remove('shake1','shake2');
+      jf.classList.remove('go');
+      jf.style.opacity=0;
+      drawFill($('jumpArt'),JCOLS,jumpLum,JRAMP,0);
+
+      /* ══ 1.2초 영상 재생 ══ */
+      const JDUR=1200, jt0=performance.now();
+      let jraf=null;
+      const jloop=()=>{
+        const e=performance.now()-jt0;
+        jz=Math.min(1,e/JDUR);
+        jt+=1;
+
+        /* 흔들림 — 0.20 약하게, 0.62 격하게 */
+        jd.classList.toggle('shake1', jz>0.20&&jz<=0.62);
+        jd.classList.toggle('shake2', jz>0.62);
+
+        /* 섬광 — 얼굴 드러날 때 + 마지막 */
+        if(jz>0.40&&jz<0.46)      jf.style.opacity=String((0.46-jz)/0.06*0.5);
+        else if(jz>0.94)          jf.style.opacity=String((jz-0.94)/0.06*0.85);
+        else                      jf.style.opacity=0;
+
+        drawFill($('jumpArt'),JCOLS,jumpLum,JRAMP,0);
+        if(jz<1) jraf=requestAnimationFrame(jloop);
+      };
+      jraf=requestAnimationFrame(jloop);
+
+      /* 괴성 — 얼굴이 드러나는 순간 */
+      setTimeout(()=>SND.fx('scream',1), 420);
+
+      /* 정리 */
+      setTimeout(()=>{
+        cancelAnimationFrame(jraf);
+        jd.classList.remove('shake1','shake2');
+        jf.style.opacity=0;
+      }, JDUR+180);
+      setTimeout(()=>jd.classList.remove('on'), jumpMs-100);
+    },200);
   }
 
   /* 3. 데스 화면으로 전환 */
