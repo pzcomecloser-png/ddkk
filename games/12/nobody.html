@@ -75,6 +75,19 @@
 
   /* ═══ 게임 ═══ */
   #game{flex-direction:column}
+  #userMapOverlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.95);
+    z-index:90;flex-direction:column;align-items:center;justify-content:center;
+    padding:20px;backdrop-filter:blur(4px)}
+  #userMapOverlay.on{display:flex}
+  #userMapArt{font-family:"SFMono-Regular","Menlo",monospace;color:#d8d8d8;
+    font-size:12px;line-height:1.15;white-space:pre;letter-spacing:0;
+    text-shadow:0 0 4px rgba(200,200,200,.28);
+    margin:0 0 10px;padding:0;background:transparent;
+    max-width:100%;overflow:auto}
+  #userMapNote{font-family:inherit;font-size:11px;color:#7a736a;margin-bottom:16px;
+    letter-spacing:1px}
+  #userMapOverlay button{padding:10px 30px;background:#111;color:#d8d8d8;
+    border:1px solid #555;font-family:inherit;font-size:16px;cursor:pointer}
   .titlebar{flex:0 0 auto;background:#d8d8d8;color:#000;font-size:15px;font-weight:700;
     padding:7px 11px;display:flex;justify-content:space-between;align-items:center}
   .titlebar .clock{font-variant-numeric:tabular-nums;letter-spacing:1px}
@@ -132,6 +145,7 @@
                   50%{box-shadow:0 0 20px rgba(255,250,230,.95)}}
   .dir[disabled]{opacity:.30}
   .n{grid-area:1/2}.w{grid-area:2/1}.s{grid-area:2/2}.e{grid-area:2/3}
+  .map{grid-area:1/3;font-size:15px;color:#8a8276;border:1px solid #5a5246;background:transparent;}
 
   #choices{display:none;width:100%;gap:7px}
   #choices.on{display:flex}
@@ -336,10 +350,12 @@
     <div class="ornament" id="ornTopBox"><pre id="ornTop"></pre></div>
     <div id="viewport"><pre id="screen"></pre></div>
     <div id="narr"></div>
+    <div id="userMapOverlay"><pre id="userMapArt"></pre><div id="userMapNote"></div><button onclick="toggleMap()">닫기</button></div>
     <div class="ornament" id="ornBotBox"><pre id="orn"></pre></div>
     <div id="controls">
       <div class="compass">
         <button class="dir n" id="dN" onclick="move('N')">▲ 북</button>
+        <button class="dir map" id="btnMap" onclick="toggleMap()">지도</button>
         <button class="dir w" id="dW" onclick="move('W')">◀ 서</button>
         <button class="dir s" id="dS" onclick="move('S')">▼ 남</button>
         <button class="dir e" id="dE" onclick="move('E')">동 ▶</button>
@@ -754,6 +770,9 @@ function fitPre(el,cols,rows,fillW){const b=el.parentElement;
 
 /* ═══════════ 미로 ═══════════ */
 const N=9,CX=4,CY=4;
+/* 이번 세션에서 이미 본 사망기믹 — 재등장 확률을 절반으로 낮춘다.
+   페이지를 새로 열 때까지 유지된다. */
+const SEEN_GIM={};
 const OPP={N:'S',S:'N',E:'W',W:'E'};
 const DXY={N:[0,-1],S:[0,1],E:[1,0],W:[-1,0]};
 const DIRKO={N:'북',S:'남',E:'동',W:'서'};
@@ -1768,74 +1787,21 @@ function fmt(s){const m=Math.floor(s/60),ss=s%60;
 function placeEvents(){
   const rnd=rngFrom(GS.seed+31337);
   const ev={};
-  const dist=GS.maze.dist;
   const cells=[];
   for(let y=0;y<N;y++)for(let x=0;x<N;x++){
-    if(x===CX&&y===CY) continue;                      /* 시작 칸은 비운다 */
-    if(x===GS.maze.ex&&y===GS.maze.ey) continue;      /* 출구 칸도 비운다 —
-                                                         빛 버튼을 누르는 것이
-                                                         '이동'으로 판정돼
-                                                         죽는 것을 막는다 */
-    const d=dist[x+','+y];
-    if(d===undefined) continue;
-    cells.push({x,y,d});
+    if(x===CX&&y===CY) continue;
+    if(x===GS.maze.ex&&y===GS.maze.ey) continue;
+    if(GS.maze.dist[x+','+y]!==undefined) cells.push({x,y});
   }
 
-  /* ── 20번 smile — 출구 인접 칸 고정 ── */
-  const exitAdj=cells.filter(c=>
-    Math.abs(c.x-GS.maze.ex)+Math.abs(c.y-GS.maze.ey)===1);
-  if(exitAdj.length){
-    const c=exitAdj[Math.floor(rnd()*exitAdj.length)];
-    ev[c.x+','+c.y]='smile';
-  }
-
-  /* ── 근거리(1~3): 기본 문법을 반드시 배우게 한다 ── */
-  const near=cells.filter(c=>c.d>=1&&c.d<=3&&!ev[c.x+','+c.y]);
-  const basic=['crow','faceFront','closer','faceSide'];
-  basic.forEach(k=>{
-    if(!near.length) return;
-    const i=Math.floor(rnd()*near.length);
-    const c=near.splice(i,1)[0];
-    ev[c.x+','+c.y]=k;
-  });
-
-  /* ── 나머지 칸의 약 62%에 이벤트를 깐다 ──
-     모든 조건이 최소 1회는 등장하도록 먼저 한 바퀴 돌린다.
-     이벤트는 칸을 '대체'하는 것이 아니라 덮어쓴다 —
-     미로의 벽·열린 방향은 그대로 유지된다. */
-  const rest=cells.filter(c=>!ev[c.x+','+c.y]);
-  /* 거리순 섞기 (Fisher-Yates) */
-  for(let i=rest.length-1;i>0;i--){
+  /* ── 30개의 함정칸(Trap) 선택 ── */
+  for(let i=cells.length-1;i>0;i--){
     const j=Math.floor(rnd()*(i+1));
-    [rest[i],rest[j]]=[rest[j],rest[i]];
+    [cells[i],cells[j]]=[cells[j],cells[i]];
   }
-
-  const all=[...WAITS,...FLEES,...CHOICES];
-  const target=Math.round(rest.length*0.62);
-
-  /* 1단계 — 모든 조건을 한 번씩 (총 18종) */
-  let ptr=0;
-  const deck=all.slice();
-  for(let i=deck.length-1;i>0;i--){
-    const j=Math.floor(rnd()*(i+1));
-    [deck[i],deck[j]]=[deck[j],deck[i]];
-  }
-  for(const k of deck){
-    if(ptr>=rest.length||ptr>=target) break;
-    const c=rest[ptr++];
-    ev[c.x+','+c.y]=k;
-  }
-
-  /* 2단계 — 남은 자리를 무작위로 채운다 (조건당 최대 3회) */
-  const used={};
-  for(const k in ev) used[ev[k]]=(used[ev[k]]||0)+1;
-  while(ptr<rest.length&&ptr<target){
-    const c=rest[ptr++];
-    let k, tries=0;
-    do{ k=all[Math.floor(rnd()*all.length)]; tries++; }
-    while((used[k]||0)>=3&&tries<30);
-    used[k]=(used[k]||0)+1;
-    ev[c.x+','+c.y]=k;
+  for(let i=0;i<30 && i<cells.length;i++){
+    const c=cells[i];
+    ev[c.x+','+c.y] = 'trap';
   }
 
   GS.events=ev;
@@ -1847,7 +1813,7 @@ function newGame(){
   GS.x=CX; GS.y=CY; GS.prev=null;
   GS.remain=LIMIT; GS.dead=false; GS.moves=0; GS.monoCount=0;
   GS.cond=null; GS.armed=false; GS.locked=false;
-  GS.atExit=false; GS.crowsGone=false;
+  GS.atExit=false; GS.crowsGone=false; GS.visited={};
   placeEvents();
   clearTimers();
   $('titlebar').className='titlebar';
@@ -1879,6 +1845,31 @@ function tick(){
 }
 
 /* ══ 칸 진입 ══ */
+/* ══ 사망기믹 추첨 — COND 에 정의된 것만, 안 본 것에 가중치 ══ */
+function rollGimmick(){
+  const pool=[];
+  for(const g of GIM){
+    if(!g.key) continue;          /* 19번 추적자 냄새는 보류 */
+    if(!COND[g.key]) continue;    /* 정의 없는 키 방어 */
+    pool.push(g.key);
+  }
+  if(!pool.length) return null;
+
+  let total=0;
+  const w=pool.map(k=>{
+    const v = SEEN_GIM[k] ? 0.5 : 1.0;
+    total+=v; return v;
+  });
+  let r=Math.random()*total;
+  let picked=pool[pool.length-1];
+  for(let i=0;i<pool.length;i++){
+    r-=w[i];
+    if(r<=0){ picked=pool[i]; break; }
+  }
+  SEEN_GIM[picked]=true;
+  return picked;
+}
+
 function enterCell(first=false){
   const key=GS.x+','+GS.y;
   GS.atExit=(GS.x===GS.maze.ex&&GS.y===GS.maze.ey);
@@ -1892,9 +1883,21 @@ function enterCell(first=false){
     P.cornDens=0.70;
   }
 
+  /* 방문 기록 */
+  if(!GS.visited) GS.visited = {};
+  GS.visited[key] = true;
+
   /* 조건 예약 */
   GS.cond=null; GS.armed=false; GS.locked=false;
-  const ck=GS.events[key];
+  let ck=GS.events[key];
+
+  /* ── 함정칸이면 그 자리에서 20개 중 하나를 뽑는다 ──
+     칸에 고정하지 않는다. 다시 지날 때마다 새로 뽑힌다.
+     이미 본 기믹은 가중치가 절반이라 새 기믹이 더 자주 나온다. */
+  if(ck==='trap'){
+    ck = rollGimmick();
+  }
+
   hideChoices();
   updateDirs();
 
@@ -2151,6 +2154,94 @@ function updateDirs(){
       el.classList.add('wall');
     }
   }
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   사용자 미니맵 — 방문한 칸만 그린다
+
+   문자 캔버스에 직접 찍는다. 방문하지 않은 칸 주변에는
+   격자점도 벽도 찍지 않으므로, 밭의 크기도 출구 위치도
+   드러나지 않는다.
+
+   칸 하나 = 가로 4칸 + 경계 1칸,  세로 1칸 + 경계 1칸
+   ══════════════════════════════════════════════════════════════ */
+function toggleMap(){
+  const overlay=$('userMapOverlay');
+  if(overlay.classList.contains('on')){ overlay.classList.remove('on'); return; }
+  if(!GS.maze) return;
+  if(!GS.visited) GS.visited={};
+
+  const W=GS.maze.wall, ex=GS.maze.ex, ey=GS.maze.ey, ed=GS.maze.ed;
+  const vis=(x,y)=> !!GS.visited[x+','+y];
+
+  const CW=5, CH=2;                       /* 칸 하나가 차지하는 문자 수 */
+  const cols=N*CW+1, rows=N*CH+1;
+  const g=[];
+  for(let r=0;r<rows;r++) g.push(new Array(cols).fill(' '));
+  const put=(r,c,ch)=>{ if(r>=0&&r<rows&&c>=0&&c<cols) g[r][c]=ch; };
+  const puts=(r,c,str)=>{ for(let i=0;i<str.length;i++) put(r,c+i,str[i]); };
+
+  /* 방문한 칸만 순회한다 */
+  let any=false;
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    if(!vis(x,y)) continue;
+    any=true;
+    const r0=y*CH, c0=x*CW;               /* 이 칸의 좌상단 */
+    const r1=r0+CH, c1=c0+CW;             /* 우하단 */
+
+    /* ── 네 모서리 격자점 ── */
+    put(r0,c0,'┼'); put(r0,c1,'┼'); put(r1,c0,'┼'); put(r1,c1,'┼');
+
+    /* ── 네 벽 ── */
+    const edge=(dir)=>{
+      const nx=x+DXY[dir][0], ny=y+DXY[dir][1];
+      /* 밭 밖으로 나가는 면 = 외곽. 출구면 뚫린다 */
+      if(nx<0||nx>=N||ny<0||ny>=N)
+        return (x===ex&&y===ey&&ed===dir) ? 'open' : 'wall';
+      return W[y][x][dir] ? 'wall' : 'open';
+    };
+    /* 북 */
+    if(edge('N')==='wall') puts(r0,c0+1,'────');
+    /* 남 */
+    if(edge('S')==='wall') puts(r1,c0+1,'────');
+    /* 서 */
+    if(edge('W')==='wall') put(r0+1,c0,'│');
+    /* 동 */
+    if(edge('E')==='wall') put(r0+1,c1,'│');
+
+    /* ── 칸 내용 ── */
+    let label='    ';
+    if(x===GS.x&&y===GS.y)      label=' ▶◀ ';   /* 현재 위치 */
+    else if(x===CX&&y===CY)     label=' ◎  ';   /* 처음 선 곳 */
+    else if(x===ex&&y===ey)     label=' ‼  ';   /* 출구 — 발견했을 때만 */
+    else                        label=' ·  ';   /* 지나온 칸 */
+    puts(r0+1,c0+1,label);
+  }
+
+  /* ── 빈 줄·빈 열을 잘라낸다 (밭 크기를 감춘다) ── */
+  let out='';
+  if(!any){
+    out='아직 아무 곳도 지나지 않았다.';
+  } else {
+    let rTop=rows, rBot=-1, cL=cols, cR=-1;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      if(g[r][c]!==' '){
+        if(r<rTop) rTop=r;
+        if(r>rBot) rBot=r;
+        if(c<cL) cL=c;
+        if(c>cR) cR=c;
+      }
+    }
+    const lines=[];
+    for(let r=rTop;r<=rBot;r++) lines.push(g[r].slice(cL,cR+1).join(''));
+    out=lines.join('\n');
+  }
+
+  const n=Object.keys(GS.visited).length;
+  $('userMapArt').textContent=out;
+  $('userMapNote').textContent='지나온 곳  '+n+'칸';
+  overlay.classList.add('on');
 }
 
 function move(d){
@@ -3722,11 +3813,21 @@ function devMap(){
       else if(isStart)        c=' ◎  ';          /* 시작 칸 */
       else if(x===ex&&y===ey) c=' !! ';
       else if(GS.events[k]){
-        const nn=num[GS.events[k]];
-        c=(path.has(k)?'*':' ')+String(nn).padStart(2,'0')+' ';
+        if(GS.events[k]==='trap') {
+          c = (path.has(k)?'*':' ') + '☠  ';
+        } else {
+          const nn=num[GS.events[k]];
+          c=(path.has(k)?'*':' ')+String(nn).padStart(2,'0')+' ';
+        }
       }
       else c=path.has(k)?' ·· ':'    ';
-      if(isNow) c='▶'+(GS.events[k]?String(num[GS.events[k]]).padStart(2,'0'):'▪▪')+'◀';
+      
+      if(isNow) {
+        let evStr = '▪▪';
+        if(GS.events[k]==='trap') evStr = '☠ ';
+        else if(GS.events[k]) evStr = String(num[GS.events[k]]).padStart(2,'0');
+        c='▶'+evStr+'◀';
+      }
       mid+=c;
       if(x===N-1) mid+=(ex===x&&ey===y&&ed==='E')?' ':'│';
       else        mid+= W[y][x].E?'│':' ';
