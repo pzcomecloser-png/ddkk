@@ -1,228 +1,384 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Galton</title>
-<style>
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: #080808;
-    color: #e8e8e8;
-    font-family: "Courier New", monospace;
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  #game {
-    width: 1000px;
-    max-width: 96vw;
-  }
-  #header {
-    display: flex;
-    justify-content: space-between;
-    border-bottom: 1px solid #555;
-    padding: 0 0 12px;
-    margin-bottom: 18px;
-    font-size: 17px;
-  }
-  #screen {
-    display: grid;
-    grid-template-columns: 1fr 270px;
-    gap: 28px;
-  }
-  #board, #cannon {
-    white-space: pre;
-    font-size: 15px;
-    line-height: 1.22;
-    min-height: 430px;
-  }
-  #board { position: relative; }
-  #cannon {
-    border-left: 1px solid #444;
-    padding-left: 24px;
-  }
-  #info {
-    margin-top: 18px;
-    border-top: 1px solid #444;
-    padding-top: 12px;
-    font-size: 14px;
-    color: #aaa;
-  }
-  .clear { color: #fff; font-weight: bold; }
-</style>
+    <meta charset="UTF-8">
+    <title>갈톤보드 구슬 게임 (Geometry Wars Style)</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        :root {
+            --neon-cyan: #00ffff;
+            --neon-pink: #ff00ff;
+            --neon-green: #39ff14;
+            --neon-yellow: #ffff00;
+            --neon-red: #ff003c;
+            --bg-color: #050508;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: #fff;
+            font-family: 'Share Tech Mono', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* 지오메트리 워즈 스타일 배경 그리드 */
+        .bg-grid {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: 
+                linear-gradient(rgba(0, 255, 255, 0.15) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.15) 1px, transparent 1px);
+            background-size: 50px 50px;
+            z-index: 0;
+            transform: perspective(500px) rotateX(10deg);
+            transform-origin: center top;
+            opacity: 0.6;
+        }
+
+        .game-screen {
+            position: relative;
+            width: 1280px;
+            height: 720px;
+            border: 2px solid var(--neon-cyan);
+            box-shadow: 0 0 15px var(--neon-cyan), inset 0 0 15px var(--neon-cyan);
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        /* 1. UI Overlay (상단 정보) */
+        .ui-panel {
+            position: absolute;
+            top: 20px; left: 20px;
+            z-index: 10;
+        }
+        .ui-text {
+            font-size: 24px;
+            color: var(--neon-cyan);
+            text-shadow: 0 0 10px var(--neon-cyan);
+            margin-bottom: 10px;
+        }
+        .ui-marbles {
+            font-size: 32px;
+            color: var(--neon-pink);
+            text-shadow: 0 0 10px var(--neon-pink);
+        }
+        
+        .ui-cards {
+            position: absolute;
+            top: 20px; left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+        }
+        .card {
+            width: 60px; height: 80px;
+            border: 2px solid var(--neon-yellow);
+            box-shadow: 0 0 10px var(--neon-yellow), inset 0 0 5px var(--neon-yellow);
+            display: flex; justify-content: center; align-items: center;
+            font-size: 12px; text-align: center; color: var(--neon-yellow);
+            text-shadow: 0 0 5px var(--neon-yellow);
+        }
+
+        /* 2. 갈톤 보드 (좌측) */
+        .galton-board {
+            position: absolute;
+            top: 100px; left: 50px;
+            width: 800px; height: 480px;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+        }
+        .pegs-container {
+            position: relative;
+            width: 100%; height: 85%;
+        }
+        .peg {
+            position: absolute;
+            width: 8px; height: 8px;
+            background: transparent;
+            border: 2px solid var(--neon-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--neon-cyan);
+            transform: translate(-50%, -50%);
+        }
+        .slots-container {
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 100%; height: 15%;
+            display: flex;
+        }
+        .slot {
+            flex: 1;
+            border-left: 2px dashed rgba(0, 255, 255, 0.5);
+            display: flex; justify-content: center; align-items: center;
+            font-size: 18px; font-weight: bold;
+        }
+        .slot:last-child { border-right: 2px dashed rgba(0, 255, 255, 0.5); }
+        .slot-x1 { color: var(--neon-cyan); text-shadow: 0 0 8px var(--neon-cyan); }
+        .slot-x2 { color: var(--neon-green); text-shadow: 0 0 8px var(--neon-green); }
+        .slot-x3 { color: var(--neon-yellow); text-shadow: 0 0 8px var(--neon-yellow); }
+        .slot-x5 { color: var(--neon-pink); text-shadow: 0 0 8px var(--neon-pink); }
+        .slot-fail { color: var(--neon-red); text-shadow: 0 0 8px var(--neon-red); border-bottom: 3px solid var(--neon-red); }
+
+        /* 구슬 (갈톤보드 내 낙하중) */
+        .marble {
+            position: absolute;
+            width: 14px; height: 14px;
+            background: var(--neon-pink);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--neon-pink), 0 0 30px var(--neon-pink);
+        }
+
+        /* 3. 컨베이어 벨트 (하단) */
+        .conveyor-belt {
+            position: absolute;
+            top: 590px; left: 50px;
+            width: 950px; height: 40px;
+            border-top: 2px solid var(--neon-cyan);
+            border-bottom: 2px solid var(--neon-cyan);
+            background: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 20px,
+                rgba(0, 255, 255, 0.2) 20px,
+                rgba(0, 255, 255, 0.2) 40px
+            );
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+            animation: moveConveyor 1s linear infinite;
+        }
+        @keyframes moveConveyor {
+            from { background-position: 0 0; }
+            to { background-position: 40px 0; }
+        }
+        
+        .marble-on-belt {
+            position: absolute;
+            top: 50%; transform: translateY(-50%);
+            width: 14px; height: 14px;
+            background: var(--neon-pink);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--neon-pink);
+        }
+
+        /* 4. 구슬 창고 (우측 하단) */
+        .storage-tank {
+            position: absolute;
+            top: 530px; left: 1000px;
+            width: 150px; height: 100px;
+            border: 3px solid var(--neon-green);
+            box-shadow: 0 0 20px var(--neon-green), inset 0 0 20px var(--neon-green);
+            display: flex; flex-wrap: wrap; align-content: flex-end; justify-content: center;
+            padding: 5px; gap: 4px;
+            background: rgba(57, 255, 20, 0.1);
+        }
+        .storage-tank::before {
+            content: "STORAGE";
+            position: absolute; top: -25px;
+            color: var(--neon-green); text-shadow: 0 0 5px var(--neon-green);
+        }
+
+        /* 5. 장전 튜브 (창고 -> 대포) */
+        .reload-tube {
+            position: absolute;
+            top: 150px; left: 1120px;
+            width: 30px; height: 380px;
+            border-left: 2px solid var(--neon-cyan);
+            border-right: 2px solid var(--neon-cyan);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5), inset 0 0 10px rgba(0, 255, 255, 0.3);
+            overflow: hidden;
+        }
+        .tube-marble {
+            position: absolute;
+            left: 50%; transform: translateX(-50%);
+            width: 14px; height: 14px;
+            background: var(--neon-pink);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--neon-pink);
+            animation: moveUpTube 2s linear infinite;
+        }
+        @keyframes moveUpTube {
+            from { bottom: -20px; }
+            to { bottom: 400px; }
+        }
+
+        /* 6. 갈톤 대포 (우측 상단) */
+        .cannon-area {
+            position: absolute;
+            top: 80px; left: 880px;
+            width: 240px; height: 100px;
+            transform: rotate(-15deg);
+        }
+        .cannon-body {
+            position: absolute;
+            right: 0; top: 20px;
+            width: 120px; height: 60px;
+            border: 3px solid var(--neon-green);
+            background: rgba(57, 255, 20, 0.15);
+            box-shadow: 0 0 20px var(--neon-green), inset 0 0 15px var(--neon-green);
+            border-radius: 10px;
+        }
+        .cannon-barrel {
+            position: absolute;
+            right: 110px; top: 30px;
+            width: 130px; height: 40px;
+            border: 3px solid var(--neon-cyan);
+            background: transparent;
+            box-shadow: 0 0 20px var(--neon-cyan), inset 0 0 10px var(--neon-cyan);
+        }
+        .cannon-barrel::before {
+            content: ''; position: absolute;
+            left: -10px; top: -5px; width: 20px; height: 44px;
+            background: var(--neon-cyan);
+            box-shadow: 0 0 15px var(--neon-cyan);
+        }
+        
+        /* 발사 이펙트 */
+        .fire-flash {
+            position: absolute;
+            left: -40px; top: 5px;
+            width: 40px; height: 30px;
+            background: radial-gradient(circle, var(--neon-pink) 0%, transparent 70%);
+            opacity: 0;
+            animation: flash 1.5s infinite;
+        }
+        @keyframes flash {
+            0%, 90% { opacity: 0; transform: scale(0.5); }
+            95% { opacity: 1; transform: scale(1.5); }
+            100% { opacity: 0; transform: scale(0.5); }
+        }
+
+        /* 궤적 라인 (대포 -> 보드) */
+        .trajectory {
+            position: absolute;
+            top: 80px; left: 450px;
+            width: 420px; height: 2px;
+            border-top: 2px dashed rgba(255, 0, 255, 0.4);
+            transform: rotate(12deg);
+        }
+
+    </style>
 </head>
 <body>
-<div id="game">
-  <div id="header">
-    <span>G A L T O N</span>
-    <span id="stage">STAGE 01</span>
-  </div>
 
-  <div id="screen">
-    <pre id="board"></pre>
-    <pre id="cannon"></pre>
-  </div>
+    <div class="bg-grid"></div>
 
-  <div id="info"></div>
-</div>
+    <div class="game-screen">
+        
+        <!-- UI -->
+        <div class="ui-panel">
+            <div class="ui-text">STAGE 04 - CLEAR 500</div>
+            <div class="ui-marbles">MARBLES: 342</div>
+            <div class="ui-text" style="font-size: 16px; margin-top: 10px; color: var(--neon-green);">UPGRADE: 다연발 장치 (Lv.2)</div>
+        </div>
 
-<script>
-const ROWS = 11;
-const WIDTH = 61;
-const CENTER = 25;
+        <div class="ui-cards">
+            <div class="card">피버<br>카드</div>
+            <div class="card" style="border-color: var(--neon-pink); box-shadow: 0 0 10px var(--neon-pink), inset 0 0 5px var(--neon-pink); color: var(--neon-pink);">올인</div>
+            <div class="card" style="border-color: #333; box-shadow: none; color: #555;">EMPTY</div>
+        </div>
 
-let marbles = 100;
-let fired = 0;
-let gained = 0;
-let falling = [];
-let cleared = false;
+        <!-- 대포 발사 궤적 -->
+        <div class="trajectory"></div>
 
-const slots = [
-  {v:0}, {v:1}, {v:1}, {v:1}, {v:2},
-  {v:2}, {v:1}, {v:3}, {v:1}, {v:0},
-  {v:1}, {v:3}, {v:1}, {v:2}, {v:2}
-];
+        <!-- 2. 갈톤보드 -->
+        <div class="galton-board">
+            <div class="pegs-container" id="pegs">
+                <!-- JS로 핀(Peg) 자동 생성 -->
+                
+                <!-- 현재 보드 안을 구르는 구슬들 -->
+                <div class="marble" style="top: 20%; left: 52%;"></div>
+                <div class="marble" style="top: 40%; left: 45%;"></div>
+                <div class="marble" style="top: 60%; left: 55%;"></div>
+                <div class="marble" style="top: 75%; left: 35%;"></div>
+                <div class="marble" style="top: 85%; left: 65%;"></div>
+            </div>
+            <div class="slots-container">
+                <div class="slot slot-fail">FAIL</div>
+                <div class="slot slot-x1">x1</div>
+                <div class="slot slot-x1">x1</div>
+                <div class="slot slot-x2">x2</div>
+                <div class="slot slot-x2">x2</div>
+                <div class="slot slot-x3">x3</div>
+                <div class="slot slot-x5">x5</div>
+                <div class="slot slot-x3">x3</div>
+                <div class="slot slot-x2">x2</div>
+                <div class="slot slot-x2">x2</div>
+                <div class="slot slot-x1">x1</div>
+                <div class="slot slot-x1">x1</div>
+                <div class="slot slot-fail">FAIL</div>
+            </div>
+        </div>
 
-// 갈톤 핀 좌표
-const pins = [];
-for (let r = 0; r < 7; r++) {
-  const count = r + 1;
-  const start = CENTER - r;
-  for (let i = 0; i < count; i++) {
-    pins.push({r: r + 1, c: start + i * 2});
-  }
-}
+        <!-- 3. 컨베이어 벨트 -->
+        <div class="conveyor-belt">
+            <div class="marble-on-belt" style="left: 10%;"></div>
+            <div class="marble-on-belt" style="left: 30%;"></div>
+            <div class="marble-on-belt" style="left: 35%;"></div>
+            <div class="marble-on-belt" style="left: 60%;"></div>
+            <div class="marble-on-belt" style="left: 85%;"></div>
+        </div>
 
-function makeGrid() {
-  return Array.from({length: ROWS + 4}, () => Array(WIDTH).fill(' '));
-}
+        <!-- 4. 구슬 창고 -->
+        <div class="storage-tank">
+            <!-- 창고에 쌓인 구슬들 -->
+            <script>
+                for(let i=0; i<30; i++) {
+                    document.write('<div class="marble" style="position:relative; box-shadow: 0 0 5px #ff00ff;"></div>');
+                }
+            </script>
+        </div>
 
-function put(g, r, c, s) {
-  if (r < 0 || r >= g.length || c < 0 || c >= WIDTH) return;
-  for (let i = 0; i < s.length; i++) {
-    if (c + i >= 0 && c + i < WIDTH) g[r][c+i] = s[i];
-  }
-}
+        <!-- 5. 장전 튜브 (엘리베이터) -->
+        <div class="reload-tube">
+            <div class="tube-marble" style="animation-delay: 0s;"></div>
+            <div class="tube-marble" style="animation-delay: 0.5s;"></div>
+            <div class="tube-marble" style="animation-delay: 1.0s;"></div>
+            <div class="tube-marble" style="animation-delay: 1.5s;"></div>
+        </div>
 
-function draw() {
-  const g = makeGrid();
+        <!-- 6. 갈톤 대포 -->
+        <div class="cannon-area">
+            <div class="cannon-barrel">
+                <div class="fire-flash"></div>
+            </div>
+            <div class="cannon-body"></div>
+        </div>
 
-  // 상단 보드 프레임
-  put(g, 0, 8, "┌───────────────────────────────────────────┐");
-  put(g, 1, 8, "│               G A L T O N                 │");
-  put(g, 2, 8, "│                                           │");
+    </div>
 
-  // 핀
-  for (const p of pins) {
-    put(g, p.r + 2, 8 + p.c, "•");
-  }
+    <script>
+        // 갈톤보드 핀(Peg)을 역삼각형/피라미드 형태로 배치
+        const pegsContainer = document.getElementById('pegs');
+        const rows = 12;
+        const startX = 400; // 보드 중앙 (가로 800)
+        const startY = 40;
+        const xSpacing = 28;
+        const ySpacing = 30;
 
-  // 현재 떨어지는 구슬
-  for (const m of falling) {
-    put(g, m.r + 2, 8 + Math.round(m.c), "●");
-  }
-
-  // 하단 슬롯
-  const slotStart = 8 + CENTER - 14;
-  put(g, 10, slotStart, "┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐");
-  let labels = "";
-  for (const s of slots) labels += `│${s.v === 0 ? "X" : s.v + "×"} `;
-  put(g, 11, slotStart, labels + "│");
-  put(g, 12, slotStart, "└──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘");
-
-  document.getElementById("board").textContent = g.map(row => row.join("")).join("\n");
-
-  // 대포
-  const cannonText =
-`       ┌───────────────┐
-       │  MARBLE CANNON│
-       └───────┬───────┘
-               │
-        ┌──────┴──────┐
-        │     ●       │
-        │   ┌───┐     │
-        │   │ ● │     │
-        │   └───┘     │
-        └──────┬──────┘
-               │
-        ┌──────┴──────┐
-        │  ● ● ● ● ●  │
-        │  ● ● ● ● ●  │
-        │  ● ● ● ● ●  │
-        └─────────────┘
-          MARBLES: ${String(marbles).padStart(3," ")}
-
-       AUTO FIRE: ON
-       SPEED: 2.0 / sec`;
-  document.getElementById("cannon").textContent = cannonText;
-
-  document.getElementById("info").textContent =
-    `MARBLES ${marbles}   |   FIRED ${fired}   |   GAINED ${gained}   |   TARGET 200`
-    + (cleared ? "   |   ★ STAGE CLEAR" : "");
-}
-
-function fire() {
-  if (cleared || marbles <= 0) return;
-
-  marbles--;
-  fired++;
-
-  // 실제 애니메이션 경로: 위에서 시작해 핀 사이를 좌우로 튕기며 내려감
-  let c = CENTER;
-  const path = [];
-  for (let r = 0; r < 8; r++) {
-    const dir = Math.random() < 0.5 ? -1 : 1;
-    c += dir * (r < 7 ? 1 : 0);
-    path.push({r, c});
-  }
-
-  // 15칸의 중앙 집중형 분포를 근사
-  const x = Math.random() + Math.random() + Math.random() + Math.random() + Math.random() + Math.random() + Math.random() - 3;
-  let slot = Math.round(7 + x * 2.0);
-  slot = Math.max(0, Math.min(14, slot));
-
-  falling.push({r:0, c:CENTER, path, step:0, slot});
-
-  setTimeout(() => resolveMarble(falling[falling.length-1]), 650);
-}
-
-function resolveMarble(m) {
-  if (!m) return;
-  const idx = falling.indexOf(m);
-  if (idx === -1) return;
-
-  const result = slots[m.slot].v;
-  if (result > 0) {
-    marbles += result;
-    gained += result;
-  }
-
-  falling.splice(idx, 1);
-
-  if (marbles >= 200) {
-    cleared = true;
-    clearInterval(autoFire);
-  }
-  draw();
-}
-
-function animate() {
-  for (const m of falling) {
-    if (m.step < m.path.length) {
-      const p = m.path[m.step++];
-      m.r = p.r;
-      m.c = p.c;
-    }
-  }
-  draw();
-}
-
-draw();
-const animation = setInterval(animate, 90);
-const autoFire = setInterval(fire, 500);
-</script>
+        for (let row = 0; row < rows; row++) {
+            const cols = row + 3; // 첫 줄에 3개부터 시작
+            for (let col = 0; col < cols; col++) {
+                const x = startX - ((cols - 1) * xSpacing) / 2 + (col * xSpacing);
+                const y = startY + (row * ySpacing);
+                
+                const peg = document.createElement('div');
+                peg.className = 'peg';
+                peg.style.left = x + 'px';
+                peg.style.top = y + 'px';
+                pegsContainer.appendChild(peg);
+            }
+        }
+    </script>
 </body>
 </html>
