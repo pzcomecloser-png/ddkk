@@ -133,24 +133,43 @@ html,body{
 #field{ flex:1 1 auto; position:relative; overflow:hidden; }
 #pinScale{ position:absolute; inset:0; transform-origin:center center; }
 /* ===== 핀 (= 밤하늘의 별) ===== */
+/* ★ 성능: box-shadow 애니메이션을 제거하고 발광을 별도 의사요소로 분리.
+   box-shadow는 매 프레임 CPU 페인트를 유발하지만,
+   opacity/transform은 GPU 합성만으로 처리되어 비용이 사실상 0이 된다.   */
 .pin{
-  position:absolute; width:4px; height:4px; margin:-2px 0 0 -2px; border-radius:50%;
+  position:absolute; width:4px; height:4px; margin:-2px 0 0 -2px;
+  border-radius:50%;
   background:radial-gradient(circle at 40% 40%,#fff,#E8EAEF 60%,#A3A7B5);
-  will-change:opacity, transform;
+  transform:translateZ(0);          /* 합성 레이어 승격 */
 }
-/* 별처럼 희미해지다 밝아지기를 반복 — 핀마다 주기/위상이 다름 */
+/* 발광 — 미리 그려둔 그라데이션. 크기·투명도만 애니메이션 */
+.pin::after{
+  content:''; position:absolute;
+  left:-7px; top:-7px; width:18px; height:18px;
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,
+    rgba(225,238,255,.85) 0%,
+    rgba(200,222,255,.42) 32%,
+    rgba(180,210,255,0)   70%);
+  will-change:opacity, transform;
+  animation:twinkle var(--tw-dur,3s) ease-in-out var(--tw-delay,0s) infinite alternate;
+}
+/* 별처럼 희미해지다 밝아지기를 반복 — 핀마다 주기/위상/밝기가 다름 */
 @keyframes twinkle{
-  0%   { opacity:.28; transform:scale(.78);
-         box-shadow:0 0 2px rgba(255,255,255,.25); }
-  100% { opacity:1;   transform:scale(1.22);
-         box-shadow:0 0 7px 1px rgba(220,235,255,.85); }
+  0%   { opacity:var(--tw-lo, .22); transform:scale(.55); }
+  100% { opacity:var(--tw-hi, .95); transform:scale(1.15); }
 }
 /* 구슬 충돌 시 발광 — 인라인 twinkle 애니메이션을 덮어써야 하므로 !important */
 /* ★ 네온 발광 — 흰 코어 + 색 하이라이트 + 넓은 확산의 3중 그림자
    실제 네온사인처럼 중심은 하얗게 타고 주변으로 색이 번진다.
    인라인 twinkle 애니메이션을 덮어써야 하므로 !important        */
+/* 충돌 발광 중에는 ::after 깜빡임을 멈춰 겹침 방지 */
 .pin.hitY, .pin.hitO, .pin.hitR, .pin.hitG, .pin.hitB{
   z-index:4;
+}
+.pin.hitY::after, .pin.hitO::after, .pin.hitR::after,
+.pin.hitG::after, .pin.hitB::after{
+  animation-play-state:paused; opacity:0;
 }
 .pin.hitY{ animation:hitY .45s cubic-bezier(.1,.8,.2,1) !important; }
 .pin.hitO{ animation:hitO .50s cubic-bezier(.1,.8,.2,1) !important; }
@@ -585,12 +604,18 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
   transition:opacity .4s ease, left .45s cubic-bezier(.3,.8,.3,1),
              top .45s cubic-bezier(.3,.8,.3,1), width .45s ease, height .45s ease;
 }
-#tutRing.on{ opacity:1; animation:tutRingPulse 1.5s ease-in-out infinite; }
+#tutRing.on{ opacity:1; }
+/* ★ 성능: box-shadow 무한 애니메이션을 제거하고 별도 레이어의 opacity만 변경 */
+#tutRing::after{
+  content:''; position:absolute; inset:-6px;
+  border-radius:14px; pointer-events:none;
+  box-shadow:0 0 0 6px rgba(255,217,138,.10), 0 0 34px 12px rgba(255,217,138,.5);
+  opacity:0; will-change:opacity;
+}
+#tutRing.on::after{ animation:tutRingPulse 1.5s ease-in-out infinite; }
 @keyframes tutRingPulse{
-  0%,100%{ box-shadow:0 0 0 5px rgba(255,217,138,.16), 0 0 26px 8px rgba(255,217,138,.4),
-                     inset 0 0 18px rgba(255,217,138,.18); }
-  50%    { box-shadow:0 0 0 9px rgba(255,217,138,.08), 0 0 38px 14px rgba(255,217,138,.62),
-                     inset 0 0 24px rgba(255,217,138,.3); }
+  0%,100%{ opacity:.25; }
+  50%    { opacity:1; }
 }
 
 /* 설명 말풍선 */
@@ -1912,7 +1937,7 @@ function startProduction(){
 ========================================================= */
 const pins=[];
 function buildPins(){
-  ui.pinScale.innerHTML=''; pins.length=0;
+  ui.pinScale.innerHTML=''; pins.length=0; PINMAP.clear();
   const W=ui.field.clientWidth, H=ui.field.clientHeight;
   const colW=W/COLS, vGap=H/(ROWS+1);
 
@@ -1931,13 +1956,20 @@ function buildPins(){
       if(x<-2||x>W+2) continue;
       const p=document.createElement('div');
       p.className='pin'; p.style.left=x+'px'; p.style.top=y+'px';
-      // 별처럼 각자 다른 주기·위상으로 깜빡임 + 개별 밝기 편차
-      const dur   = (1.8 + Math.random()*3.4).toFixed(2);   // 1.8~5.2초
-      const delay = (-Math.random()*6).toFixed(2);          // 음수 지연 → 시작부터 흩어짐
-      p.style.animation = `twinkle ${dur}s ease-in-out ${delay}s infinite alternate`;
-      // 별마다 고유 밝기 (일부는 은은하게, 일부는 도드라지게)
-      p.style.filter = `brightness(${(0.72 + Math.random()*0.55).toFixed(2)})`;
-      ui.pinScale.appendChild(p); pins.push({el:p,x,y});
+      /* ★ 성능: 애니메이션을 ::after(발광)에만 적용.
+         filter는 제거하고 CSS 변수로 밝기 편차를 표현 → 레이어 폭증 방지 */
+      const dur   = (1.8 + Math.random()*3.4).toFixed(2);
+      const delay = (-Math.random()*6).toFixed(2);
+      const hi    = (0.55 + Math.random()*0.45).toFixed(2);   // 최대 밝기 편차
+      const lo    = (0.10 + Math.random()*0.18).toFixed(2);   // 최소 밝기 편차
+      p.style.setProperty('--tw-hi', hi);
+      p.style.setProperty('--tw-lo', lo);
+      p.style.setProperty('--tw-dur', dur+'s');
+      p.style.setProperty('--tw-delay', delay+'s');
+      ui.pinScale.appendChild(p);
+      const obj={el:p,x,y,r,c};
+      pins.push(obj);
+      PINMAP.set(pinKey(r,c), obj);      // ★ 격자 인덱스 등록
     }
   }
 }
@@ -1969,6 +2001,9 @@ function dropBall(forcedKind){
   S.active++;
   ui.lanternPivot.classList.add('charge');
 
+  // ★ 장전이 끝나기 직전에 발사구 속도를 2프레임만 측정 (관성용)
+  setTimeout(()=>sampleMuzzle(), Math.max(0, CHARGE_MS-40));
+
   setTimeout(()=>{
     ui.lanternPivot.classList.remove('charge');
     const W=ui.field.clientWidth, H=ui.field.clientHeight;
@@ -1980,9 +2015,11 @@ function dropBall(forcedKind){
     ui.pinScale.appendChild(b);
 
     // ── 초기 위치 (흔들리는 랜턴의 발사구) ──
-    const mR=ui.muzzle.getBoundingClientRect(), fR=ui.field.getBoundingClientRect();
-    let x = clamp(mR.left+mR.width/2-fR.left, colW*0.3, W-colW*0.3);
-    let y = Math.max(4, mR.bottom-fR.top);
+    // ★ sampleMuzzle이 측정해둔 x를 재사용 (rect 호출 절약)
+    const fR = ui.field.getBoundingClientRect();
+    const mx = (MUZ.x !== null) ? MUZ.x : (fR.left + fR.width/2);
+    let x = clamp(mx - fR.left, colW*0.3, W-colW*0.3);
+    let y = 4;
 
     // ── 물리 상태 ──
     // ★ 진자 관성 승계 — 랜턴이 스윙하던 방향으로 구슬이 밀려나간다
@@ -2077,48 +2114,63 @@ function dropBall(forcedKind){
    CSS: rotate(-45°)↔rotate(45°), 2.6초, alternate → 왕복 5.2초
    각도 θ(t) = -45·cos(2πt/T)  ·  각속도 ω = dθ/dt
    접선속도 v = r·ω  →  수평 성분 vx = v·cos(θ)                    */
-/* ★ 랜턴 발사구의 실제 이동 속도를 직접 측정한다.
-   CSS 애니메이션의 위상을 추정하는 대신, 발사구 좌표를 매 프레임 샘플링해
-   실제 속도(px/s)를 구한다. 이 값이 구슬의 초기 수평 속도가 된다.        */
-const MUZ = { x:null, t:0, v:0 };
-function trackMuzzle(){
-  const r = ui.muzzle.getBoundingClientRect();
-  const cx = r.left + r.width/2;
-  const now = performance.now();
-  if(MUZ.x !== null){
-    const dt = (now - MUZ.t)/1000;
-    if(dt > 0.004 && dt < 0.2){
-      const inst = (cx - MUZ.x)/dt;              // 순간 속도 (px/s)
-      MUZ.v = MUZ.v*0.55 + inst*0.45;            // 약한 평활화 (노이즈 제거)
-    }
-  }
-  MUZ.x = cx; MUZ.t = now;
-  requestAnimationFrame(trackMuzzle);
+/* ★ 성능: 매 프레임 getBoundingClientRect()를 호출하던 trackMuzzle을 제거.
+   관성은 '발사 순간'에만 필요하므로, 발사 직전 2회만 샘플링해 속도를 구한다.
+   초당 60회 강제 레이아웃 → 발사당 2회로 감소 (30배 개선)            */
+const MUZ = { x:null, t:0, v:0, pending:false };
+
+/* 발사 예정 시점에 호출 — 짧은 간격으로 2회 측정해 속도 산출 */
+function sampleMuzzle(cb){
+  const r1 = ui.muzzle.getBoundingClientRect();
+  const x1 = r1.left + r1.width/2, t1 = performance.now();
+  requestAnimationFrame(()=>{
+    const r2 = ui.muzzle.getBoundingClientRect();
+    const x2 = r2.left + r2.width/2, t2 = performance.now();
+    const dt = (t2-t1)/1000;
+    MUZ.v = (dt > 0.002 && dt < 0.1) ? (x2-x1)/dt : 0;
+    MUZ.x = x2;
+    cb && cb();
+  });
 }
-requestAnimationFrame(trackMuzzle);
 
 /* 발사 순간의 관성 = 측정된 발사구 속도 × 승계율 */
 function lanternTangentV(){
   return MUZ.v * PHYS.inertia;
 }
 
-/* 핀 충돌 이펙트 — 가장 가까운 핀을 찾아 발광 */
+/* 핀 충돌 이펙트 — ★ 성능: 격자 인덱스로 O(1) 조회
+   기존에는 매 충돌마다 152개 전체를 순회해 거리를 계산했다(구슬 1개당 1,976회).
+   핀은 규칙적인 삼각격자이므로 (행, 열)을 직접 계산하면 즉시 찾을 수 있다. */
+const PINMAP = new Map();          // "row,col" → pin 객체
+
+function pinKey(r,c){ return r*100+c; }
+
 function hitPin(x, y, colW){
-  let best=null, bd=1e9;
-  for(const p of pins){
-    const dd=(p.x-x)**2+(p.y-y)**2;
-    if(dd<bd){ bd=dd; best=p; }
-  }
-  if(!best || bd >= colW*colW) return;
+  // y 좌표에서 행을 역산 (vGap 간격)
+  const H = ui.field.clientHeight;
+  const vGap = H/(ROWS+1);
+  const r = Math.round(y/vGap) - 1;
+  if(r < 0 || r >= ROWS-1) return;
+
+  // 해당 행의 오프셋을 반영해 열 역산
+  const off = (r%2===0) ? colW*0.5 : 0;
+  const c = Math.round((x - off)/colW);
+
+  const best = PINMAP.get(pinKey(r,c));
+  if(!best) return;
+  // 실제 거리 확인 (격자 밖으로 벗어난 경우 제외)
+  const dx = best.x - x, dy = best.y - y;
+  if(dx*dx + dy*dy >= colW*colW) return;
+
   /* ★ 네온 5색 추첨 — 희귀할수록 크고 오래 빛난다
        노랑 60% / 주황 20% / 녹색 12% / 빨강 6% / 청록 2%           */
-  const r = Math.random();
+  const rr = Math.random();
   let cls, litMs, ringCol = null;
-  if(r < 0.02){        cls='hitB'; litMs=760; ringCol='rgba(41,212,255,.95)'; }
-  else if(r < 0.08){   cls='hitR'; litMs=630; ringCol='rgba(255,61,110,.9)'; }
-  else if(r < 0.20){   cls='hitG'; litMs=560; }
-  else if(r < 0.40){   cls='hitO'; litMs=510; }
-  else {               cls='hitY'; litMs=460; }
+  if(rr < 0.02){        cls='hitB'; litMs=760; ringCol='rgba(41,212,255,.95)'; }
+  else if(rr < 0.08){   cls='hitR'; litMs=630; ringCol='rgba(255,61,110,.9)'; }
+  else if(rr < 0.20){   cls='hitG'; litMs=560; }
+  else if(rr < 0.40){   cls='hitO'; litMs=510; }
+  else {                cls='hitY'; litMs=460; }
 
   best.el.classList.remove('hitY','hitO','hitG','hitR','hitB');
   void best.el.offsetWidth;
@@ -2583,21 +2635,26 @@ const TUT_STEPS = [
     sub:'불꽃이 피어나는 동안, 그 아이는 편히 잠들 수 있습니다',
     sfx:'card',
   },
-  { // ② 마법 랜턴 — 회전 중이므로 고정 영역을 직접 계산
+  { /* ② 마법 랜턴 — 회전 중이라 rect가 부정확하므로 CSS 값으로 직접 계산.
+         #lanternPivot: top:-56px, height:138px (lane 기준)
+         → 랜턴이 차지하는 세로 범위 = lane.top-56 ~ lane.top+82
+         스윙 시 회전축(상단)을 중심으로 좌우 최대 ±98px 이동 (sin45×138)  */
     rect:()=>{
-      const lane=$('lanternLane').getBoundingClientRect();
-      // 랜턴은 lane 상단 -56px에서 시작, 폭 54px, 높이 138px (좌우 45도 스윙)
-      const w=54, hgt=138, top=lane.top-56;
-      const cx=lane.left+lane.width/2;
-      // 스윙 반경을 고려한 실제 점유 범위
-      const swing=Math.sin(45*Math.PI/180)*hgt;   // ≈98px
-      return { left:cx-swing*0.55, top:top,
-               width:swing*1.1, height:hgt+10,
-               cx:cx, cy:top+hgt*0.45 };
+      const lane = $('lanternLane').getBoundingClientRect();
+      const PIVOT_TOP = -56, LANTERN_H = 138;
+      const top    = lane.top + PIVOT_TOP;
+      const bottom = lane.top + PIVOT_TOP + LANTERN_H;   // = lane.top + 82
+      const cx     = lane.left + lane.width/2;
+      const halfW  = Math.sin(45*Math.PI/180) * LANTERN_H * 0.62;  // ≈61px
+      return { left:cx-halfW, top:top,
+               width:halfW*2, height:bottom-top,
+               bottom:bottom, cx:cx };
     },
     title:'마법 랜턴',
     body:'좌우로 흔들리는 랜턴이 <b>구슬을 떨어뜨립니다</b>.<br>어디로 떨어질지는 아무도 모릅니다.',
-    place:'below', pad:6,
+    place:'below', pad:10,
+    gap:34,
+    noFlip:true,     // ★ 화면 밖으로 나가도 위로 뒤집지 않음 (랜턴을 가리게 되므로)
   },
   { // ③ 핀 필드
     target:()=>$('field'),
@@ -2697,18 +2754,29 @@ function tutShow(){
     let by;
     box.classList.remove('arrowUp','arrowDown');
 
+    const gap = st.gap ?? 16;      // 대상과 말풍선 사이 간격
+    const rBottom = r.bottom ?? (r.top + r.height);
     if(st.place==='above'){
-      by = r.top - pad - bh - 16;
+      by = r.top - pad - bh - gap;
       box.classList.add('arrowDown');
-      if(by < 20){ by = r.bottom + pad + 16; box.classList.remove('arrowDown'); box.classList.add('arrowUp'); }
+      if(by < 20 && !st.noFlip){
+        by = rBottom + pad + gap;
+        box.classList.remove('arrowDown'); box.classList.add('arrowUp');
+      }
     } else if(st.place==='below'){
-      by = r.bottom + pad + 16;
+      by = rBottom + pad + gap;
       box.classList.add('arrowUp');
-      if(by + bh > vh-20){ by = r.top - pad - bh - 16; box.classList.remove('arrowUp'); box.classList.add('arrowDown'); }
+      // ★ noFlip이면 아래에 고정 (뒤집으면 대상을 가리므로)
+      if(by + bh > vh-20 && !st.noFlip){
+        by = r.top - pad - bh - gap;
+        box.classList.remove('arrowUp'); box.classList.add('arrowDown');
+      }
     } else { // inside — 필드 중앙
       by = r.top + r.height/2 - bh/2;
     }
-    by = clamp(by, 16, vh - bh - 16);
+    // noFlip인 경우 대상 아래 최소 위치를 보장 (위로 밀려 올라가지 않도록)
+    const minY = st.noFlip ? (rBottom + pad + 8) : 16;
+    by = clamp(by, minY, Math.max(minY, vh - bh - 16));
     box.style.left = bx+'px';
     box.style.top  = by+'px';
 
@@ -2895,6 +2963,7 @@ function fireworks(x, baseY, m){
 }
 
 function spawnTrail(x,y,pal){
+  if(!canSpawn(1)) return;
   const t=document.createElement('div');
   t.className='fwTrail';
   const h=pick(pal), sz=2+Math.random()*2;
@@ -2903,6 +2972,7 @@ function spawnTrail(x,y,pal){
   t.style.boxShadow=`0 0 ${5+sz}px hsl(${h},100%,56%), 0 0 ${9+sz*2}px hsl(${h},100%,44%)`;
   t.style.left=x+'px'; t.style.top=y+'px';
   document.body.appendChild(t);
+  trackParticle(t, 720);
   t.animate([
     {transform:'translate(0,0) scale(1)',opacity:.95},
     {transform:`translate(${(Math.random()-.5)*14}px, ${11+Math.random()*18}px) scale(.15)`,opacity:0}
@@ -2910,8 +2980,22 @@ function spawnTrail(x,y,pal){
 }
 
 /* ── 폭발 ── */
+/* ★ 성능: 동시 파티클 상한 — 구슬이 많을 때 DOM 폭증 방지 */
+let PARTICLES = 0;
+const PARTICLE_MAX = 420;
+function canSpawn(n){ return PARTICLES + n <= PARTICLE_MAX; }
+function trackParticle(el, ms){
+  PARTICLES++;
+  setTimeout(()=>{ PARTICLES--; }, ms);
+}
+
 function burst(x, y, g, pal, type){
   sfxBurst(g.size>=2.7?5:g.size>=2?3:1);
+  // 파티클 여유가 없으면 규모를 줄인다 (연출은 유지, 개수만 감축)
+  if(!canSpawn(80)){
+    g = Object.assign({}, g, { petals: Math.max(6, Math.round(g.petals*0.35)),
+                               size: g.size*0.8 });
+  }
   // 중심 섬광
   const fl=document.createElement('div');
   fl.className='fwFlash';
@@ -3182,6 +3266,7 @@ function spawnSpark(x,y,ang,dist,g,pal,o){
   s.style.boxShadow=`0 0 ${5+sz*2}px hsl(${h},100%,62%), 0 0 ${11+sz*3}px hsl(${h},100%,48%)`;
   s.style.left=x+'px'; s.style.top=y+'px';
   document.body.appendChild(s);
+  trackParticle(s, o.dur*1.4);
 
   const ex=Math.cos(ang)*dist, ey=Math.sin(ang)*dist;
   const gv=o.grav;
@@ -3218,6 +3303,7 @@ function spawnGlitter(x,y,g,pal){
   el.style.boxShadow=`0 0 7px hsl(${h},100%,68%), 0 0 13px hsl(${h},100%,52%)`;
   el.style.left=x+'px'; el.style.top=y+'px';
   document.body.appendChild(el);
+  trackParticle(el, 2400);
   const dx=(Math.random()-.5)*80*g.size, dy=52+Math.random()*110;
   el.animate([
     // 퍼지며 밝아짐
