@@ -268,6 +268,26 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 13. Air Fight (NEW) -->
+    <a class="game-card" href="games/13/air.html">
+      <div class="icon-frame"><canvas id="iconAirFight" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">Air Fight</div>
+        <div class="card-desc">본격 비행기 슈팅게임</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 14. 밤의 불꽃 (NEW) -->
+    <a class="game-card" href="games/14/Fire.html">
+      <div class="icon-frame"><canvas id="iconFire" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">밤의 불꽃</div>
+        <div class="card-desc">불꽃놀이 로그라이크</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -278,7 +298,7 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  딸깍 게임즈 로고 & 픽셀아트 아이콘 렌더러 (총 10개)
+//  딸깍 게임즈 로고 & 픽셀아트 아이콘 렌더러 (총 14개)
 // ═══════════════════════════════════════════════════════════════
 
 // 0. 딸깍 게임스 로고
@@ -547,7 +567,7 @@ function drawSaveWorld2Icon(id) {
   ctx.fillRect(18, 22, 4, 1);
 }
 
-// 9. REWIND (엔딩 장면 — 마주보는 과거의 나 & 현재의 나)
+// 9. REWIND
 function drawRewindIcon(id) {
   const c = document.getElementById(id);
   if (!c) return;
@@ -555,19 +575,16 @@ function drawRewindIcon(id) {
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, 24, 24);
 
-  // ── 배경: 엔딩의 따뜻한 실내 톤 ──
   ctx.fillStyle = '#2b1a10';
   ctx.fillRect(0, 0, 24, 24);
   ctx.fillStyle = '#3d2718';
   ctx.fillRect(2, 2, 20, 20);
 
-  // 천장 조명 빛 (상단 중앙 은은한 노란빛)
   ctx.fillStyle = 'rgba(255, 225, 150, 0.10)';
   ctx.fillRect(5, 2, 14, 8);
   ctx.fillStyle = 'rgba(255, 225, 150, 0.08)';
   ctx.fillRect(3, 2, 18, 5);
 
-  // ── 하트 (둘 사이 위로 떠오르는 💛) ──
   ctx.fillStyle = '#ffe15a';
   ctx.fillRect(10, 2, 2, 1);
   ctx.fillRect(13, 2, 2, 1);
@@ -577,39 +594,25 @@ function drawRewindIcon(id) {
   ctx.fillStyle = '#fff6c0';
   ctx.fillRect(10, 3, 1, 1);
 
-  // 반짝임
   ctx.fillStyle = 'rgba(255,255,255,0.75)';
   ctx.fillRect(4, 4, 1, 1);
   ctx.fillRect(19, 6, 1, 1);
   ctx.fillRect(20, 3, 1, 1);
 
-  /* ══════════════════════════════════════════════
-     캐릭터 드로잉 헬퍼 — 엔딩의 둥근 몸통 캐릭터
-     x0: 왼쪽 시작 좌표(9px 폭), look: 'R' | 'L'
-  ══════════════════════════════════════════════ */
   function drawEndChar(x0, body, outline, look) {
-    // 몸통 (모서리 깎은 둥근 사각형)
     ctx.fillStyle = body;
     ctx.fillRect(x0 + 1, 7, 7, 1);
     ctx.fillRect(x0, 8, 9, 8);
     ctx.fillRect(x0 + 1, 16, 7, 1);
-
-    // 윤곽 하이라이트 (밝은 테두리 느낌)
     ctx.fillStyle = outline;
     ctx.fillRect(x0 + 1, 7, 7, 1);
     ctx.fillRect(x0, 8, 1, 8);
     ctx.fillRect(x0 + 8, 8, 1, 8);
-
-    // 배 하이라이트 (입체감)
     ctx.fillStyle = 'rgba(255,255,255,0.22)';
     ctx.fillRect(x0 + 1, 8, 7, 3);
-
-    // 발 2개
     ctx.fillStyle = body;
     ctx.fillRect(x0 + 1, 17, 2, 2);
     ctx.fillRect(x0 + 6, 17, 2, 2);
-
-    // 눈 (흰자 2×2 + 눈동자, 시선 방향 반영)
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x0 + 2, 10, 2, 2);
     ctx.fillRect(x0 + 5, 10, 2, 2);
@@ -617,30 +620,22 @@ function drawRewindIcon(id) {
     const px = (look === 'R') ? 1 : 0;
     ctx.fillRect(x0 + 2 + px, 11, 1, 1);
     ctx.fillRect(x0 + 5 + px, 11, 1, 1);
-
-    // 웃는 입
     ctx.fillStyle = 'rgba(40,20,10,0.55)';
     ctx.fillRect(x0 + 3, 14, 3, 1);
     ctx.fillRect(x0 + 2, 13, 1, 1);
     ctx.fillRect(x0 + 6, 13, 1, 1);
-
-    // 볼터치
     ctx.fillStyle = 'rgba(255,255,255,0.40)';
     ctx.fillRect(x0, 12, 1, 2);
     ctx.fillRect(x0 + 8, 12, 1, 2);
   }
 
-  // 의자 등받이 (양쪽 바깥)
   ctx.fillStyle = '#5c3520';
   ctx.fillRect(0, 8, 2, 11);
   ctx.fillRect(22, 8, 2, 11);
 
-  // 과거의 나 (왼쪽 · 하늘색 · 오른쪽을 바라봄)
   drawEndChar(2, '#a8d8f0', '#d4ecf8', 'R');
-  // 현재의 나 (오른쪽 · 주황색 · 왼쪽을 바라봄)
   drawEndChar(13, '#ff9f43', '#ffd9a0', 'L');
 
-  // ── 식탁 (체크무늬 붉은 식탁보) ──
   ctx.fillStyle = '#e06565';
   ctx.fillRect(0, 19, 24, 1);
   ctx.fillStyle = '#c94f4f';
@@ -651,13 +646,11 @@ function drawRewindIcon(id) {
   ctx.fillRect(14, 20, 2, 4);
   ctx.fillRect(20, 20, 2, 4);
 
-  // ── 치킨 접시 (둘 사이 식탁 위) ──
   ctx.fillStyle = '#f0ece4';
   ctx.fillRect(9, 18, 6, 1);
   ctx.fillStyle = '#d8d2c6';
   ctx.fillRect(10, 19, 4, 1);
 
-  // 치킨 드럼스틱
   ctx.fillStyle = '#d98a2b';
   ctx.fillRect(10, 16, 4, 2);
   ctx.fillStyle = '#e8a94a';
@@ -665,13 +658,12 @@ function drawRewindIcon(id) {
   ctx.fillStyle = '#f5efe0';
   ctx.fillRect(9, 15, 1, 2);
 
-  // 모락모락 김
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.fillRect(11, 14, 1, 1);
   ctx.fillRect(12, 12, 1, 1);
 }
 
-// 10. 창고담당 김대리 (첨부 도트 캐릭터 반영)
+// 10. 창고담당 김대리
 function drawKimIcon(id) {
   const c = document.getElementById(id);
   if (!c) return;
@@ -679,81 +671,36 @@ function drawKimIcon(id) {
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, 24, 24);
 
-  // 배경 (창고 분위기의 다크 차콜)
-  ctx.fillStyle = '#16141a';
-  ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#16141a'; ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#09080c'; ctx.fillRect(6, 21, 11, 2); ctx.fillRect(5, 22, 13, 1);
 
-  // 발밑 그림자 타원
-  ctx.fillStyle = '#09080c';
-  ctx.fillRect(6, 21, 11, 2);
-  ctx.fillRect(5, 22, 13, 1);
-
-  // 1. 머리카락 (갈색)
   ctx.fillStyle = '#4e342e';
-  ctx.fillRect(6, 2, 11, 5);
-  ctx.fillRect(5, 4, 1, 3);
-  ctx.fillRect(17, 4, 1, 3);
-  // 앞머리 바운스
-  ctx.fillRect(6, 7, 2, 1);
-  ctx.fillRect(10, 7, 3, 1);
-  ctx.fillRect(15, 7, 2, 1);
+  ctx.fillRect(6, 2, 11, 5); ctx.fillRect(5, 4, 1, 3); ctx.fillRect(17, 4, 1, 3);
+  ctx.fillRect(6, 7, 2, 1); ctx.fillRect(10, 7, 3, 1); ctx.fillRect(15, 7, 2, 1);
 
-  // 2. 얼굴 피부톤
   ctx.fillStyle = '#ffdfc4';
-  ctx.fillRect(6, 7, 11, 5);
-  ctx.fillRect(8, 7, 2, 1); // 이마 노출
-  ctx.fillRect(13, 7, 2, 1);
+  ctx.fillRect(6, 7, 11, 5); ctx.fillRect(8, 7, 2, 1); ctx.fillRect(13, 7, 2, 1);
 
-  // 눈 (큰 픽셀 눈동자 + 반사광)
-  ctx.fillStyle = '#151528';
-  ctx.fillRect(8, 8, 2, 2);
-  ctx.fillRect(13, 8, 2, 2);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(8, 8, 1, 1);
-  ctx.fillRect(13, 8, 1, 1);
+  ctx.fillStyle = '#151528'; ctx.fillRect(8, 8, 2, 2); ctx.fillRect(13, 8, 2, 2);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(8, 8, 1, 1); ctx.fillRect(13, 8, 1, 1);
 
-  // 볼터치 (분홍)
-  ctx.fillStyle = '#ff8a9e';
-  ctx.fillRect(6, 9, 2, 2);
-  ctx.fillRect(15, 9, 2, 2);
+  ctx.fillStyle = '#ff8a9e'; ctx.fillRect(6, 9, 2, 2); ctx.fillRect(15, 9, 2, 2);
+  ctx.fillStyle = '#793a26'; ctx.fillRect(10, 10, 3, 1);
 
-  // 입 (미소)
-  ctx.fillStyle = '#793a26';
-  ctx.fillRect(10, 10, 3, 1);
+  ctx.fillStyle = '#3b82f6'; ctx.fillRect(7, 12, 9, 6);
+  ctx.fillStyle = '#ffdfc4'; ctx.fillRect(4, 13, 3, 2);
+  ctx.fillRect(16, 13, 2, 2); ctx.fillRect(18, 10, 2, 4); ctx.fillRect(17, 12, 1, 2);
 
-  // 3. 몸통 & 옷 (파란색 티셔츠)
-  ctx.fillStyle = '#3b82f6';
-  ctx.fillRect(7, 12, 9, 6);
+  ctx.fillStyle = '#f97316'; ctx.fillRect(11, 12, 1, 1); ctx.fillRect(10, 13, 3, 1);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(10, 14, 3, 3);
 
-  // 왼손
-  ctx.fillStyle = '#ffdfc4';
-  ctx.fillRect(4, 13, 3, 2);
-
-  // 오른손 (따봉 👍)
-  ctx.fillRect(16, 13, 2, 2);
-  ctx.fillRect(18, 10, 2, 4); // 엄지 척
-  ctx.fillRect(17, 12, 1, 2);
-
-  // 사원증 목걸이 줄 (주황) & 사원증 본체 (흰색 카드)
-  ctx.fillStyle = '#f97316';
-  ctx.fillRect(11, 12, 1, 1);
-  ctx.fillRect(10, 13, 3, 1);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(10, 14, 3, 3);
-
-  // 4. 하의 (남색 바지)
   ctx.fillStyle = '#1e293b';
-  ctx.fillRect(8, 18, 7, 2);
-  ctx.fillRect(8, 20, 3, 1);
-  ctx.fillRect(12, 20, 3, 1);
+  ctx.fillRect(8, 18, 7, 2); ctx.fillRect(8, 20, 3, 1); ctx.fillRect(12, 20, 3, 1);
 
-  // 5. 신발 (갈색 구두)
-  ctx.fillStyle = '#8d4f27';
-  ctx.fillRect(7, 21, 4, 2);
-  ctx.fillRect(12, 21, 4, 2);
+  ctx.fillStyle = '#8d4f27'; ctx.fillRect(7, 21, 4, 2); ctx.fillRect(12, 21, 4, 2);
 }
 
-// 11. 칸맞추기 퍼즐 (3×3 슬라이딩 타일 + 빈 칸)
+// 11. 칸맞추기 퍼즐
 function drawSlidingIcon(id) {
   const c = document.getElementById(id);
   if (!c) return;
@@ -761,55 +708,28 @@ function drawSlidingIcon(id) {
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, 24, 24);
 
-  // 배경 & 퍼즐 프레임 (금속 트레이)
-  ctx.fillStyle = '#0e1420';
-  ctx.fillRect(0, 0, 24, 24);
-  ctx.fillStyle = '#2b3448';
-  ctx.fillRect(1, 1, 22, 22);
-  ctx.fillStyle = '#141b28';
-  ctx.fillRect(2, 2, 20, 20);
-  // 프레임 상단 하이라이트
-  ctx.fillStyle = '#3f4c66';
-  ctx.fillRect(1, 1, 22, 1);
-  ctx.fillRect(1, 1, 1, 22);
+  ctx.fillStyle = '#0e1420'; ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#2b3448'; ctx.fillRect(1, 1, 22, 22);
+  ctx.fillStyle = '#141b28'; ctx.fillRect(2, 2, 20, 20);
+  ctx.fillStyle = '#3f4c66'; ctx.fillRect(1, 1, 22, 1); ctx.fillRect(1, 1, 1, 22);
 
-  // ── 3×3 타일 배치 (각 타일 6×6, 간격 1px) ──
-  // 우측 하단 한 칸은 비워서 "슬라이딩 퍼즐"임을 표현
-  const tiles = [
-    [3,  3], [10, 3], [17, 3],
-    [3, 10], [10,10], [17,10],
-    [3, 17], [10,17]           // (17,17) = 빈 칸
-  ];
-
-  tiles.forEach(([x, y], i) => {
-    // 타일 본체 (시안 → 청록 그라데이션 느낌)
-    ctx.fillStyle = '#1d7fa8';
-    ctx.fillRect(x, y, 4, 4);
-    ctx.fillStyle = '#29a8d4';
-    ctx.fillRect(x, y, 4, 3);
-    // 상단 하이라이트
-    ctx.fillStyle = '#7fe4ff';
-    ctx.fillRect(x, y, 4, 1);
-    // 하단 그림자
-    ctx.fillStyle = '#125a78';
-    ctx.fillRect(x, y + 3, 4, 1);
+  const tiles = [[3,3], [10,3], [17,3], [3,10], [10,10], [17,10], [3,17], [10,17]];
+  tiles.forEach(([x, y]) => {
+    ctx.fillStyle = '#1d7fa8'; ctx.fillRect(x, y, 4, 4);
+    ctx.fillStyle = '#29a8d4'; ctx.fillRect(x, y, 4, 3);
+    ctx.fillStyle = '#7fe4ff'; ctx.fillRect(x, y, 4, 1);
+    ctx.fillStyle = '#125a78'; ctx.fillRect(x, y + 3, 4, 1);
   });
 
-  // 빈 칸 (움푹 들어간 홈)
-  ctx.fillStyle = '#080c14';
-  ctx.fillRect(17, 17, 4, 4);
-  ctx.fillStyle = '#1e2634';
-  ctx.fillRect(17, 17, 4, 1);
+  ctx.fillStyle = '#080c14'; ctx.fillRect(17, 17, 4, 4);
+  ctx.fillStyle = '#1e2634'; ctx.fillRect(17, 17, 4, 1);
 
-  // ── 마지막 타일이 빈 칸으로 밀려드는 화살표 (노란색) ──
   ctx.fillStyle = '#ffe15a';
-  ctx.fillRect(14, 19, 2, 1);   // 화살대
-  ctx.fillRect(16, 18, 1, 1);   // 화살촉 위
-  ctx.fillRect(16, 20, 1, 1);   // 화살촉 아래
-  ctx.fillRect(16, 19, 1, 1);
+  ctx.fillRect(14, 19, 2, 1); ctx.fillRect(16, 18, 1, 1);
+  ctx.fillRect(16, 20, 1, 1); ctx.fillRect(16, 19, 1, 1);
 }
 
-// 12. 아무도 없는.. (ASCII 호러 — 문틈에 선 실루엣)
+// 12. 아무도 없는..
 function drawNobodyIcon(id) {
   const c = document.getElementById(id);
   if (!c) return;
@@ -817,11 +737,8 @@ function drawNobodyIcon(id) {
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, 24, 24);
 
-  // 배경: 순수 검정 (터미널)
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, 24, 24);
 
-  // ── ASCII 문자 격자 텍스처 (밝기 3단계로 흩뿌림) ──
   for (let y = 1; y < 24; y += 2) {
     for (let x = 1; x < 24; x += 2) {
       const n = (x * 7 + y * 13) % 5;
@@ -833,43 +750,85 @@ function drawNobodyIcon(id) {
     }
   }
 
-  // ── 문틀 (밝은 ASCII 벽 문자) ──
-  ctx.fillStyle = '#d4d4d4';
-  ctx.fillRect(7, 3, 10, 21);
-  ctx.fillStyle = '#8a8a8a';
-  ctx.fillRect(7, 3, 10, 1);
+  ctx.fillStyle = '#d4d4d4'; ctx.fillRect(7, 3, 10, 21);
+  ctx.fillStyle = '#8a8a8a'; ctx.fillRect(7, 3, 10, 1);
+  ctx.fillStyle = '#121212'; ctx.fillRect(8, 4, 8, 20);
 
-  // 문 안쪽 어둠
-  ctx.fillStyle = '#121212';
-  ctx.fillRect(8, 4, 8, 20);
-
-  // 문 안 희미한 잔상 (아주 옅은 점 몇 개)
   ctx.fillStyle = 'rgba(255,255,255,0.10)';
-  ctx.fillRect(9, 6, 1, 1);
-  ctx.fillRect(14, 8, 1, 1);
-  ctx.fillRect(11, 19, 1, 1);
+  ctx.fillRect(9, 6, 1, 1); ctx.fillRect(14, 8, 1, 1); ctx.fillRect(11, 19, 1, 1);
 
-  // ── 실루엣 (완전한 검정 — 있는지 없는지 모를 존재) ──
   ctx.fillStyle = '#000000';
-  ctx.fillRect(10, 8, 4, 4);    // 머리
-  ctx.fillRect(9, 12, 6, 12);   // 몸통
-  ctx.fillRect(8, 13, 1, 6);    // 늘어진 왼팔
-  ctx.fillRect(15, 13, 1, 6);   // 늘어진 오른팔
+  ctx.fillRect(10, 8, 4, 4); ctx.fillRect(9, 12, 6, 12);
+  ctx.fillRect(8, 13, 1, 6); ctx.fillRect(15, 13, 1, 6);
 
-  // ── 눈 (유일한 흰 점 2개) ──
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(10, 9, 1, 1);
-  ctx.fillRect(13, 9, 1, 1);
+  ctx.fillRect(10, 9, 1, 1); ctx.fillRect(13, 9, 1, 1);
 
-  // 발밑으로 새어나오는 빛
-  ctx.fillStyle = 'rgba(255,255,255,0.16)';
-  ctx.fillRect(8, 22, 8, 1);
-  ctx.fillStyle = 'rgba(255,255,255,0.28)';
-  ctx.fillRect(8, 23, 8, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fillRect(8, 22, 8, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillRect(8, 23, 8, 1);
 
-  // 스캔라인 (CRT 느낌 — 가로 어두운 줄)
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   for (let y = 0; y < 24; y += 3) ctx.fillRect(0, y, 24, 1);
+}
+
+// 13. Air Fight
+function drawAirFightIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // Background
+  ctx.fillStyle = '#1e281e'; 
+  ctx.fillRect(0, 0, 24, 24);
+
+  // Engine flame
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath(); ctx.moveTo(9, 16); ctx.lineTo(12, 22); ctx.lineTo(15, 16); ctx.fill();
+
+  // Main body (White delta wing)
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath(); ctx.moveTo(12, 4); ctx.lineTo(18, 16); ctx.lineTo(12, 14); ctx.lineTo(6, 16); ctx.closePath(); ctx.fill();
+
+  // Cockpit
+  ctx.fillStyle = '#0284c7';
+  ctx.beginPath(); ctx.ellipse(12, 10, 1.5, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Wing tips accents
+  ctx.fillStyle = '#3b82f6';
+  ctx.fillRect(5, 14, 2, 2);
+  ctx.fillRect(17, 14, 2, 2);
+}
+
+// 14. 밤의 불꽃
+function drawFireIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // Night sky
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0, 0, 24, 24);
+
+  // Firework 1
+  ctx.fillStyle = '#ff3366';
+  ctx.fillRect(12, 4, 1, 2); ctx.fillRect(12, 10, 1, 2);
+  ctx.fillRect(8, 7, 2, 1); ctx.fillRect(14, 7, 2, 1);
+  ctx.fillStyle = '#ffdd33';
+  ctx.fillRect(10, 5, 1, 1); ctx.fillRect(13, 5, 1, 1);
+  ctx.fillRect(10, 9, 1, 1); ctx.fillRect(13, 9, 1, 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(11, 7, 2, 1); ctx.fillRect(12, 6, 1, 3);
+
+  // Firework 2
+  ctx.fillStyle = '#33ccff';
+  ctx.fillRect(5, 14, 1, 1); ctx.fillRect(9, 14, 1, 1);
+  ctx.fillRect(7, 12, 1, 1); ctx.fillRect(7, 16, 1, 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(7, 14, 1, 1);
 }
 
 // 전체 렌더링
@@ -886,6 +845,8 @@ drawRewindIcon('iconRewind');
 drawKimIcon('iconKim');
 drawSlidingIcon('iconSliding');
 drawNobodyIcon('iconNobody');
+drawAirFightIcon('iconAirFight');
+drawFireIcon('iconFire');
 </script>
 </body>
 </html>
