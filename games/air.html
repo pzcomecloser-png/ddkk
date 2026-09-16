@@ -1,0 +1,3151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Air Fight - Retro Arcade Top-down Shooter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Bangers&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      touch-action: none;
+    }
+    body {
+      background-color: #0b1117;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start; /* 화면 최상단 밀착 */
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding-top: env(safe-area-inset-top, 0); /* 노치/다이내믹 아일랜드 대응 */
+    }
+    #game-container {
+      position: relative;
+      width: min(800px, 100vw, calc(100dvh * 800 / 1200));
+      height: min(1200px, calc(100vw * 1200 / 800), 100dvh);
+      aspect-ratio: 800 / 1200;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #1e281e;
+      margin-top: 0;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .hud {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      right: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      font-family: "Press Start 2P", monospace;
+      font-size: 11px;
+      letter-spacing: 1px;
+      z-index: 10;
+    }
+    .hud-left {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .hud-lives {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hud-lives svg {
+      width: 20px;
+      height: 20px;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+    }
+    /* 박스 테두리 제거된 BOMB 컴팩트 인라인 표시 (잔기 바로 아래) */
+    .hud-bombs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .hud-bombs .bomb-label {
+      font-family: "Press Start 2P", monospace;
+      font-size: 10px;
+      color: #ef4444;
+      text-shadow: 1px 1px 0 #991b1b;
+      margin-right: 2px;
+    }
+    .hud-bombs svg {
+      width: 20px;
+      height: 20px;
+      filter: drop-shadow(0 2px 4px rgba(239, 68, 68, 0.6));
+      transition: opacity 0.15s;
+    }
+    .hud-status-left {
+      font-size: 10px;
+      font-family: "SF Mono", Menlo, monospace;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin-top: 2px;
+    }
+    .hud-score {
+      text-align: center;
+      color: #facc15;
+      text-shadow: 2px 2px 0px #854d0e, 0 0 10px rgba(250, 204, 21, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .hud-score .label {
+      font-size: 13px;
+      letter-spacing: 2px;
+    }
+    .hud-score .digits {
+      font-size: 16px;
+      color: #fef08a;
+    }
+    /* 우측 상단 컨트롤 버튼 그룹 (볼륨 + 일시정지) */
+    .hud-controls-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    .hud-btn {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid #38bdf8;
+      border-radius: 8px;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #38bdf8;
+      padding: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      transition: transform 0.1s, background-color 0.1s;
+    }
+    .hud-btn:active {
+      transform: scale(0.92);
+      background: rgba(30, 41, 59, 0.95);
+    }
+    /* 일시정지 오버레이 */
+    #pause-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 45;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(5, 7, 13, 0.7);
+      backdrop-filter: blur(4px);
+    }
+    #pause-overlay .pause-text {
+      font-family: "Press Start 2P", monospace;
+      font-size: clamp(28px, 7vw, 48px);
+      color: #facc15;
+      text-shadow: 4px 4px 0 #854d0e, 0 0 25px rgba(250, 204, 21, 0.8);
+      letter-spacing: 4px;
+      animation: pulseTitle 0.9s infinite alternate;
+      margin-bottom: 20px;
+    }
+    #pause-overlay .pause-hint {
+      font-family: "Press Start 2P", monospace;
+      font-size: clamp(10px, 2.8vw, 13px);
+      color: #94a3b8;
+    }
+    /* Continue & Game Over Modal */
+    #retro-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 7, 13, 0.85);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      backdrop-filter: blur(4px);
+    }
+    .overlay-title {
+      font-family: "Press Start 2P", monospace;
+      font-size: clamp(20px, 6vw, 44px);
+      letter-spacing: clamp(1px, 0.5vw, 4px);
+      text-align: center;
+      margin-bottom: 24px;
+      padding: 0 16px;
+      animation: pulseTitle 0.8s infinite alternate;
+    }
+    .continue-text {
+      color: #38bdf8;
+      text-shadow: 4px 4px 0 #0369a1, 0 0 20px rgba(56, 189, 248, 0.8);
+    }
+    .gameover-text {
+      color: #ef4444;
+      text-shadow: 4px 4px 0 #991b1b, 0 0 25px rgba(239, 68, 68, 0.8);
+    }
+    .countdown-number {
+      font-family: "Press Start 2P", monospace;
+      font-size: clamp(48px, 14vw, 80px);
+      color: #facc15;
+      text-shadow: 6px 6px 0 #854d0e, 0 0 25px rgba(250, 204, 21, 0.9);
+      margin-bottom: 28px;
+    }
+    .final-score-box {
+      font-family: "Press Start 2P", monospace;
+      margin: 12px 0 20px 0;
+      text-align: center;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .final-score-label {
+      font-size: clamp(10px, 3vw, 13px);
+      color: #94a3b8;
+      letter-spacing: 2px;
+    }
+    .final-score-val {
+      font-size: clamp(20px, 6vw, 32px);
+      color: #facc15;
+      text-shadow: 2px 2px 0 #854d0e, 0 0 15px rgba(250, 204, 21, 0.7);
+      letter-spacing: 2px;
+    }
+    .continue-btn {
+      font-family: "Press Start 2P", monospace;
+      font-size: 14px;
+      background: #facc15;
+      color: #1e1b4b;
+      padding: 14px 28px;
+      border: 4px solid #fef08a;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 6px 0 #854d0e;
+      transition: transform 0.1s;
+    }
+    .continue-btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 #854d0e;
+    }
+    .back-title-btn {
+      font-family: "Press Start 2P", monospace;
+      font-size: clamp(10px, 2.8vw, 13px);
+      background: rgba(30, 41, 59, 0.95);
+      color: #38bdf8;
+      border: 2px solid #38bdf8;
+      border-radius: 8px;
+      padding: 12px 20px;
+      margin-top: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #0369a1;
+      display: none;
+      transition: transform 0.1s, background-color 0.1s;
+    }
+    .back-title-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 #0369a1;
+      background: #0f172a;
+    }
+
+    /* 30만점 달성 축하 승리 오버레이 모달 */
+    #victory-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 60;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, rgba(15, 23, 42, 0.78) 0%, rgba(5, 7, 13, 0.94) 100%);
+      backdrop-filter: blur(6px);
+      padding: 20px;
+      animation: victoryFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes victoryFadeIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .congrat-title {
+      font-family: "Bangers", "Press Start 2P", cursive;
+      font-size: clamp(26px, 6.2vw, 56px);
+      color: #facc15;
+      text-align: center;
+      letter-spacing: clamp(1px, 0.4vw, 3px);
+      line-height: 1.1;
+      padding: 0 12px;
+      max-width: 90%;
+      -webkit-text-stroke: 2px #78350f;
+      text-shadow:
+        3px 3px 0 #b45309,
+        6px 6px 0 rgba(0, 0, 0, 0.6),
+        0 0 28px rgba(250, 204, 21, 0.8);
+      animation: victoryPulse 1s infinite alternate;
+      margin-bottom: 20px;
+    }
+    @keyframes victoryPulse {
+      0% { transform: scale(1) rotate(-1.5deg); }
+      100% { transform: scale(1.04) rotate(1.5deg); filter: brightness(1.2); }
+    }
+    .congrat-msg {
+      font-family: "Press Start 2P", -apple-system, sans-serif;
+      font-size: clamp(12px, 3.2vw, 18px);
+      color: #f8fafc;
+      text-align: center;
+      line-height: 1.8;
+      text-shadow: 2px 2px 0 #0f172a, 0 0 16px rgba(56, 189, 248, 0.7);
+      margin-bottom: 26px;
+      padding: 0 12px;
+      word-break: keep-all;
+    }
+    .congrat-msg .highlight {
+      color: #38bdf8;
+      font-weight: bold;
+    }
+    .score-badge {
+      background: rgba(15, 23, 42, 0.85);
+      border: 3px solid #facc15;
+      border-radius: 14px;
+      padding: 14px 28px;
+      text-align: center;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6), 0 0 20px rgba(250, 204, 21, 0.3);
+      margin-bottom: 28px;
+      animation: floatBadge 2.5s ease-in-out infinite;
+    }
+    @keyframes floatBadge {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+    .score-badge .label {
+      font-family: "Press Start 2P", monospace;
+      font-size: clamp(9px, 2.5vw, 12px);
+      color: #94a3b8;
+      margin-bottom: 6px;
+      letter-spacing: 2px;
+    }
+    .score-badge .score-number {
+      font-family: "Press Start 2P", monospace;
+      font-size: clamp(22px, 5.5vw, 36px);
+      color: #facc15;
+      text-shadow: 3px 3px 0 #854d0e;
+      letter-spacing: 2px;
+    }
+    .victory-btn {
+      font-family: "Press Start 2P", monospace;
+      font-size: clamp(11px, 2.8vw, 14px);
+      background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+      color: #031427;
+      padding: 14px 30px;
+      border: 3px solid #bae6fd;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 6px 0 #0369a1, 0 10px 25px rgba(2, 132, 199, 0.4);
+      transition: transform 0.1s;
+    }
+    .victory-btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 #0369a1;
+    }
+    .continue-info {
+      font-family: "Press Start 2P", monospace;
+      font-size: 10px;
+      color: #94a3b8;
+      margin-top: 18px;
+    }
+    @keyframes pulseTitle {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.05); }
+    }
+    /* Title Screen */
+    #title-screen {
+      position: absolute;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(5, 7, 13, 0.35);
+      cursor: pointer;
+    }
+    #title-screen .game-title {
+      font-family: "Bangers", "Press Start 2P", cursive;
+      font-size: 120px;
+      letter-spacing: 6px;
+      color: #facc15;
+      -webkit-text-stroke: 4px #7c2d12;
+      text-shadow:
+        6px 6px 0 #991b1b,
+        12px 12px 0 rgba(0,0,0,0.5),
+        0 0 40px rgba(250, 204, 21, 0.6);
+      transform: rotate(-3deg);
+      margin-bottom: 60px;
+      text-align: center;
+      line-height: 1.1;
+    }
+    #title-screen .push-start {
+      font-family: "Press Start 2P", monospace;
+      font-size: 26px;
+      letter-spacing: 3px;
+      color: #f8fafc;
+      text-shadow: 3px 3px 0 #0369a1, 0 0 18px rgba(56, 189, 248, 0.7);
+      animation: blinkStart 1s steps(1) infinite;
+    }
+    @keyframes blinkStart {
+      0%, 50% { opacity: 1; }
+      50.01%, 100% { opacity: 0; }
+    }
+    .controls {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 20, 0.82);
+      backdrop-filter: blur(8px);
+      padding: 8px 18px;
+      border-radius: 20px;
+      border: 1px solid rgba(134, 239, 172, 0.2);
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      color: #cbd5e1;
+      z-index: 10;
+      align-items: center;
+    }
+    .controls label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .controls input[type="range"] {
+      width: 90px;
+      accent-color: #4ade80;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <div class="hud">
+      <!-- 왼쪽 상단 1P 잔기 + 바로 아래 BOMB 아이콘 컴팩트 배치 -->
+      <div class="hud-left">
+        <div class="hud-lives" id="hud-lives" title="잔여 기체 (LIVES)">
+          <span style="color: #60a5fa; margin-right: 2px;">1P</span>
+          <svg id="life-icon-1" viewBox="0 0 32 32">
+            <!-- 비행기 미니멀 아이콘 -->
+            <path d="M16 2 L28 26 L16 20 L4 26 Z" fill="#f8fafc" stroke="#3b82f6" stroke-width="2"/>
+            <ellipse cx="16" cy="14" rx="3" ry="5" fill="#0284c7"/>
+          </svg>
+          <svg id="life-icon-2" viewBox="0 0 32 32">
+            <path d="M16 2 L28 26 L16 20 L4 26 Z" fill="#f8fafc" stroke="#3b82f6" stroke-width="2"/>
+            <ellipse cx="16" cy="14" rx="3" ry="5" fill="#0284c7"/>
+          </svg>
+        </div>
+
+        <!-- 잔기 바로 아래 BOMB 아이콘 (빨간 테두리 박스 없음) -->
+        <div class="hud-bombs" id="bombBtn" title="클릭시 전탄 소멸 및 전체 폭발!">
+          <span class="bomb-label">BOMB</span>
+          <!-- 레트로 폭탄 SVG 1 -->
+          <svg id="bomb-icon-1" viewBox="0 0 32 32">
+            <path d="M22 4 Q25 1 27 3 Q29 5 26 8" stroke="#f59e0b" stroke-width="2" fill="none"/>
+            <circle cx="28" cy="2" r="2.5" fill="#ef4444"/>
+            <rect x="18" y="7" width="5" height="4" fill="#64748b" rx="1"/>
+            <circle cx="15" cy="19" r="10.5" fill="#1e293b" stroke="#ef4444" stroke-width="2"/>
+            <ellipse cx="12" cy="16" rx="2.5" ry="3.5" fill="rgba(255, 255, 255, 0.45)" transform="rotate(-30 12 16)"/>
+          </svg>
+          <!-- 레트로 폭탄 SVG 2 -->
+          <svg id="bomb-icon-2" viewBox="0 0 32 32">
+            <path d="M22 4 Q25 1 27 3 Q29 5 26 8" stroke="#f59e0b" stroke-width="2" fill="none"/>
+            <circle cx="28" cy="2" r="2.5" fill="#ef4444"/>
+            <rect x="18" y="7" width="5" height="4" fill="#64748b" rx="1"/>
+            <circle cx="15" cy="19" r="10.5" fill="#1e293b" stroke="#ef4444" stroke-width="2"/>
+            <ellipse cx="12" cy="16" rx="2.5" ry="3.5" fill="rgba(255, 255, 255, 0.45)" transform="rotate(-30 12 16)"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 상단 가운데 레트로 옐로우 SCORE 점수판 (9자리: 000000000) -->
+      <div class="hud-score">
+        <span class="label">SCORE</span>
+        <span class="digits" id="score-val">000000000</span>
+      </div>
+
+      <!-- 우측 상단 상태 정보: FPS & Rapid 배율 표시 + 사운드 토글 버튼 -->
+      <div class="hud-status" style="display: flex; align-items: center; gap: 12px; pointer-events: auto;">
+        <div>
+          <div id="fps-counter" style="color: #86efac;">FPS: 60</div>
+          <div id="rapid-display" style="color: #38bdf8; margin-top: 4px; font-weight: bold;">Rapid: +0%</div>
+        </div>
+        <button id="soundToggleBtn" title="사운드 On/Off" style="background: rgba(15, 23, 42, 0.85); border: 1px solid #38bdf8; border-radius: 8px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #38bdf8; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.5);">
+          <!-- 스피커 On 아이콘 SVG -->
+          <svg id="soundOnIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <!-- 스피커 Off 아이콘 SVG (초기 숨김) -->
+          <svg id="soundOffIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+
+    <!-- 오락실 CONTINUE & GAMEOVER 오버레이 -->
+    <div id="retro-overlay">
+      <div id="overlay-title" class="overlay-title continue-text">CONTINUE?</div>
+      <div id="countdown-display" class="countdown-number">10</div>
+      <!-- 게임오버 시 노출되는 최종 점수 박스 -->
+      <div id="finalScoreBox" class="final-score-box">
+        <span class="final-score-label">FINAL SCORE</span>
+        <span id="finalScoreVal" class="final-score-val">000000000</span>
+      </div>
+      <button id="continueBtn" class="continue-btn">PRESS START</button>
+      <button id="backTitleBtn" class="back-title-btn">GO TITLE</button>
+      <div id="continue-info" class="continue-info">CREDIT(S) REMAINING: 2</div>
+    </div>
+
+    <!-- 30만점 달성 축하 승리 오버레이 모달 -->
+    <div id="victory-overlay">
+      <div class="congrat-title">Congraturation!</div>
+      <div class="congrat-msg">
+        당신의 노력으로 <span class="highlight">뭔가를 구했습니다!</span>
+      </div>
+      <div class="score-badge">
+        <div class="label">MISSION CLEAR SCORE</div>
+        <div id="victoryScoreVal" class="score-number">000300000</div>
+      </div>
+      <button id="victoryTitleBtn" class="victory-btn">BACK TO THE TITLE</button>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="1200"></canvas>
+
+    <!-- 타이틀 화면 (배경만 흐르고, 주인공/적 없음) -->
+    <div id="title-screen">
+      <div class="game-title">AIR<br>FIGHT</div>
+      <div class="push-start">PUSH START</div>
+    </div>
+
+    <div class="controls" id="controlsPanel" style="display:none;">
+      <label>
+        비행 속도: <input type="range" id="speedSlider" min="1" max="20" value="14">
+        <span id="speedVal">14px</span>
+      </label>
+      <label>
+        <input type="checkbox" id="shadowToggle" checked> 비행기 상공 그림자
+      </label>
+    </div>
+
+    <!-- 좌측 최상단 숨겨진 터치 영역 (5회 클릭 시 설정 패널 토글) -->
+    <div id="secretTapZone" style="position:absolute; top:0; left:0; width:80px; height:80px; z-index:30; cursor:default;"></div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const WIDTH = 800;
+    const HEIGHT = 1200;
+
+    let baseSpeed = 14;
+    const speedSlider = document.getElementById('speedSlider');
+    const speedVal = document.getElementById('speedVal');
+    const shadowToggle = document.getElementById('shadowToggle');
+    const fpsCounter = document.getElementById('fps-counter');
+    const controlsPanel = document.getElementById('controlsPanel');
+    const secretTapZone = document.getElementById('secretTapZone');
+
+    let secretTapCount = 0;
+    let gameStarted = false; // 타이틀 화면(PUSH START) 통과 여부 - 게임 로직 전반에서 참조
+    let secretTapTimer = null;
+    secretTapZone.addEventListener('click', () => {
+      secretTapCount++;
+      clearTimeout(secretTapTimer);
+      secretTapTimer = setTimeout(() => { secretTapCount = 0; }, 1500);
+      if (secretTapCount >= 5) {
+        secretTapCount = 0;
+        controlsPanel.style.display = (controlsPanel.style.display === 'none') ? 'flex' : 'none';
+      }
+    });
+
+    speedSlider.addEventListener('input', (e) => {
+      baseSpeed = parseInt(e.target.value, 10);
+      speedVal.innerText = `${baseSpeed}px`;
+    });
+
+    // -------------------------------------------------------------
+    // 지형 & 건물 절차적 텍스처 생성 (3대 멀티 바이옴: 800x1200 x 3 = 3600px 거대 순환 전장)
+    // -------------------------------------------------------------
+    // 유틸: 시드 기반 난수
+    const seedRandom = (seed) => {
+      let x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
+
+    // 지면 풀숲/덤불 군락 렌더링 공통 함수
+    function drawFoliageClusterOn(tCtx, cx, cy, count, radius, startSeed = 10) {
+      let s = startSeed;
+      for (let j = 0; j < count; j++) {
+        const fx = cx + (seedRandom(s++) - 0.5) * radius * 1.6;
+        const fy = cy + (seedRandom(s++) - 0.5) * radius * 1.6;
+        const fr = 12 + seedRandom(s++) * 18;
+
+        // 수풀 바닥 그림자 (지면 밀착)
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        tCtx.beginPath();
+        tCtx.arc(fx + 4, fy + 8, fr * 0.95, 0, Math.PI * 2);
+        tCtx.fill();
+
+        // 수풀 본체 (원형 나무 캐노피)
+        const treeGrad = tCtx.createRadialGradient(fx - 4, fy - 6, 2, fx, fy, fr);
+        treeGrad.addColorStop(0, '#4d7c3d');
+        treeGrad.addColorStop(0.7, '#2f4f24');
+        treeGrad.addColorStop(1, '#1b3215');
+        tCtx.fillStyle = treeGrad;
+        tCtx.beginPath();
+        tCtx.arc(fx, fy, fr, 0, Math.PI * 2);
+        tCtx.fill();
+
+        // 잎사귀 하이라이트 텍스처
+        tCtx.fillStyle = 'rgba(134, 239, 172, 0.2)';
+        tCtx.beginPath();
+        tCtx.arc(fx - 3, fy - 4, fr * 0.45, 0, Math.PI * 2);
+        tCtx.fill();
+      }
+    }
+
+    // 포격 크레이터(폭격 구덩이) 공통 함수
+    function drawCraterOn(tCtx, cx, cy, r) {
+      // 그을음 및 그림자
+      tCtx.fillStyle = 'rgba(15, 12, 10, 0.7)';
+      tCtx.beginPath();
+      tCtx.arc(cx, cy, r, 0, Math.PI * 2);
+      tCtx.fill();
+
+      // 타버린 내부 그라데이션
+      const cGrad = tCtx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 2, cx, cy, r);
+      cGrad.addColorStop(0, '#1c1917');
+      cGrad.addColorStop(0.6, '#292524');
+      cGrad.addColorStop(1, '#44403c');
+      tCtx.fillStyle = cGrad;
+      tCtx.beginPath();
+      tCtx.arc(cx, cy, r * 0.82, 0, Math.PI * 2);
+      tCtx.fill();
+
+      // 가장자리 흙 융기 림 (Rim)
+      tCtx.strokeStyle = 'rgba(120, 113, 108, 0.6)';
+      tCtx.lineWidth = 3;
+      tCtx.stroke();
+    }
+
+    // 군용 주차 트럭/차량 공통 함수
+    function drawMilitaryTruckOn(tCtx, x, y, angle = 0, color = '#3f4f38') {
+      tCtx.save();
+      tCtx.translate(x, y);
+      tCtx.rotate(angle);
+
+      // 그림자
+      tCtx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      tCtx.fillRect(-10 + 6, -18 + 8, 20, 36);
+
+      // 차체 본체
+      tCtx.fillStyle = color;
+      tCtx.fillRect(-10, -18, 20, 36);
+
+      // 운전석 캐빈
+      tCtx.fillStyle = '#1e293b';
+      tCtx.fillRect(-9, -17, 18, 12);
+      // 앞유리창
+      tCtx.fillStyle = '#93c5fd';
+      tCtx.fillRect(-7, -15, 14, 5);
+
+      // 짐칸 (화물 천막 커버)
+      tCtx.fillStyle = '#4a5942';
+      tCtx.fillRect(-9, -3, 18, 19);
+      tCtx.strokeStyle = '#273422';
+      tCtx.lineWidth = 1.5;
+      tCtx.strokeRect(-9, -3, 18, 19);
+
+      // 바퀴 4개
+      tCtx.fillStyle = '#0f172a';
+      tCtx.fillRect(-13, -14, 3, 7);
+      tCtx.fillRect(10, -14, 3, 7);
+      tCtx.fillRect(-13, 7, 3, 7);
+      tCtx.fillRect(10, 7, 3, 7);
+
+      tCtx.restore();
+    }
+
+    // 대공포 진지 공통 함수
+    function drawDefenseBunkerOn(tCtx, bx, by) {
+      tCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      tCtx.beginPath();
+      tCtx.arc(bx + 8, by + 10, 24, 0, Math.PI * 2);
+      tCtx.fill();
+
+      tCtx.fillStyle = '#5c4d38';
+      tCtx.beginPath();
+      tCtx.arc(bx, by, 22, 0, Math.PI * 2);
+      tCtx.fill();
+
+      tCtx.fillStyle = '#1e293b';
+      tCtx.beginPath();
+      tCtx.arc(bx, by, 14, 0, Math.PI * 2);
+      tCtx.fill();
+
+      tCtx.strokeStyle = '#94a3b8';
+      tCtx.lineWidth = 3;
+      tCtx.beginPath();
+      tCtx.moveTo(bx - 3, by); tCtx.lineTo(bx - 3, by - 24);
+      tCtx.moveTo(bx + 3, by); tCtx.lineTo(bx + 3, by - 24);
+      tCtx.stroke();
+    }
+
+    // -------------------------------------------------------------
+    // 바이옴 1: 군사 전초기지 & 사령부 (Military Airbase HQ)
+    // -------------------------------------------------------------
+    function createGroundTerrainTexture1() {
+      const offscreen = document.createElement('canvas');
+      offscreen.width = WIDTH;
+      offscreen.height = HEIGHT;
+      const tCtx = offscreen.getContext('2d');
+
+      // 기본 지면 (야전 잔디/대지)
+      const groundGrad = tCtx.createLinearGradient(0, 0, 0, HEIGHT);
+      groundGrad.addColorStop(0, '#2d3b2a');
+      groundGrad.addColorStop(0.5, '#354531');
+      groundGrad.addColorStop(1, '#2d3b2a');
+      tCtx.fillStyle = groundGrad;
+      tCtx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      // 잔디/흙 지형 패치
+      let s = 42;
+      for (let i = 0; i < 90; i++) {
+        const px = seedRandom(s++) * WIDTH;
+        const py = seedRandom(s++) * HEIGHT;
+        const pr = 30 + seedRandom(s++) * 70;
+        const isDirt = seedRandom(s++) > 0.6;
+        tCtx.fillStyle = isDirt ? 'rgba(74, 62, 44, 0.28)' : 'rgba(38, 54, 34, 0.35)';
+        tCtx.beginPath();
+        tCtx.arc(px, py, pr, 0, Math.PI * 2);
+        tCtx.fill();
+      }
+
+      // 메인 흙길 도로
+      tCtx.strokeStyle = 'rgba(92, 77, 56, 0.65)';
+      tCtx.lineWidth = 42;
+      tCtx.beginPath();
+      tCtx.moveTo(280, 0);
+      tCtx.bezierCurveTo(340, 400, 240, 800, 310, HEIGHT);
+      tCtx.stroke();
+
+      // 바퀴 자국
+      tCtx.strokeStyle = 'rgba(56, 46, 33, 0.4)';
+      tCtx.lineWidth = 3;
+      tCtx.beginPath();
+      tCtx.moveTo(270, 0);
+      tCtx.bezierCurveTo(330, 400, 230, 800, 300, HEIGHT);
+      tCtx.moveTo(290, 0);
+      tCtx.bezierCurveTo(350, 400, 250, 800, 320, HEIGHT);
+      tCtx.stroke();
+
+      // 지선 콘크리트 도로망
+      tCtx.strokeStyle = '#475569';
+      tCtx.lineWidth = 26;
+      tCtx.beginPath();
+      tCtx.moveTo(290, 240); tCtx.lineTo(600, 240);
+      tCtx.moveTo(280, 720); tCtx.lineTo(120, 720);
+      tCtx.moveTo(310, 1050); tCtx.lineTo(580, 1050);
+      tCtx.stroke();
+
+      tCtx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      tCtx.lineWidth = 1.5;
+      tCtx.beginPath();
+      tCtx.moveTo(290, 227); tCtx.lineTo(600, 227);
+      tCtx.moveTo(290, 253); tCtx.lineTo(600, 253);
+      tCtx.stroke();
+
+      // 수풀 군락
+      const bushSpots = [
+        [100, 100], [180, 130], [80, 360], [700, 80], [720, 480],
+        [140, 920], [680, 860], [440, 520], [80, 1120], [450, 1150]
+      ];
+      bushSpots.forEach(([bx, by]) => drawFoliageClusterOn(tCtx, bx, by, 7, 32, s++));
+
+      // 보급 창고 단지
+      function drawWarehouse(wx, wy, w, h, roofColor) {
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.48)';
+        tCtx.fillRect(wx + 16, wy + 18, w + 10, h + 12);
+
+        tCtx.fillStyle = '#334155';
+        tCtx.fillRect(wx - 4, wy - 4, w + 8, h + 8);
+
+        tCtx.fillStyle = '#1e293b';
+        tCtx.fillRect(wx, wy + h - 6, w, 14);
+
+        tCtx.fillStyle = '#0f172a';
+        tCtx.fillRect(wx + w * 0.2, wy + h - 4, w * 0.6, 12);
+        tCtx.strokeStyle = '#64748b';
+        tCtx.strokeRect(wx + w * 0.2, wy + h - 4, w * 0.6, 12);
+
+        const roofGrad = tCtx.createLinearGradient(wx, wy, wx, wy + h);
+        roofGrad.addColorStop(0, roofColor);
+        roofGrad.addColorStop(1, '#1e293b');
+        tCtx.fillStyle = roofGrad;
+        tCtx.fillRect(wx, wy, w, h);
+        tCtx.strokeStyle = '#475569';
+        tCtx.lineWidth = 1.5;
+        tCtx.strokeRect(wx, wy, w, h);
+
+        tCtx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+        tCtx.lineWidth = 2;
+        for (let x = wx + 12; x < wx + w; x += 14) {
+          tCtx.beginPath();
+          tCtx.moveTo(x, wy);
+          tCtx.lineTo(x, wy + h);
+          tCtx.stroke();
+        }
+
+        tCtx.fillStyle = '#090d16';
+        tCtx.fillRect(wx + w * 0.35, wy + h * 0.4, w * 0.3, 10);
+      }
+
+      drawWarehouse(520, 160, 170, 110, '#475569');
+      drawWarehouse(540, 310, 140, 95, '#3b4252');
+
+      // 전초 사령부 군사 기지 본관
+      function drawBaseHeadquarters(hx, hy, size) {
+        const shadowOffset = 22;
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.52)';
+        tCtx.fillRect(hx + shadowOffset, hy + shadowOffset, size + 10, size + 10);
+
+        tCtx.fillStyle = '#1e293b';
+        tCtx.fillRect(hx - 12, hy - 12, size + 24, size + 24);
+
+        tCtx.strokeStyle = '#475569';
+        tCtx.lineWidth = 4;
+        tCtx.strokeRect(hx - 10, hy - 10, size + 20, size + 20);
+
+        const bGrad = tCtx.createLinearGradient(hx, hy, hx, hy + size);
+        bGrad.addColorStop(0, '#47523d');
+        bGrad.addColorStop(1, '#2c3326');
+        tCtx.fillStyle = bGrad;
+        tCtx.fillRect(hx, hy, size, size);
+        tCtx.strokeStyle = '#5c6b4e';
+        tCtx.lineWidth = 2;
+        tCtx.strokeRect(hx, hy, size, size);
+
+        const innerSize = size * 0.52;
+        const ix = hx + (size - innerSize) / 2;
+        const iy = hy + (size - innerSize) / 2;
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        tCtx.fillRect(ix + 6, iy + 8, innerSize, innerSize);
+
+        tCtx.fillStyle = '#1f2937';
+        tCtx.fillRect(ix, iy, innerSize, innerSize);
+        tCtx.strokeStyle = '#60a5fa';
+        tCtx.lineWidth = 1.5;
+        tCtx.strokeRect(ix, iy, innerSize, innerSize);
+
+        const cx = hx + size / 2;
+        const cy = hy + size / 2;
+        tCtx.fillStyle = '#0f172a';
+        tCtx.beginPath();
+        tCtx.arc(cx, cy, 14, 0, Math.PI * 2);
+        tCtx.fill();
+
+        tCtx.strokeStyle = '#93c5fd';
+        tCtx.lineWidth = 3;
+        tCtx.beginPath();
+        tCtx.arc(cx, cy, 10, -Math.PI * 0.3, Math.PI * 0.7);
+        tCtx.stroke();
+
+        tCtx.fillStyle = '#ef4444';
+        tCtx.beginPath();
+        tCtx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+        tCtx.fill();
+      }
+
+      drawBaseHeadquarters(70, 640, 160);
+
+      // 헬리패드
+      function drawHeliport(cx, cy, radius) {
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        tCtx.fillRect(cx - radius * 1.25 + 10, cy - radius * 1.25 + 12, radius * 2.5, radius * 2.5);
+
+        tCtx.fillStyle = '#334155';
+        tCtx.fillRect(cx - radius * 1.25, cy - radius * 1.25, radius * 2.5, radius * 2.5);
+        tCtx.strokeStyle = '#475569';
+        tCtx.lineWidth = 2;
+        tCtx.strokeRect(cx - radius * 1.25, cy - radius * 1.25, radius * 2.5, radius * 2.5);
+
+        tCtx.strokeStyle = '#facc15';
+        tCtx.lineWidth = 3;
+        tCtx.beginPath();
+        tCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+        tCtx.stroke();
+
+        tCtx.fillStyle = '#facc15';
+        tCtx.font = `bold ${Math.floor(radius * 1.15)}px sans-serif`;
+        tCtx.textAlign = 'center';
+        tCtx.textBaseline = 'middle';
+        tCtx.fillText('H', cx, cy);
+
+        tCtx.fillStyle = '#4ade80';
+        [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dy]) => {
+          tCtx.beginPath();
+          tCtx.arc(cx + dx * radius, cy + dy * radius, 3, 0, Math.PI * 2);
+          tCtx.fill();
+        });
+      }
+
+      drawHeliport(150, 480, 36);
+
+      // 유류 탱크 단지
+      function drawFuelTanks(baseX, baseY) {
+        const tanks = [
+          { x: baseX, y: baseY, r: 38 },
+          { x: baseX + 80, y: baseY + 15, r: 34 },
+          { x: baseX + 40, y: baseY + 80, r: 36 }
+        ];
+
+        tanks.forEach(tank => {
+          tCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          tCtx.beginPath();
+          tCtx.arc(tank.x + 14, tank.y + 16, tank.r, 0, Math.PI * 2);
+          tCtx.fill();
+
+          const tGrad = tCtx.createRadialGradient(tank.x - 8, tank.y - 12, 4, tank.x, tank.y, tank.r);
+          tGrad.addColorStop(0, '#94a3b8');
+          tGrad.addColorStop(0.7, '#475569');
+          tGrad.addColorStop(1, '#1e293b');
+          tCtx.fillStyle = tGrad;
+          tCtx.beginPath();
+          tCtx.arc(tank.x, tank.y, tank.r, 0, Math.PI * 2);
+          tCtx.fill();
+
+          tCtx.strokeStyle = '#cbd5e1';
+          tCtx.lineWidth = 1.5;
+          tCtx.stroke();
+
+          tCtx.strokeStyle = '#0f172a';
+          tCtx.lineWidth = 3;
+          tCtx.beginPath();
+          tCtx.moveTo(tank.x - tank.r + 4, tank.y);
+          tCtx.lineTo(tank.x + tank.r - 4, tank.y);
+          tCtx.stroke();
+
+          tCtx.fillStyle = '#ef4444';
+          tCtx.beginPath();
+          tCtx.arc(tank.x, tank.y, 4, 0, Math.PI * 2);
+          tCtx.fill();
+        });
+
+        tCtx.strokeStyle = '#ca8a04';
+        tCtx.lineWidth = 2.5;
+        tCtx.strokeRect(baseX - 48, baseY - 48, 185, 175);
+      }
+
+      drawFuelTanks(530, 930);
+
+      // 대공포 진지
+      drawDefenseBunkerOn(tCtx, 450, 430);
+      drawDefenseBunkerOn(tCtx, 210, 1020);
+
+      // 군용 트럭 배치
+      drawMilitaryTruckOn(tCtx, 490, 240, 0);
+      drawMilitaryTruckOn(tCtx, 520, 255, 0.1);
+      drawMilitaryTruckOn(tCtx, 160, 720, Math.PI / 2);
+
+      // 포격 크레이터 흔적
+      drawCraterOn(tCtx, 370, 120, 18);
+      drawCraterOn(tCtx, 410, 140, 12);
+      drawCraterOn(tCtx, 680, 680, 22);
+
+      return offscreen;
+    }
+
+    // -------------------------------------------------------------
+    // 바이옴 2: 대형 비행장 활주로 & 격납고 단지 (Airstrip & Taxiway)
+    // -------------------------------------------------------------
+    function createGroundTerrainTexture2() {
+      const offscreen = document.createElement('canvas');
+      offscreen.width = WIDTH;
+      offscreen.height = HEIGHT;
+      const tCtx = offscreen.getContext('2d');
+
+      // 잔디 지면
+      const groundGrad = tCtx.createLinearGradient(0, 0, 0, HEIGHT);
+      groundGrad.addColorStop(0, '#2d3b2a');
+      groundGrad.addColorStop(0.5, '#32402e');
+      groundGrad.addColorStop(1, '#2a3827');
+      tCtx.fillStyle = groundGrad;
+      tCtx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      // 지면 패치
+      let s = 105;
+      for (let i = 0; i < 70; i++) {
+        const px = seedRandom(s++) * WIDTH;
+        const py = seedRandom(s++) * HEIGHT;
+        const pr = 25 + seedRandom(s++) * 60;
+        tCtx.fillStyle = seedRandom(s++) > 0.5 ? 'rgba(68, 56, 38, 0.25)' : 'rgba(34, 48, 30, 0.32)';
+        tCtx.beginPath();
+        tCtx.arc(px, py, pr, 0, Math.PI * 2);
+        tCtx.fill();
+      }
+
+      // 메인 군용 활주로 (Runway - 폭 170px의 아스팔트/콘크리트 직선로)
+      const rwX = 260;
+      const rwW = 180;
+
+      // 활주로 기초 섀도우
+      tCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      tCtx.fillRect(rwX + 6, 0, rwW, HEIGHT);
+
+      // 활주로 메인 아스팔트
+      const rwGrad = tCtx.createLinearGradient(rwX, 0, rwX + rwW, 0);
+      rwGrad.addColorStop(0, '#334155');
+      rwGrad.addColorStop(0.15, '#1e293b');
+      rwGrad.addColorStop(0.85, '#1e293b');
+      rwGrad.addColorStop(1, '#334155');
+      tCtx.fillStyle = rwGrad;
+      tCtx.fillRect(rwX, 0, rwW, HEIGHT);
+
+      // 활주로 외곽 백색 경계선
+      tCtx.strokeStyle = '#f8fafc';
+      tCtx.lineWidth = 4;
+      tCtx.beginPath();
+      tCtx.moveTo(rwX + 8, 0); tCtx.lineTo(rwX + 8, HEIGHT);
+      tCtx.moveTo(rwX + rwW - 8, 0); tCtx.lineTo(rwX + rwW - 8, HEIGHT);
+      tCtx.stroke();
+
+      // 활주로 중앙 점선 (Centerline)
+      tCtx.strokeStyle = '#facc15';
+      tCtx.lineWidth = 5;
+      tCtx.setLineDash([40, 30]);
+      tCtx.beginPath();
+      tCtx.moveTo(rwX + rwW / 2, 0);
+      tCtx.lineTo(rwX + rwW / 2, HEIGHT);
+      tCtx.stroke();
+      tCtx.setLineDash([]); // 대시 해제
+
+      // 착륙 구역 피아노 건반 마킹 (Threshold Stripes)
+      tCtx.fillStyle = '#f8fafc';
+      for (let i = 0; i < 8; i++) {
+        tCtx.fillRect(rwX + 22 + i * 17, 20, 10, 60);
+      }
+      // 활주로 번호 마킹 '09L'
+      tCtx.fillStyle = '#f8fafc';
+      tCtx.font = 'bold 38px sans-serif';
+      tCtx.textAlign = 'center';
+      tCtx.fillText('09L', rwX + rwW / 2, 130);
+
+      // 보조 유도로 (Taxiway - 우측 주기장 연결)
+      tCtx.fillStyle = '#334155';
+      tCtx.fillRect(rwX + rwW, 420, 240, 80);
+      tCtx.fillRect(rwX + rwW, 850, 240, 80);
+
+      // 유도로 황색 중심 유도선
+      tCtx.strokeStyle = '#eab308';
+      tCtx.lineWidth = 3;
+      tCtx.beginPath();
+      tCtx.moveTo(rwX + rwW, 460); tCtx.lineTo(rwX + rwW + 240, 460);
+      tCtx.moveTo(rwX + rwW, 890); tCtx.lineTo(rwX + rwW + 240, 890);
+      tCtx.stroke();
+
+      // 우측 대형 주기장 에이프런 (Aircraft Parking Apron)
+      tCtx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      tCtx.fillRect(520 + 8, 260 + 10, 250, 680);
+      tCtx.fillStyle = '#1e293b';
+      tCtx.fillRect(520, 260, 250, 680);
+      tCtx.strokeStyle = '#475569';
+      tCtx.lineWidth = 3;
+      tCtx.strokeRect(520, 260, 250, 680);
+
+      // 에이프런 타일 그리드
+      tCtx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      tCtx.lineWidth = 1.5;
+      for (let y = 320; y < 940; y += 60) {
+        tCtx.beginPath();
+        tCtx.moveTo(520, y); tCtx.lineTo(770, y);
+        tCtx.stroke();
+      }
+
+      // 주기된 지원 전투기 실루엣 2대
+      function drawParkedJet(jx, jy) {
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        tCtx.beginPath();
+        tCtx.moveTo(jx + 6, jy - 20 + 8);
+        tCtx.lineTo(jx + 24 + 6, jy + 20 + 8);
+        tCtx.lineTo(jx + 6, jy + 12 + 8);
+        tCtx.lineTo(jx - 24 + 6, jy + 20 + 8);
+        tCtx.closePath();
+        tCtx.fill();
+
+        tCtx.fillStyle = '#64748b';
+        tCtx.beginPath();
+        tCtx.moveTo(jx, jy - 20);
+        tCtx.lineTo(jx + 24, jy + 20);
+        tCtx.lineTo(jx, jy + 12);
+        tCtx.lineTo(jx - 24, jy + 20);
+        tCtx.closePath();
+        tCtx.fill();
+        tCtx.strokeStyle = '#94a3b8';
+        tCtx.lineWidth = 1.5;
+        tCtx.stroke();
+      }
+
+      drawParkedJet(620, 360);
+      drawParkedJet(620, 560);
+      drawParkedJet(620, 760);
+
+      // 좌측 레이더 관제탑 단지
+      function drawRadarTower(rx, ry) {
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        tCtx.fillRect(rx + 12, ry + 14, 90, 90);
+        tCtx.fillStyle = '#334155';
+        tCtx.fillRect(rx, ry, 90, 90);
+        tCtx.strokeStyle = '#64748b';
+        tCtx.lineWidth = 2;
+        tCtx.strokeRect(rx, ry, 90, 90);
+
+        // 회전 거대 레이더 안테나
+        tCtx.fillStyle = '#0f172a';
+        tCtx.beginPath();
+        tCtx.arc(rx + 45, ry + 45, 22, 0, Math.PI * 2);
+        tCtx.fill();
+        tCtx.strokeStyle = '#38bdf8';
+        tCtx.lineWidth = 3.5;
+        tCtx.beginPath();
+        tCtx.arc(rx + 45, ry + 45, 16, -0.6, 1.4);
+        tCtx.stroke();
+        tCtx.fillStyle = '#ef4444';
+        tCtx.beginPath();
+        tCtx.arc(rx + 45, ry + 45, 4, 0, Math.PI * 2);
+        tCtx.fill();
+      }
+
+      drawRadarTower(80, 240);
+      drawRadarTower(80, 780);
+
+      // 관제탑 주변 트럭 및 대공포
+      drawMilitaryTruckOn(tCtx, 110, 360, 0);
+      drawMilitaryTruckOn(tCtx, 140, 370, -0.2);
+      drawDefenseBunkerOn(tCtx, 130, 560);
+
+      // 덤불 군락
+      drawFoliageClusterOn(tCtx, 60, 100, 6, 28, 201);
+      drawFoliageClusterOn(tCtx, 80, 1050, 7, 30, 202);
+      drawFoliageClusterOn(tCtx, 490, 110, 5, 24, 203);
+      drawFoliageClusterOn(tCtx, 500, 1080, 6, 26, 204);
+
+      // 포격 크레이터
+      drawCraterOn(tCtx, 220, 640, 20);
+      drawCraterOn(tCtx, 190, 670, 14);
+
+      return offscreen;
+    }
+
+    // -------------------------------------------------------------
+    // 바이옴 3: 협곡 하천 & 철교 & 해안 요새 (River, Iron Bridge & Fortress)
+    // -------------------------------------------------------------
+    function createGroundTerrainTexture3() {
+      const offscreen = document.createElement('canvas');
+      offscreen.width = WIDTH;
+      offscreen.height = HEIGHT;
+      const tCtx = offscreen.getContext('2d');
+
+      // 울창한 숲/암벽 지면
+      const groundGrad = tCtx.createLinearGradient(0, 0, 0, HEIGHT);
+      groundGrad.addColorStop(0, '#243322');
+      groundGrad.addColorStop(0.5, '#2e3d29');
+      groundGrad.addColorStop(1, '#223020');
+      tCtx.fillStyle = groundGrad;
+      tCtx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      // 암벽 지형 및 얼룩
+      let s = 310;
+      for (let i = 0; i < 80; i++) {
+        const px = seedRandom(s++) * WIDTH;
+        const py = seedRandom(s++) * HEIGHT;
+        const pr = 20 + seedRandom(s++) * 55;
+        tCtx.fillStyle = seedRandom(s++) > 0.4 ? 'rgba(40, 50, 36, 0.4)' : 'rgba(70, 60, 50, 0.3)';
+        tCtx.beginPath();
+        tCtx.arc(px, py, pr, 0, Math.PI * 2);
+        tCtx.fill();
+      }
+
+      // 거대 협곡 강줄기 (화면 좌측 바깥에서 우측 바깥까지 시원하게 완전히 관통하는 거대 하천)
+      tCtx.save();
+      const riverPoints = [
+        { x: -100, y: 520 },
+        { cx1: 180, cy1: 580, cx2: 360, cy2: 440, x: 500, y: 470 },
+        { cx1: 620, cy1: 500, cx2: 740, cy2: 430, x: WIDTH + 100, y: 460 }
+      ];
+
+      // A. 양쪽 흙/암벽 제방 및 수심 깊은 그림자 테두리 (너비 230px)
+      tCtx.strokeStyle = 'rgba(15, 23, 42, 0.8)';
+      tCtx.lineWidth = 220;
+      tCtx.lineCap = 'round';
+      tCtx.lineJoin = 'round';
+      tCtx.beginPath();
+      tCtx.moveTo(riverPoints[0].x, riverPoints[0].y);
+      tCtx.bezierCurveTo(riverPoints[1].cx1, riverPoints[1].cy1, riverPoints[1].cx2, riverPoints[1].cy2, riverPoints[1].x, riverPoints[1].y);
+      tCtx.bezierCurveTo(riverPoints[2].cx1, riverPoints[2].cy1, riverPoints[2].cx2, riverPoints[2].cy2, riverPoints[2].x, riverPoints[2].y);
+      tCtx.stroke();
+
+      // B. 황토/모래톱 강기슭 림 (너비 190px)
+      tCtx.strokeStyle = '#334155';
+      tCtx.lineWidth = 190;
+      tCtx.beginPath();
+      tCtx.moveTo(riverPoints[0].x, riverPoints[0].y);
+      tCtx.bezierCurveTo(riverPoints[1].cx1, riverPoints[1].cy1, riverPoints[1].cx2, riverPoints[1].cy2, riverPoints[1].x, riverPoints[1].y);
+      tCtx.bezierCurveTo(riverPoints[2].cx1, riverPoints[2].cy1, riverPoints[2].cx2, riverPoints[2].cy2, riverPoints[2].x, riverPoints[2].y);
+      tCtx.stroke();
+
+      // C. 강 수면 메인 그라데이션 (너비 160px: 에메랄드 딥블루)
+      const waterGrad = tCtx.createLinearGradient(0, 380, 0, 620);
+      waterGrad.addColorStop(0, '#0284c7');
+      waterGrad.addColorStop(0.35, '#0369a1');
+      waterGrad.addColorStop(0.7, '#075985');
+      waterGrad.addColorStop(1, '#0c4a6e');
+      tCtx.strokeStyle = waterGrad;
+      tCtx.lineWidth = 160;
+      tCtx.beginPath();
+      tCtx.moveTo(riverPoints[0].x, riverPoints[0].y);
+      tCtx.bezierCurveTo(riverPoints[1].cx1, riverPoints[1].cy1, riverPoints[1].cx2, riverPoints[1].cy2, riverPoints[1].x, riverPoints[1].y);
+      tCtx.bezierCurveTo(riverPoints[2].cx1, riverPoints[2].cy1, riverPoints[2].cx2, riverPoints[2].cy2, riverPoints[2].x, riverPoints[2].y);
+      tCtx.stroke();
+
+      // D. 흐르는 물결 & 햇빛 반사 하이라이트
+      tCtx.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+      tCtx.lineWidth = 3;
+      for (let rx = -50; rx <= WIDTH + 50; rx += 55) {
+        // 하천 중심 곡선 근처 y 좌표 추정
+        const t = (rx + 50) / (WIDTH + 100);
+        const ry = 510 - Math.sin(t * Math.PI * 1.5) * 50;
+        tCtx.beginPath();
+        tCtx.moveTo(rx - 22, ry + ((rx % 3) - 1) * 18);
+        tCtx.lineTo(rx + 22, ry + ((rx % 3) - 1) * 18);
+        tCtx.stroke();
+      }
+      tCtx.restore();
+
+      // 강을 종단으로 가로지르는 군용 대형 철교 (Truss Iron Bridge)
+      const brX = 380;
+      const brW = 84;
+
+      // 교각 수면 그림자
+      tCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      tCtx.fillRect(brX + 16, 320, brW + 10, 340);
+
+      // 도로/철교 상판
+      tCtx.fillStyle = '#334155';
+      tCtx.fillRect(brX, 0, brW, HEIGHT);
+
+      // 아스팔트 차선
+      tCtx.strokeStyle = '#e2e8f0';
+      tCtx.lineWidth = 2;
+      tCtx.setLineDash([20, 20]);
+      tCtx.beginPath();
+      tCtx.moveTo(brX + brW / 2, 0);
+      tCtx.lineTo(brX + brW / 2, HEIGHT);
+      tCtx.stroke();
+      tCtx.setLineDash([]);
+
+      // 강 위 철골 트러스 구조물 (X자 격자 철골 프레임)
+      tCtx.strokeStyle = '#dc2626'; // 선명한 붉은색 군용 트러스
+      tCtx.lineWidth = 4;
+      tCtx.strokeRect(brX, 360, brW, 260);
+
+      tCtx.lineWidth = 2.5;
+      for (let y = 360; y < 620; y += 40) {
+        tCtx.beginPath();
+        tCtx.moveTo(brX, y); tCtx.lineTo(brX + brW, y + 40);
+        tCtx.moveTo(brX + brW, y); tCtx.lineTo(brX, y + 40);
+        tCtx.stroke();
+      }
+
+      // 교각 방호 포대 진지 (북단/남단 2개소)
+      drawDefenseBunkerOn(tCtx, 280, 310);
+      drawDefenseBunkerOn(tCtx, 490, 670);
+
+      // 강 건너편 암벽 요새 벙커 (Hardened Concrete Bunker)
+      function drawCliffBunker(bx, by) {
+        tCtx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        tCtx.fillRect(bx + 14, by + 16, 110, 80);
+
+        tCtx.fillStyle = '#475569';
+        tCtx.fillRect(bx, by, 110, 80);
+        tCtx.strokeStyle = '#1e293b';
+        tCtx.lineWidth = 3;
+        tCtx.strokeRect(bx, by, 110, 80);
+
+        // 총안구 (Embrasure 슬릿)
+        tCtx.fillStyle = '#020617';
+        tCtx.fillRect(bx + 20, by + 30, 70, 16);
+
+        // 상단 관측 큐폴라
+        tCtx.fillStyle = '#334155';
+        tCtx.beginPath();
+        tCtx.arc(bx + 55, by - 4, 18, Math.PI, 0);
+        tCtx.fill();
+        tCtx.strokeStyle = '#64748b';
+        tCtx.stroke();
+      }
+
+      drawCliffBunker(120, 140);
+      drawCliffBunker(580, 820);
+
+      // 보급 트럭 통행
+      drawMilitaryTruckOn(tCtx, brX + 22, 220, 0);
+      drawMilitaryTruckOn(tCtx, brX + 60, 780, Math.PI);
+
+      // 울창한 숲 군락 집중 배치
+      drawFoliageClusterOn(tCtx, 100, 720, 9, 36, 401);
+      drawFoliageClusterOn(tCtx, 680, 220, 9, 36, 402);
+      drawFoliageClusterOn(tCtx, 220, 920, 8, 34, 403);
+      drawFoliageClusterOn(tCtx, 720, 960, 7, 30, 404);
+
+      // 강변 크레이터
+      drawCraterOn(tCtx, 250, 420, 24);
+      drawCraterOn(tCtx, 520, 580, 20);
+
+      return offscreen;
+    }
+
+    // -------------------------------------------------------------
+    // 3장의 개별 바이옴 텍스처 프리베이킹
+    // -------------------------------------------------------------
+    const groundTextures = [
+      createGroundTerrainTexture1(),
+      createGroundTerrainTexture2(),
+      createGroundTerrainTexture3()
+    ];
+    const groundTexture = groundTextures[0]; // 하위 호환용 참조 유지
+
+    // -------------------------------------------------------------
+    // 무한 루프 멀티 세그먼트 스크롤 시스템
+    // -------------------------------------------------------------
+    const TOTAL_SEGMENTS = groundTextures.length; // 3구역 (총 3600px 길이 루프)
+    const bgSegments = [
+      { y: 0, texIdx: 0 },
+      { y: -HEIGHT, texIdx: 1 }
+    ];
+
+    // 플레이어 전투기 상태
+    let playerX = WIDTH / 2;
+    let playerY = HEIGHT * 0.8;
+    let targetX = playerX;
+    let targetY = playerY;
+
+    // 모바일 터치 상대 이동 (Relative Touch Delta) 변수
+    let lastTouchX = null;
+    let lastTouchY = null;
+
+    function updatePointerPos(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      targetX = (clientX - rect.left) * scaleX;
+      targetY = (clientY - rect.top) * scaleY;
+    }
+
+    // 데스크톱 마우스 조작
+    canvas.addEventListener('mousemove', (e) => {
+      updatePointerPos(e.clientX, e.clientY);
+    });
+
+    // 윈도우 전역 터치 조작 (게임 캔버스뿐만 아니라 하단 여백 화면 어디든 스와이프해도 기체 조작 & 2손가락 폭탄)
+    window.addEventListener('touchstart', (e) => {
+      // 컨티뉴 카운트다운 중이면 화면 아무 곳 터치 시 즉시 부활 처리
+      if (isContinueState && credits > 0) {
+        handleContinueAction();
+        return;
+      }
+      // 손가락 2개 이상 터치 시 폭탄 즉시 발동
+      if (e.touches.length >= 2) {
+        triggerBomb();
+        return;
+      }
+      if (e.touches.length === 1) {
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+      if (e.touches.length >= 2) return;
+      if (e.touches.length === 1 && lastTouchX !== null && lastTouchY !== null) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        const curX = e.touches[0].clientX;
+        const curY = e.touches[0].clientY;
+        const deltaX = (curX - lastTouchX) * scaleX;
+        const deltaY = (curY - lastTouchY) * scaleY;
+
+        lastTouchX = curX;
+        lastTouchY = curY;
+
+        if (Number.isFinite(deltaX) && Number.isFinite(deltaY)) {
+          targetX += deltaX;
+          targetY += deltaY;
+        }
+
+        // 경계 제한
+        targetX = Math.max(40, Math.min(WIDTH - 40, targetX));
+        targetY = Math.max(60, Math.min(HEIGHT - 40, targetY));
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      if (e.touches.length === 1) {
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      } else if (e.touches.length === 0) {
+        lastTouchX = null;
+        lastTouchY = null;
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchcancel', () => {
+      lastTouchX = null;
+      lastTouchY = null;
+    }, { passive: true });
+
+    // PC 마우스 양쪽 버튼(좌클릭 + 우클릭) 동시 입력 시 폭탄 발동
+    let mouseButtonsDown = 0;
+
+    canvas.addEventListener('mousedown', (e) => {
+      // e.buttons 비트마스크: 1(좌클릭) + 2(우클릭) = 3(동시 클릭)
+      mouseButtonsDown = e.buttons;
+      if ((mouseButtonsDown & 1) && (mouseButtonsDown & 2)) {
+        triggerBomb();
+      }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      mouseButtonsDown = e.buttons;
+    });
+
+    // 우클릭 시 브라우저 기본 컨텍스트 메뉴 방지 (우클릭 게임 조작 보장)
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+    });
+
+    // 플레이어 전투기 및 지면 투영 그림자 드로잉
+    function drawPlayer(x, y) {
+      // 1. 비행기가 높은 상공에 떠 있음을 나타내는 '지면 그림자' (고도차 연출)
+      if (shadowToggle.checked) {
+        ctx.save();
+        // 그림자는 빛의 각도에 맞춰 우하단으로 길게 오프셋(+45px, +60px)
+        ctx.translate(x + 45, y + 65);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)'; // 지면에 비치는 반투명 실루엣
+        ctx.beginPath();
+        ctx.moveTo(0, -32);
+        ctx.lineTo(26, 24);
+        ctx.lineTo(0, 16);
+        ctx.lineTo(-26, 24);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 2. 비행기 본체 렌더링
+      ctx.save();
+      ctx.translate(x, y);
+
+      // 제트 엔진 추진 화염 (Afterburner)
+      ctx.fillStyle = '#38bdf8';
+      ctx.shadowColor = '#0284c7';
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.moveTo(-10, 26);
+      ctx.lineTo(0, 46 + Math.random() * 8);
+      ctx.lineTo(10, 26);
+      ctx.closePath();
+      ctx.fill();
+
+      // 기체 본체
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.moveTo(0, -34);
+      ctx.lineTo(28, 22);
+      ctx.lineTo(0, 15);
+      ctx.lineTo(-28, 22);
+      ctx.closePath();
+      ctx.fill();
+
+      // 날개 위장/라인 액센트
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-20, 16);
+      ctx.lineTo(-28, 22);
+      ctx.moveTo(20, 16);
+      ctx.lineTo(28, 22);
+      ctx.stroke();
+
+      // 콕핏 캐노피
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.ellipse(0, -7, 5, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // -------------------------------------------------------------
+    // 슈팅 게임 코어 시스템 (점수, 잔기, 폭탄, 탄환, 피격, 폭발, 컨티뉴)
+    // -------------------------------------------------------------
+    let score = 0; // 기본값 0점 (5자리 포맷: 00000)
+    let lives = 2; // 잔기 2개 (2번 맞을 수 있고, 잔기 0 상태에서 1번 더 맞으면 컨티뉴)
+    let bombs = 2; // 폭탄 2개
+    let credits = 2; // 컨티뉴 기회 2번
+    let isGameOver = false;
+    let isContinueState = false;
+    let continueTimer = 10;
+    let continueInterval = null;
+
+    let playerInvulnerable = 0; // 피격 후 무적 시간 (프레임)
+    let autoShootTimer = 0; // 플레이어 자동 발사 타이머
+    let rapidBoost = 0;     // R 아이템 획득 시 총알 속도 증가치 (5%씩 최대 60%)
+    let items = [];         // R 아이템 목록
+    let itemSpawnTimer = 0; // R 아이템 스폰 타이머
+
+    let playerBullets = [];
+    let enemyBullets = [];
+    let explosions = [];
+    let bombShockwaves = []; // 폭탄 전체 화면 폭발 효과
+
+    const scoreVal = document.getElementById('score-val');
+    const rapidDisplay = document.getElementById('rapid-display');
+    const lifeIcon1 = document.getElementById('life-icon-1');
+    const lifeIcon2 = document.getElementById('life-icon-2');
+    const bombIcon1 = document.getElementById('bomb-icon-1');
+    const bombIcon2 = document.getElementById('bomb-icon-2');
+    const bombBtn = document.getElementById('bombBtn');
+
+    const retroOverlay = document.getElementById('retro-overlay');
+    const overlayTitle = document.getElementById('overlay-title');
+    const countdownDisplay = document.getElementById('countdown-display');
+    const finalScoreBox = document.getElementById('finalScoreBox');
+    const finalScoreVal = document.getElementById('finalScoreVal');
+    const continueBtn = document.getElementById('continueBtn');
+    const continueInfo = document.getElementById('continue-info');
+    const backTitleBtn = document.getElementById('backTitleBtn');
+
+    // 승리 오버레이 모달 요소
+    const victoryOverlay = document.getElementById('victory-overlay');
+    const victoryScoreVal = document.getElementById('victoryScoreVal');
+    const victoryTitleBtn = document.getElementById('victoryTitleBtn');
+
+    let isVictoryState = false; // 30만점 승리 엔딩 상태
+    let confettis = []; // 꽃가루 파티클 배열
+
+    // -------------------------------------------------------------
+    // 오디오 사운드 시스템 (Web Audio API 레트로 아케이드 신디사이저)
+    // -------------------------------------------------------------
+    let soundEnabled = true;
+    let audioCtx = null;
+    const soundToggleBtn = document.getElementById('soundToggleBtn');
+    const soundOnIcon = document.getElementById('soundOnIcon');
+    const soundOffIcon = document.getElementById('soundOffIcon');
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    // 30만점 승리 팡파레 멜로디 (도 - 미 - 솔 - 높은도 4음 화음)
+    function playVictoryAudio() {
+      if (!soundEnabled) return;
+      initAudio();
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+
+      playExplosionSound(true); // 대폭발 콤보음
+
+      const notes = [
+        { f: 523.25, time: 0.15, dur: 0.12 }, // C5
+        { f: 659.25, time: 0.28, dur: 0.12 }, // E5
+        { f: 783.99, time: 0.41, dur: 0.15 }, // G5
+        { f: 1046.50, time: 0.58, dur: 0.60 } // C6
+      ];
+
+      notes.forEach(n => {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(n.f, now + n.time);
+        g.gain.setValueAtTime(0.24, now + n.time);
+        g.gain.exponentialRampToValueAtTime(0.001, now + n.time + n.dur);
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start(now + n.time);
+        osc.stop(now + n.time + n.dur);
+      });
+    }
+
+    // 꽃가루(Confetti) 생성 함수 (300개)
+    const CONFETTI_COLORS = [
+      '#f43f5e', '#facc15', '#38bdf8', '#4ade80', '#c084fc',
+      '#fb923c', '#f472b6', '#ffffff', '#e879f9', '#a3e635'
+    ];
+
+    function createConfettiShower(count = 300) {
+      for (let i = 0; i < count; i++) {
+        confettis.push({
+          x: Math.random() * WIDTH,
+          y: -20 - Math.random() * 500,
+          w: 8 + Math.random() * 12,
+          h: 6 + Math.random() * 10,
+          vx: (Math.random() - 0.5) * 4.5,
+          vy: 3.5 + Math.random() * 5.5,
+          rot: Math.random() * Math.PI * 2,
+          vRot: (Math.random() - 0.5) * 0.18,
+          wobble: Math.random() * Math.PI * 2,
+          wobbleSpeed: 0.05 + Math.random() * 0.08,
+          color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)]
+        });
+      }
+    }
+
+    // 30만점 달성 시 승리 엔딩 발동
+    function triggerVictory() {
+      if (isVictoryState) return;
+      isVictoryState = true;
+      playVictoryAudio();
+
+      // 화면 내 모든 적 일제 폭발 전멸
+      enemies.forEach(e => {
+        createExplosion(e.x, e.y, e.radius * 1.5, '#f59e0b', 35);
+        createExplosion(e.x + 10, e.y - 10, e.radius, '#ef4444', 20);
+      });
+      enemies = [];
+      enemyBullets = [];
+
+      // 무수한 꽃가루 비
+      createConfettiShower(300);
+
+      // 모달 표시
+      victoryScoreVal.innerText = score.toString().padStart(9, '0');
+      setTimeout(() => {
+        victoryOverlay.style.display = 'flex';
+      }, 350);
+    }
+
+    // 타이틀 화면으로 완전히 돌아가기 (RESET)
+    function returnToTitleScreen() {
+      if (continueInterval) clearInterval(continueInterval);
+      isContinueState = false;
+      isGameOver = false;
+      isVictoryState = false;
+      gameStarted = false;
+
+      // 모달 전부 숨김
+      retroOverlay.style.display = 'none';
+      victoryOverlay.style.display = 'none';
+      titleScreen.style.display = 'flex';
+
+      // 상태 리셋
+      score = 0;
+      lives = 2;
+      bombs = 2;
+      credits = 2;
+      rapidBoost = 0;
+      updateScoreDisplay();
+      updateLivesDisplay();
+      updateBombsDisplay();
+      updateRapidDisplay();
+
+      // 적, 총알, 파티클 전부 초기화
+      enemies = [];
+      enemyBullets = [];
+      playerBullets = [];
+      explosions = [];
+      confettis = [];
+      items = [];
+      bombShockwaves = [];
+
+      playerX = WIDTH / 2;
+      playerY = HEIGHT * 0.8;
+      targetX = playerX;
+      targetY = playerY;
+      lastTouchX = null;
+      lastTouchY = null;
+    }
+
+    backTitleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      returnToTitleScreen();
+    });
+    victoryTitleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      returnToTitleScreen();
+    });
+
+    // 레이저 발사 효과음 (급격한 드롭의 쫀득한 '뾱/삐용~' 레이저)
+    // 볼륨 30% 감축 (0.13 -> 0.09) + R 아이템 획득(rapidBoost)당 소리 속도 5%씩 가속 (지속시간 단축)
+    function playLaserSound() {
+      if (!soundEnabled) return;
+      try {
+        initAudio();
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+
+        // 귀에 자극 없는 둥근 Triangle 파형 + 680Hz 로우패스 필터
+        osc.type = 'triangle';
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(680, audioCtx.currentTime);
+
+        const now = audioCtx.currentTime;
+        
+        // R 아이템 먹을 때마다(rapidBoost: 5% 단위) 사운드 속도 5%씩 가속 -> 지속시간 duration 단축
+        // rapidSpeedFactor = 1 + (rapidBoost / 100)
+        const rapidSpeedFactor = 1 + (rapidBoost / 100);
+        const duration = 0.09 / rapidSpeedFactor;
+
+        // 피치: 720Hz에서 85Hz로 가파른 지수 곡선을 그리며 급격히 곤두박질치는 글라이드 라인
+        osc.frequency.setValueAtTime(720, now);
+        osc.frequency.exponentialRampToValueAtTime(85, now + duration);
+
+        // 볼륨: 50% 추가 감축 (0.09 -> 0.045)
+        gain.gain.setValueAtTime(0.045, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(now);
+        osc.stop(now + duration);
+      } catch (e) {}
+    }
+
+    // 적기 피격 효과음 (소리를 확실히 키우고 찰진 명중감을 부여: 메탈릭 임팩트 2중 오실레이터, 게인 0.35)
+    function playHitSound() {
+      if (!soundEnabled) return;
+      try {
+        initAudio();
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+
+        const now = audioCtx.currentTime;
+
+        // A. 단단한 금속 타격 바이트 (Square 520Hz -> 200Hz)
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(200, now + 0.07);
+
+        gain.gain.setValueAtTime(0.35, now); // 볼륨 대폭 상향 (기존 0.14 -> 0.35)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.07);
+
+        // B. 묵직한 펀치감 서브 (Triangle 240Hz -> 80Hz)
+        const sub = audioCtx.createOscillator();
+        const subGain = audioCtx.createGain();
+        sub.type = 'triangle';
+        sub.frequency.setValueAtTime(240, now);
+        sub.frequency.exponentialRampToValueAtTime(80, now + 0.07);
+
+        subGain.gain.setValueAtTime(0.30, now);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+        sub.connect(subGain);
+        subGain.connect(audioCtx.destination);
+        sub.start(now);
+        sub.stop(now + 0.07);
+      } catch (e) {}
+    }
+
+    // 적기 폭발 격추 효과음 (화이트 노이즈 버스트 + 저주파 럼블 붐)
+    function playExplosionSound(isBoss = false) {
+      if (!soundEnabled) return;
+      try {
+        initAudio();
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+
+        const now = audioCtx.currentTime;
+        const duration = isBoss ? 0.65 : 0.28;
+
+        // 1. 노이즈 버스트 (파열음)
+        const bufferSize = Math.floor(audioCtx.sampleRate * duration);
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+
+        // 로우패스 필터로 먹먹한 폭발음 질감 구현
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(isBoss ? 900 : 1200, now);
+        filter.frequency.linearRampToValueAtTime(150, now + duration);
+
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(isBoss ? 0.45 : 0.26, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        noise.connect(filter);
+        filter.connect(noiseGain);
+        noiseGain.connect(audioCtx.destination);
+
+        noise.start(now);
+        noise.stop(now + duration);
+
+        // 2. 묵직한 서브 베이스 럼블 (Boom!)
+        const subOsc = audioCtx.createOscillator();
+        const subGain = audioCtx.createGain();
+        subOsc.type = 'triangle';
+        subOsc.frequency.setValueAtTime(isBoss ? 160 : 130, now);
+        subOsc.frequency.exponentialRampToValueAtTime(30, now + duration);
+
+        subGain.gain.setValueAtTime(isBoss ? 0.4 : 0.22, now);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        subOsc.connect(subGain);
+        subGain.connect(audioCtx.destination);
+
+        subOsc.start(now);
+        subOsc.stop(now + duration);
+      } catch (err) {
+        console.warn('사운드 실행 실패:', err);
+      }
+    }
+
+    // 사운드 On/Off 토글
+    if (soundToggleBtn) {
+      soundToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        initAudio();
+        soundEnabled = !soundEnabled;
+        if (soundEnabled) {
+          soundOnIcon.style.display = 'block';
+          soundOffIcon.style.display = 'none';
+          soundToggleBtn.style.borderColor = '#38bdf8';
+          soundToggleBtn.style.color = '#38bdf8';
+        } else {
+          soundOnIcon.style.display = 'none';
+          soundOffIcon.style.display = 'block';
+          soundToggleBtn.style.borderColor = '#64748b';
+          soundToggleBtn.style.color = '#94a3b8';
+        }
+      });
+    }
+
+    function updateScoreDisplay() {
+      // 9자리 고정 표시 (000000000)
+      scoreVal.innerText = score.toString().padStart(9, '0');
+    }
+
+    function updateRapidDisplay() {
+      if (rapidDisplay) {
+        rapidDisplay.innerText = `Rapid: +${rapidBoost}%`;
+        rapidDisplay.style.color = rapidBoost >= 60 ? '#facc15' : '#38bdf8';
+      }
+    }
+
+    function updateLivesDisplay() {
+      lifeIcon1.style.opacity = lives >= 1 ? '1' : '0.15';
+      lifeIcon2.style.opacity = lives >= 2 ? '1' : '0.15';
+    }
+
+    function updateBombsDisplay() {
+      bombIcon1.style.opacity = bombs >= 1 ? '1' : '0.15';
+      bombIcon2.style.opacity = bombs >= 2 ? '1' : '0.15';
+    }
+
+    // 폭탄 발동 함수 (화면 전체 폭발 및 적 & 적 총알 전멸)
+    function triggerBomb() {
+      if (bombs <= 0 || isGameOver || isContinueState) return;
+      bombs--;
+      updateBombsDisplay();
+
+      // 전체 화면 백색 섬광 및 충격파 생성
+      bombShockwaves.push({
+        radius: 10,
+        maxRadius: Math.max(WIDTH, HEIGHT) * 1.1,
+        alpha: 1.0
+      });
+
+      // 1. 화면 내의 모든 적 파괴 및 점수 획득
+      enemies.forEach(e => {
+        createExplosion(e.x, e.y, 45, '#f59e0b', 30);
+        score += 300;
+      });
+      if (enemies.length > 0) {
+        playExplosionSound(true); // 폭탄 사용 시 묵직한 대폭발음 출력
+      }
+      enemies = [];
+
+      // 2. 모든 적 총알 소멸 및 보너스 파편화
+      enemyBullets.forEach(b => {
+        createExplosion(b.x, b.y, 14, '#38bdf8', 6);
+      });
+      enemyBullets = [];
+
+      updateScoreDisplay();
+
+      // 폭탄으로 적 전멸 시 30만점 달성 체크
+      if (score >= 300000 && !isVictoryState) {
+        triggerVictory();
+      }
+    }
+
+    bombBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      triggerBomb();
+    });
+
+    // 키보드 스페이스바나 B키로도 폭탄 사용 가능 지원
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'KeyB') {
+        triggerBomb();
+      }
+    });
+
+    // 폭발 이펙트 생성기 (파티클 시스템)
+    function createExplosion(x, y, radius, color, count = 18) {
+      explosions.push({
+        x, y,
+        particles: Array.from({ length: count }, () => {
+          const angle = Math.random() * Math.PI * 2;
+          const spd = 2 + Math.random() * 7;
+          return {
+            x: 0,
+            y: 0,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd,
+            size: 3 + Math.random() * 5,
+            color: Math.random() > 0.4 ? color : '#facc15',
+            alpha: 1.0,
+            decay: 0.02 + Math.random() * 0.03
+          };
+        }),
+        ringRadius: 5,
+        ringMax: radius * 1.5,
+        ringAlpha: 1.0,
+        dead: false
+      });
+    }
+
+    // 플레이어 피격 처리
+    function hitPlayer() {
+      if (playerInvulnerable > 0 || isGameOver || isContinueState) return;
+
+      // 1. 피격 즉시 2초 무적 선적용 (1프레임 다중 피격 원천 차단)
+      playerInvulnerable = 120;
+
+      // 2. 피격 이펙트 및 사운드 방어 실행
+      try {
+        createExplosion(playerX, playerY, 50, '#ef4444', 35);
+        playExplosionSound(false);
+      } catch (err) {
+        console.warn('피격 이펙트 오류 무시:', err);
+      }
+
+      // 3. 잔기(Life) 차감 로직
+      // lives === 2 (첫 피격) -> lives 1 (생존, 아이콘 1개 꺼짐)
+      // lives === 1 (두번째 피격) -> lives 0 (생존, 마지막 기체, 아이콘 모두 꺼짐)
+      // lives === 0 (세번째 피격) -> 비로소 사망 및 컨티뉴/게임오버 진입
+      if (lives > 0) {
+        lives--;
+        updateLivesDisplay();
+        // 적 총알 화면 주변 제거 (회복 시간 제공)
+        enemyBullets = enemyBullets.filter(b => Math.hypot(b.x - playerX, b.y - playerY) > 200);
+      } else {
+        // 잔기가 0인 상태에서 추가 피격 -> 기체 대폭발 후 컨티뉴/게임오버 진입
+        try {
+          createExplosion(playerX, playerY, 70, '#ef4444', 50);
+          playExplosionSound(true);
+        } catch (err) {
+          console.warn('사망 이펙트 오류 무시:', err);
+        }
+        triggerContinueOrGameOver();
+      }
+    }
+
+    // 컨티뉴 및 게임오버 모달 제어
+    function triggerContinueOrGameOver() {
+      if (credits > 0) {
+        // 컨티뉴 진입
+        isContinueState = true;
+        continueTimer = 10;
+        overlayTitle.className = 'overlay-title continue-text';
+        overlayTitle.innerText = 'CONTINUE?';
+        countdownDisplay.style.display = 'block';
+        countdownDisplay.innerText = continueTimer;
+        finalScoreBox.style.display = 'none'; // 컨티뉴 중에는 점수 박스 숨김
+        continueBtn.style.display = 'inline-block';
+        backTitleBtn.style.display = 'none'; // 컨티뉴 중에는 타이틀 복귀 버튼 숨김
+        continueInfo.innerText = `CREDIT(S) REMAINING: ${credits}`;
+        retroOverlay.style.display = 'flex';
+
+        if (continueInterval) clearInterval(continueInterval);
+        continueInterval = setInterval(() => {
+          continueTimer--;
+          if (continueTimer >= 1) {
+            countdownDisplay.innerText = continueTimer;
+          } else {
+            // 1에서 0으로 갈 때 0은 표시하지 않고 바로 GAME OVER 처리!
+            clearInterval(continueInterval);
+            triggerGameOver();
+          }
+        }, 1000);
+      } else {
+        // 컨티뉴 2회 모두 소진됨 -> 즉시 게임오버
+        triggerGameOver();
+      }
+    }
+
+    function triggerGameOver() {
+      isContinueState = false;
+      isGameOver = true;
+      if (continueInterval) clearInterval(continueInterval);
+
+      overlayTitle.className = 'overlay-title gameover-text';
+      overlayTitle.innerText = 'GAME OVER';
+      countdownDisplay.style.display = 'none'; // 0 미표시
+
+      // 최종 점수 9자리 포맷으로 표시
+      finalScoreVal.innerText = score.toString().padStart(9, '0');
+      finalScoreBox.style.display = 'flex';
+
+      continueBtn.style.display = 'none';
+      backTitleBtn.style.display = 'inline-block'; // 타이틀 복귀 버튼 노출
+      continueInfo.innerText = 'INSERT COIN / REFRESH TO RESTART';
+      retroOverlay.style.display = 'flex';
+    }
+
+    // 모달 및 화면 터치/클릭 시 컨티뉴 즉시 처리
+    function handleContinueAction() {
+      if (!isContinueState || credits <= 0) return;
+      credits--;
+      clearInterval(continueInterval);
+      isContinueState = false;
+      retroOverlay.style.display = 'none';
+
+      // 플레이어 리스폰 (잔기 2개, 폭탄 2개 재충전, 무적 3초)
+      lives = 2;
+      bombs = 2;
+      updateLivesDisplay();
+      updateBombsDisplay();
+      playerInvulnerable = 180;
+      playerX = WIDTH / 2;
+      targetX = WIDTH / 2;
+      lastTouchX = null;
+      lastTouchY = null;
+
+      // 화면 내 적 총알 전멸
+      enemyBullets = [];
+      createExplosion(playerX, playerY, 60, '#38bdf8', 40);
+    }
+
+    continueBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleContinueAction();
+    });
+    retroOverlay.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleContinueAction();
+    });
+    retroOverlay.addEventListener('touchstart', (e) => {
+      e.stopPropagation();
+      handleContinueAction();
+    }, { passive: false });
+
+    // -------------------------------------------------------------
+    // 적 기체 타입 시스템 (기존 3종 + 신규 3종: 그룹편대, 소형/중형/대형 자코)
+    // -------------------------------------------------------------
+    // Type 1: 정찰 요격기 (Crimson Interceptor)
+    //   - 이동: 날렵한 붉은 델타익, 좌우 지그재그 사인파(Sine wave)
+    //   - 사격: "빠르게 끊어서" 2연사(Burst)로 플레이어를 조준 사격
+    //
+    // Type 2: 기갑 전폭기 (Panzer Bomber)
+    //   - 이동: 묵직한 녹색 헥사곤 장갑, 상공에서 선회(U턴/Swoop)
+    //   - 사격: "천천히 많은 총알" - 5방향 부채꼴 탄막(Slow Spread Ring) 방출
+    //
+    // Type 3: 스텔스 중전투기 (Shadow Fighter)
+    //   - 이동: 짙은 보라색 3단 전진익, 상공 진입 후 제자리 호버링
+    //   - 사격: "넓게 적은 양의 총알" - 좌우 양날개에서 넓은 각도의 트윈 와이드 샷 발사
+    //
+    // Type 4: 그룹 편대 자코 (Squad Zako) - 좌→우 또는 우→좌 횡대 이동, 여러 대가 편대로 총알 뿌림
+    // Type 5: 소형 자코 (Scout Zako) - 상단/측면에서 급속 등장, 1~3발 조준탄 발사 후 즉시 도주, 체력 매우 낮음
+    // Type 6: 중형 자코 (Heavy Zako) - 화면에 오래 체류, 확산탄 or 고속 연사 조준탄, 체력 높음
+    // Type 7: 대형 자코 (Fortress Zako) - 여러 포탑을 가진 준보스급, 넓은 고정탄막 + 조준탄막 동시 구사
+
+    let enemies = [];
+    let enemySpawnTimer = 0;
+    let targetEnemyCount = 6; // 화면에 유지할 목표 적 기체 수 (5~8 랜덤, 난이도에 따라 상한 확장)
+    let targetRecalcTimer = 0;
+    let spawnCycleIndex = 0; // 순환 스폰 인덱스 (7타입)
+    let squadSpawnTimer = 0; // 그룹 편대 전용 스폰 타이머
+    let scoutSpawnTimer = 0; // 소형 자코 전용 스폰 타이머 (자주 등장)
+    let fortressTimer = 0;   // 대형 요새형 자코 전용 타이머 (1분 30초 = 90초 주기)
+
+    // -------------------------------------------------------------
+    // 난이도 스케일링 시스템 (시작 난이도 50% = 0.5x, 10,000점당 +10%, 500,000점에서 최대 6.0배 고정)
+    // 적용 대상: 적 스폰 속도 / 동시 등장 수 / 탄속 / 탄막(발사 빈도, 탄 수)
+    // 미적용 대상: 체력(hp), 플레이어 스탯 — 항상 고정
+    // -------------------------------------------------------------
+    let difficultyMultiplier = 0.5;
+    function updateDifficulty() {
+      const cappedScore = Math.min(score, 500000);
+      const level = Math.floor(cappedScore / 10000); // 0 ~ 50
+      difficultyMultiplier = 0.5 + level * 0.10; // 0.5 ~ 5.5
+    }
+
+    class Enemy {
+      constructor(type, opts = {}) {
+        this.type = type;
+        this.age = 0;
+        this.dead = false;
+        this.shootCooldown = 0;
+        this.hp = 1; // 기본 체력 (총알/레이저 1회 피격 시 사망)
+        this.maxHp = 1;
+
+        if (this.type === 1) {
+          // [Type 1] 요격기 (붉은색) - 1방에 즉시 사망
+          this.baseX = 100 + Math.random() * (WIDTH - 200);
+          this.x = this.baseX;
+          this.y = -60;
+          this.speedY = 4.0 + Math.random() * 1.2;
+          this.amplitude = 75 + Math.random() * 45;
+          this.freq = 0.038;
+          this.width = 36;
+          this.height = 38;
+          this.radius = 20;
+          this.burstCount = 0;
+          this.burstTimer = 0;
+          this.hp = this.maxHp = 1; // 1방 즉사
+        } else if (this.type === 2) {
+          // [Type 2] 전폭기 (초록색) - 1방에 즉시 사망
+          this.startX = Math.random() > 0.5 ? 80 : WIDTH - 80;
+          this.x = this.startX;
+          this.y = -80;
+          this.vx = (this.startX < WIDTH / 2) ? 3.0 : -3.0;
+          this.vy = 3.2;
+          this.state = 'enter';
+          this.width = 54;
+          this.height = 50;
+          this.radius = 28;
+          this.shootTimer = 40;
+          this.hp = this.maxHp = 1; // 1방 즉사
+        } else if (this.type === 3) {
+          // [Type 3] 스텔스 중전투기
+          this.x = 130 + Math.random() * (WIDTH - 260);
+          this.y = -90;
+          this.targetY = 220 + Math.random() * 160;
+          this.hoverTime = 0;
+          this.maxHover = 180; // 3초간 호버링
+          this.width = 64;
+          this.height = 58;
+          this.radius = 32;
+          this.wideShotTimer = 45;
+          this.hp = this.maxHp = 2; // 스텔스기는 2방
+        } else if (this.type === 4) {
+          // [Type 4] 그룹 편대 자코 (Squad Zako) - 좌→우 또는 우→좌 횡대 이동
+          // opts로 편대 방향과 편대 내 위치(row/col)를 전달받음
+          this.dir = opts.dir || 1; // 1: 좌->우, -1: 우->좌
+          this.x = (this.dir === 1) ? -60 - (opts.col || 0) * 70 : WIDTH + 60 + (opts.col || 0) * 70;
+          this.y = opts.rowY || (150 + Math.random() * 500);
+          this.vx = this.dir * (3.2 + Math.random() * 0.6);
+          this.vy = 0;
+          this.width = 34;
+          this.height = 34;
+          this.radius = 18;
+          this.shootTimer = 30 + Math.floor(Math.random() * 30); // 편대원마다 발사 시점 분산
+          this.hp = this.maxHp = 2;
+        } else if (this.type === 5) {
+          // [Type 5] 소형 자코 (Scout Zako) - 상단/측면 급속 등장, 1~3발 쏘고 즉시 도주
+          const spawnSide = Math.floor(Math.random() * 3); // 0: top, 1: left, 2: right
+          if (spawnSide === 0) {
+            this.x = 80 + Math.random() * (WIDTH - 160);
+            this.y = -40;
+            this.vx = (Math.random() - 0.5) * 2;
+            this.vy = 9 + Math.random() * 2; // 매우 빠르게 등장
+          } else if (spawnSide === 1) {
+            this.x = -40;
+            this.y = 150 + Math.random() * 500;
+            this.vx = 9 + Math.random() * 2;
+            this.vy = (Math.random() - 0.5) * 1.5;
+          } else {
+            this.x = WIDTH + 40;
+            this.y = 150 + Math.random() * 500;
+            this.vx = -(9 + Math.random() * 2);
+            this.vy = (Math.random() - 0.5) * 1.5;
+          }
+          this.phase = 'dash-in'; // dash-in -> shoot -> flee
+          this.phaseTimer = 0;
+          this.shotsLeft = 1 + Math.floor(Math.random() * 3); // 1~3발
+          this.width = 26;
+          this.height = 26;
+          this.radius = 14;
+          this.hp = this.maxHp = 1; // 체력 매우 낮음 (원샷킬)
+        } else if (this.type === 6) {
+          // [Type 6] 중형 자코 (Heavy Zako) - 등장 즉시 탄환 발사 & 체력 3
+          this.x = 150 + Math.random() * (WIDTH - 300);
+          this.y = -100;
+          this.targetY = 260 + Math.random() * 220;
+          this.state = 'enter';
+          this.stayTimer = 0;
+          this.maxStay = 260;
+          this.subPattern = Math.random() > 0.5 ? 'spread' : 'rapid';
+          this.shootTimer = 999; // 나타나자마자 즉시 1차 사격 개시하도록 타이머 선충전
+          this.enterShotDone = false; // 진입 중 즉시 사격 여부 플래그
+          this.width = 70;
+          this.height = 64;
+          this.radius = 36;
+          this.hp = this.maxHp = 3;
+        } else {
+          // [Type 7] 대형 자코 (Fortress Zako) - 가장 큰 적 체력 2배 상향 (코어 8 -> 16, 포탑 각 2 -> 4)
+          this.x = WIDTH / 2;
+          this.y = -150;
+          this.targetY = 260;
+          this.state = 'enter';
+          this.shootTimer = 0;
+          this.spreadTimer = 0;
+          this.width = 220;
+          this.height = 140;
+          this.radius = 100;
+          // 포탑 4개 체력 2배 상향 (각 2 -> 4)
+          this.turrets = [
+            { dx: -80, dy: -10, hp: 4, maxHp: 4, alive: true },
+            { dx: -40, dy: 20, hp: 4, maxHp: 4, alive: true },
+            { dx: 40, dy: 20, hp: 4, maxHp: 4, alive: true },
+            { dx: 80, dy: -10, hp: 4, maxHp: 4, alive: true }
+          ];
+          this.hp = this.maxHp = 16; // 코어 체력 기존 8 -> 2배인 16으로 상향
+        }
+      }
+
+
+      update() {
+        this.age++;
+
+        // 1. 이동 및 사격 패턴 (난이도 배율 difficultyMultiplier 적용: 탄속/주기/탄막 확장, 체력은 고정)
+        const dMul = difficultyMultiplier;
+
+        if (this.type === 1) {
+          // [Type 1] 요격기: 지그재그 강하 + 고속 조준탄 2연사
+          this.y += this.speedY;
+          this.x = this.baseX + Math.sin(this.age * this.freq) * this.amplitude;
+
+          if (this.y > 100 && this.y < HEIGHT * 0.75) {
+            this.burstTimer++;
+            const interval = Math.max(20, Math.floor(55 / dMul));
+            if (this.burstTimer >= interval) {
+              this.burstTimer = 0;
+              this.fireAtPlayer(8.5 * Math.min(2.5, dMul));
+            }
+          }
+        } else if (this.type === 2) {
+          // [Type 2] 전폭기: U턴 선회 + 5~9방향 느린 부채꼴 탄막
+          this.x += this.vx;
+          this.y += this.vy;
+
+          if (this.y > 380 && this.state === 'enter') {
+            this.state = 'swoop';
+            this.vy = -1.2;
+            this.vx *= 1.4;
+          } else if (this.state === 'swoop' && this.y < 280) {
+            this.state = 'exit';
+            this.vy = 5.2;
+          }
+
+          if (this.y > 80 && this.y < HEIGHT - 200) {
+            this.shootTimer++;
+            const interval = Math.max(30, Math.floor(80 / dMul));
+            if (this.shootTimer >= interval) {
+              this.shootTimer = 0;
+              const baseAngle = Math.atan2(playerY - this.y, playerX - this.x);
+              // 난이도에 따라 탄 수 5발 -> 7발 -> 9발 확장
+              const fanCount = dMul >= 3.0 ? 9 : (dMul >= 1.8 ? 7 : 5);
+              const halfSpread = 0.5;
+              const step = (halfSpread * 2) / (fanCount - 1);
+              for (let i = 0; i < fanCount; i++) {
+                const ang = baseAngle - halfSpread + i * step;
+                enemyBullets.push({
+                  x: this.x,
+                  y: this.y + 12,
+                  vx: Math.cos(ang) * (2.8 * Math.min(2.2, dMul)),
+                  vy: Math.sin(ang) * (2.8 * Math.min(2.2, dMul)),
+                  radius: 11, // 크고 눈에 잘 띔
+                  color: '#4ade80'
+                });
+              }
+            }
+          }
+        } else if (this.type === 3) {
+          // [Type 3] 스텔스 중전투기: 호버링 + 넓은 트윈 와이드 샷
+          if (this.y < this.targetY) {
+            this.y += (this.targetY - this.y) * 0.04 + 1;
+          } else if (this.hoverTime < this.maxHover) {
+            this.hoverTime++;
+            this.x += Math.sin(this.hoverTime * 0.08) * 0.8;
+
+            this.wideShotTimer++;
+            const interval = Math.max(25, Math.floor(60 / dMul));
+            if (this.wideShotTimer >= interval) {
+              this.wideShotTimer = 0;
+              const bSpeed = 4.2 * Math.min(2.2, dMul);
+              [-24, 24].forEach((offX, idx) => {
+                const dirX = idx === 0 ? -2.8 : 2.8;
+                enemyBullets.push({
+                  x: this.x + offX,
+                  y: this.y + 6,
+                  vx: dirX * Math.min(2.0, dMul),
+                  vy: bSpeed,
+                  radius: 13, // 보라색 대구경 탄환 (매우 굵게)
+                  color: '#e879f9'
+                });
+              });
+            }
+          } else {
+            this.y += 6.5;
+          }
+        } else if (this.type === 4) {
+          // [Type 4] 그룹 편대 자코: 좌→우 or 우→좌 횡대 횡단 이동하며 하방 탄환 일제 살포
+          this.x += this.vx;
+          this.shootTimer++;
+          const interval = Math.max(20, Math.floor(45 / dMul));
+          if (this.shootTimer >= interval && this.x > 30 && this.x < WIDTH - 30) {
+            this.shootTimer = 0;
+            enemyBullets.push({
+              x: this.x,
+              y: this.y + 10,
+              vx: (Math.random() - 0.5) * 1.5,
+              vy: (4.0 + Math.random() * 1.5) * Math.min(2.2, dMul),
+              radius: 10,
+              color: '#f97316' // 오렌지색 편대 탄환
+            });
+          }
+        } else if (this.type === 5) {
+          // [Type 5] 소형 자코: 초고속 돌진 -> 1~3발 빠른 직선탄 발사 -> 즉시 화면 밖으로 급반전 도주
+          this.phaseTimer++;
+          if (this.phase === 'dash-in') {
+            this.x += this.vx;
+            this.y += this.vy;
+            if (this.phaseTimer > 18) {
+              this.phase = 'shoot';
+              this.phaseTimer = 0;
+            }
+          } else if (this.phase === 'shoot') {
+            if (this.shotsLeft > 0) {
+              this.fireAtPlayer(9.0 * Math.min(2.4, dMul));
+              this.shotsLeft--;
+            }
+            this.phase = 'flee';
+            // 플레이어 반대 방향 또는 상단/측면으로 초고속 이탈
+            this.vx = (this.x < WIDTH / 2 ? -1 : 1) * 11;
+            this.vy = -7;
+          } else if (this.phase === 'flee') {
+            this.x += this.vx;
+            this.y += this.vy;
+          }
+        } else if (this.type === 6) {
+          // [Type 6] 중형 자코: 화면 진입 즉시 사격 + 화면 체류 중 지속 탄막 (부채꼴 확산탄 or 고속 조준 연사탄)
+          const fireType6Bullet = () => {
+            if (this.subPattern === 'spread') {
+              // 7~11방향 확산탄막
+              const fCount = dMul >= 2.5 ? 11 : 7;
+              for (let i = 0; i < fCount; i++) {
+                const ang = Math.PI * 0.15 + (Math.PI * 0.7 * (i / (fCount - 1)));
+                enemyBullets.push({
+                  x: this.x,
+                  y: this.y + 20,
+                  vx: Math.cos(ang) * (3.8 * Math.min(2.0, dMul)),
+                  vy: Math.sin(ang) * (3.8 * Math.min(2.0, dMul)),
+                  radius: 12,
+                  color: '#38bdf8' // 시안 블루 중형 탄환
+                });
+              }
+            } else {
+              // 플레이어 방향 3점사 고속 집중탄
+              const baseAng = Math.atan2(playerY - this.y, playerX - this.x);
+              [-0.15, 0, 0.15].forEach(angOff => {
+                enemyBullets.push({
+                  x: this.x,
+                  y: this.y + 20,
+                  vx: Math.cos(baseAng + angOff) * (8.0 * Math.min(2.2, dMul)),
+                  vy: Math.sin(baseAng + angOff) * (8.0 * Math.min(2.2, dMul)),
+                  radius: 11,
+                  color: '#ef4444'
+                });
+              });
+            }
+          };
+
+          if (this.state === 'enter') {
+            this.y += (this.targetY - this.y) * 0.05 + 1;
+            // 화면 상단에 모습을 드러내자마자(y > 30) 즉시 1회 선제 사격 발사
+            if (!this.enterShotDone && this.y >= 30) {
+              this.enterShotDone = true;
+              fireType6Bullet();
+            }
+            if (Math.abs(this.y - this.targetY) < 10) this.state = 'stay';
+          } else if (this.state === 'stay') {
+            this.stayTimer++;
+            this.x += Math.sin(this.stayTimer * 0.05) * 1.5; // 좌우 부유
+
+            this.shootTimer++;
+            const interval = Math.max(25, Math.floor(50 / dMul));
+            if (this.shootTimer >= interval) {
+              this.shootTimer = 0;
+              fireType6Bullet();
+            }
+            if (this.stayTimer >= this.maxStay) this.state = 'exit';
+          } else {
+            this.y += 5.5; // 화면 하단으로 돌파 이탈
+          }
+        } else if (this.type === 7) {
+          // [Type 7] 대형 요새형 자코 (준보스): 중앙 진입 + 4개 포탑 독립 탄막 + 코어 전방위 탄막
+          if (this.state === 'enter') {
+            this.y += (this.targetY - this.y) * 0.03 + 1;
+            if (Math.abs(this.y - this.targetY) < 10) this.state = 'fight';
+          } else if (this.state === 'fight') {
+            this.x += Math.sin(this.age * 0.02) * 1.8;
+
+            // 포탑 사격 (살아있는 포탑마다 조준탄/직선탄 발사)
+            this.shootTimer++;
+            const tInterval = Math.max(30, Math.floor(65 / dMul));
+            if (this.shootTimer >= tInterval) {
+              this.shootTimer = 0;
+              this.turrets.forEach(t => {
+                if (t.alive) {
+                  const tx = this.x + t.dx;
+                  const ty = this.y + t.dy;
+                  const ang = Math.atan2(playerY - ty, playerX - tx);
+                  enemyBullets.push({
+                    x: tx,
+                    y: ty,
+                    vx: Math.cos(ang) * (5.5 * Math.min(2.0, dMul)),
+                    vy: Math.sin(ang) * (5.5 * Math.min(2.0, dMul)),
+                    radius: 12,
+                    color: '#fbbf24' // 골드 포탑 탄환
+                  });
+                }
+              });
+            }
+
+            // 코어 주기적 8방향 링 탄막
+            this.spreadTimer++;
+            const sInterval = Math.max(45, Math.floor(90 / dMul));
+            if (this.spreadTimer >= sInterval) {
+              this.spreadTimer = 0;
+              const ringCount = 10;
+              for (let i = 0; i < ringCount; i++) {
+                const ang = (Math.PI * 2 / ringCount) * i + (this.age * 0.05);
+                enemyBullets.push({
+                  x: this.x,
+                  y: this.y + 30,
+                  vx: Math.cos(ang) * (3.5 * Math.min(2.0, dMul)),
+                  vy: Math.sin(ang) * (3.5 * Math.min(2.0, dMul)),
+                  radius: 13,
+                  color: '#f43f5e' // 로즈레드 보스 코어 탄환
+                });
+              }
+            }
+          }
+        }
+
+        // 화면 이탈 시 제거
+        if (this.y > HEIGHT + 160 || this.y < -220 || this.x < -180 || this.x > WIDTH + 180) {
+          this.dead = true;
+        }
+      }
+
+      fireAtPlayer(speed) {
+        const dx = playerX - this.x;
+        const dy = playerY - this.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        enemyBullets.push({
+          x: this.x,
+          y: this.y + 15,
+          vx: (dx / dist) * speed,
+          vy: (dy / dist) * speed,
+          radius: 11, // 8 -> 11 대폭 확대 (눈에 뚜렷함)
+          color: '#ef4444' // 고속 붉은 탄환
+        });
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // 지면 그림자
+        if (shadowToggle.checked) {
+          ctx.save();
+          ctx.translate(35, 50);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+          if (this.type === 1) {
+            ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(-18, -14); ctx.lineTo(18, -14); ctx.fill();
+          } else if (this.type === 2) {
+            ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(-26, -18); ctx.lineTo(26, -18); ctx.fill();
+          } else if (this.type === 3) {
+            ctx.beginPath(); ctx.moveTo(0, 30); ctx.lineTo(-32, -20); ctx.lineTo(32, -20); ctx.fill();
+          } else if (this.type === 4) {
+            ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill();
+          } else if (this.type === 5) {
+            ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(-12, -10); ctx.lineTo(12, -10); ctx.fill();
+          } else if (this.type === 6) {
+            ctx.beginPath(); ctx.rect(-32, -28, 64, 56); ctx.fill();
+          } else {
+            ctx.beginPath(); ctx.rect(-100, -60, 200, 120); ctx.fill();
+          }
+          ctx.restore();
+        }
+
+        // [적 Type 1] 고속 요격기
+        if (this.type === 1) {
+          ctx.fillStyle = '#f97316';
+          ctx.beginPath(); ctx.moveTo(-6, -16); ctx.lineTo(0, -28 - Math.random() * 6); ctx.lineTo(6, -16); ctx.fill();
+          ctx.fillStyle = '#dc2626';
+          ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(-18, -14); ctx.lineTo(-6, -10); ctx.lineTo(0, -6); ctx.lineTo(6, -10); ctx.lineTo(18, -14); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = '#f87171'; ctx.lineWidth = 1.5; ctx.stroke();
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath(); ctx.ellipse(0, 2, 3.5, 6, 0, 0, Math.PI * 2); ctx.fill();
+
+        // [적 Type 2] 기갑 전폭기
+        } else if (this.type === 2) {
+          ctx.fillStyle = '#eab308';
+          [-12, 12].forEach(fx => {
+            ctx.beginPath(); ctx.moveTo(fx - 4, -22); ctx.lineTo(fx, -36 - Math.random() * 8); ctx.lineTo(fx + 4, -22); ctx.fill();
+          });
+          ctx.fillStyle = '#15803d';
+          ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(-24, 6); ctx.lineTo(-27, -18); ctx.lineTo(-10, -22); ctx.lineTo(10, -22); ctx.lineTo(27, -18); ctx.lineTo(24, 6); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2; ctx.stroke();
+          ctx.fillStyle = '#0f172a'; ctx.fillRect(-8, -4, 16, 14);
+          ctx.strokeStyle = '#86efac'; ctx.strokeRect(-8, -4, 16, 14);
+          ctx.fillStyle = '#0284c7'; ctx.beginPath(); ctx.arc(0, 2, 5, 0, Math.PI * 2); ctx.fill();
+
+        // [적 Type 3] 스텔스 중전투기
+        } else if (this.type === 3) {
+          ctx.fillStyle = '#c084fc';
+          [-18, 0, 18].forEach(fx => {
+            ctx.beginPath(); ctx.moveTo(fx - 3, -24); ctx.lineTo(fx, -38 - Math.random() * 7); ctx.lineTo(fx + 3, -24); ctx.fill();
+          });
+          ctx.fillStyle = '#3b0764';
+          ctx.beginPath(); ctx.moveTo(0, 32); ctx.lineTo(16, 12); ctx.lineTo(34, 4); ctx.lineTo(26, -20); ctx.lineTo(10, -14); ctx.lineTo(0, -24); ctx.lineTo(-10, -14); ctx.lineTo(-26, -20); ctx.lineTo(-34, 4); ctx.lineTo(-16, 12); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 2.5; ctx.stroke();
+          ctx.fillStyle = '#e879f9';
+          ctx.beginPath(); ctx.moveTo(0, 18); ctx.lineTo(6, -6); ctx.lineTo(-6, -6); ctx.closePath(); ctx.fill();
+
+        // [적 Type 4] 그룹 편대 자코 (Squad Zako) - 오렌지/옐로우 날렵한 전투기
+        } else if (this.type === 4) {
+          ctx.fillStyle = '#fb923c';
+          ctx.beginPath();
+          ctx.moveTo(0, 16);
+          ctx.lineTo(-16, -12);
+          ctx.lineTo(0, -6);
+          ctx.lineTo(16, -12);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#fde047'; ctx.lineWidth = 2; ctx.stroke();
+          // 방향 표시 화살촉 콕핏
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath(); ctx.arc(0, 2, 4, 0, Math.PI * 2); ctx.fill();
+
+        // [적 Type 5] 소형 자코 (Scout Zako) - 초소형 침투정, 붉은색 점멸
+        } else if (this.type === 5) {
+          ctx.fillStyle = '#e11d48';
+          ctx.beginPath();
+          ctx.moveTo(0, 14);
+          ctx.lineTo(-11, -11);
+          ctx.lineTo(11, -11);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#fda4af'; ctx.lineWidth = 1.5; ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+
+        // [적 Type 6] 중형 자코 (Heavy Zako) - 묵직한 네이비 블루 건쉽
+        } else if (this.type === 6) {
+          ctx.fillStyle = '#1e3a5f';
+          ctx.fillRect(-30, -24, 60, 48);
+          ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.5;
+          ctx.strokeRect(-30, -24, 60, 48);
+          // 좌우 주익 포대
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(-38, -10, 8, 20);
+          ctx.fillRect(30, -10, 8, 20);
+          // 중앙 코어
+          ctx.fillStyle = '#38bdf8';
+          ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill();
+          // 체력 바 (HP Bar)
+          const hpRatio = Math.max(0, this.hp / this.maxHp);
+          ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(-28, -34, 56, 5);
+          ctx.fillStyle = '#22c55e'; ctx.fillRect(-28, -34, 56 * hpRatio, 5);
+
+        // [적 Type 7] 대형 요새형 자코 (Fortress Zako) - 초대형 기동 요새
+        } else {
+          // 거대 동체 베이스
+          ctx.fillStyle = '#18181b';
+          ctx.fillRect(-95, -50, 190, 100);
+          ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 3;
+          ctx.strokeRect(-95, -50, 190, 100);
+
+          // 장갑 패널
+          ctx.fillStyle = '#27272a';
+          ctx.fillRect(-85, -40, 170, 80);
+
+          // 중앙 메인 반응로 코어 (펄스)
+          const pulse = 16 + Math.sin(this.age * 0.1) * 3;
+          ctx.fillStyle = '#ef4444';
+          ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 15;
+          ctx.beginPath(); ctx.arc(0, 0, pulse, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 0;
+
+          // 4개의 독립 포탑 렌더링
+          this.turrets.forEach((t, idx) => {
+            if (t.alive) {
+              ctx.fillStyle = '#52525b';
+              ctx.beginPath(); ctx.arc(t.dx, t.dy, 12, 0, Math.PI * 2); ctx.fill();
+              ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.stroke();
+              // 포열
+              const ang = Math.atan2(playerY - (this.y + t.dy), playerX - (this.x + t.dx));
+              ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3;
+              ctx.beginPath();
+              ctx.moveTo(t.dx, t.dy);
+              ctx.lineTo(t.dx + Math.cos(ang) * 18, t.dy + Math.sin(ang) * 18);
+              ctx.stroke();
+            } else {
+              // 파괴된 포탑 잔해
+              ctx.fillStyle = '#27272a';
+              ctx.beginPath(); ctx.arc(t.dx, t.dy, 8, 0, Math.PI * 2); ctx.fill();
+            }
+          });
+
+          // 요새 전체 체력 바
+          const fHpRatio = Math.max(0, this.hp / this.maxHp);
+          ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(-90, -62, 180, 7);
+          ctx.fillStyle = '#f43f5e'; ctx.fillRect(-90, -62, 180 * fHpRatio, 7);
+          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(-90, -62, 180, 7);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // 메인 루프
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fpsTimer = 0;
+
+    function gameLoop(now) {
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+
+      frameCount++;
+      fpsTimer += delta;
+      if (fpsTimer >= 0.5) {
+        fpsCounter.innerText = `FPS: ${Math.round(frameCount / fpsTimer)}`;
+        frameCount = 0;
+        fpsTimer = 0;
+      }
+
+      // 1. 배경 좌표 아래로 이동 및 3대 바이옴 순환 스크롤
+      bgSegments.forEach(seg => {
+        seg.y += baseSpeed;
+      });
+
+      // 아래 화면 밖으로 완전히 벗어난 세그먼트는 다른 세그먼트의 바로 위로 재배치하고 다음 바이옴 텍스처 인덱스로 갱신
+      if (bgSegments[0].y >= HEIGHT) {
+        bgSegments[0].y = bgSegments[1].y - HEIGHT;
+        bgSegments[0].texIdx = (bgSegments[1].texIdx + 1) % TOTAL_SEGMENTS;
+      }
+      if (bgSegments[1].y >= HEIGHT) {
+        bgSegments[1].y = bgSegments[0].y - HEIGHT;
+        bgSegments[1].texIdx = (bgSegments[0].texIdx + 1) % TOTAL_SEGMENTS;
+      }
+
+      // 2. 지면 렌더링
+      bgSegments.forEach(seg => {
+        const tex = groundTextures[seg.texIdx];
+        ctx.drawImage(tex, 0, Math.floor(seg.y));
+      });
+
+      // 무적 시간 카운트다운
+      if (playerInvulnerable > 0) {
+        playerInvulnerable--;
+      }
+
+      // -----------------------------------------------------------
+      // 3. 플레이어 자동 총알 발사 (R 아이템 획득 시 총알 탄속 rapidBoost% 가속)
+      // -----------------------------------------------------------
+      if (gameStarted && !isGameOver && !isContinueState && !isVictoryState) {
+        autoShootTimer++;
+        if (autoShootTimer >= 8) {
+          autoShootTimer = 0;
+          // 기본 탄속 -15에서 rapidBoost(최대 +40%)만큼 탄속 증가
+          const speedFactor = 1 + (rapidBoost / 100);
+          const bulletSpeed = -15 * speedFactor;
+          playerBullets.push({ x: playerX - 12, y: playerY - 24, vy: bulletSpeed, width: 4, height: 16 });
+          playerBullets.push({ x: playerX + 12, y: playerY - 24, vy: bulletSpeed, width: 4, height: 16 });
+          // 레이저 발사 효과음 출력
+          playLaserSound();
+        }
+      }
+
+      // 플레이어 총알 이동 & 렌더링
+      ctx.fillStyle = '#38bdf8';
+      ctx.shadowColor = '#0284c7';
+      ctx.shadowBlur = 8;
+      for (let i = playerBullets.length - 1; i >= 0; i--) {
+        const pb = playerBullets[i];
+        pb.y += pb.vy;
+
+        ctx.fillRect(pb.x - pb.width / 2, pb.y, pb.width, pb.height);
+
+        // 적과의 충돌 검사 (HP 차감 및 격추 판정 - 요새 코어는 외곽 포탑이 남아있어도 타격 가능)
+        let hit = false;
+        for (let j = enemies.length - 1; j >= 0; j--) {
+          const enemy = enemies[j];
+          if (Math.hypot(pb.x - enemy.x, pb.y - enemy.y) < enemy.radius + 6) {
+            hit = true;
+            createExplosion(pb.x, pb.y, 16, '#facc15', 8);
+            playHitSound(); // 적기 피격 타격음 출력
+
+            // 대형 요새(Type 7)인 경우: 외곽 포탑 근처면 포탑 데미지, 중앙 코어 근처면 코어 데미지 즉시 차감
+            if (enemy.type === 7 && enemy.turrets) {
+              let turretHit = false;
+              for (let t of enemy.turrets) {
+                if (t.alive && Math.hypot(pb.x - (enemy.x + t.dx), pb.y - (enemy.y + t.dy)) < 22) {
+                  t.hp--;
+                  turretHit = true;
+                  createExplosion(pb.x, pb.y, 22, '#fbbf24', 12);
+                  if (t.hp <= 0) {
+                    t.alive = false;
+                    createExplosion(enemy.x + t.dx, enemy.y + t.dy, 35, '#f59e0b', 20);
+                    playExplosionSound(false); // 포탑 격파음
+                    score += 200; // 포탑 격파 보너스
+                    updateScoreDisplay();
+                  }
+                  break;
+                }
+              }
+              // 포탑을 빗맞췄거나 코어 중심부 타격 시 코어 HP 즉시 차감
+              if (!turretHit) {
+                enemy.hp--;
+                createExplosion(pb.x, pb.y, 20, '#ef4444', 10);
+              }
+            } else {
+              enemy.hp--;
+            }
+
+            // 체력 0 이하 시 최종 격추
+            if (enemy.hp <= 0) {
+              enemy.dead = true;
+              const expRad = enemy.type === 7 ? 80 : (enemy.type === 6 ? 55 : (enemy.type === 2 ? 40 : 25));
+              createExplosion(enemy.x, enemy.y, expRad, '#f59e0b', enemy.type === 7 ? 60 : 24);
+              playExplosionSound(enemy.type === 7); // 적기 폭발 격추음 (준보스 시 묵직한 롱 럼블)
+              const scores = { 1: 100, 2: 200, 3: 300, 4: 150, 5: 80, 6: 600, 7: 1500 };
+              score += scores[enemy.type] || 100;
+              updateScoreDisplay();
+
+              // 30만점 달성 시 승리 엔딩 체크 (전체 적 전멸 + 팡파레 + 꽃가루 비 + 승리 모달)
+              if (score >= 300000 && !isVictoryState) {
+                triggerVictory();
+              }
+
+              // 대형 요새 격파 시 100% 확률로 R 아이템 드롭, 일반 적은 2.5% 희귀 드롭
+              if (enemy.type === 7 || Math.random() < 0.025) {
+                items.push({
+                  x: enemy.x,
+                  y: enemy.y,
+                  vy: 1.8, // 아래로 천천히 하강
+                  radius: 18,
+                  angle: 0
+                });
+              }
+
+              enemies.splice(j, 1);
+            }
+            break;
+          }
+        }
+
+        if (hit || pb.y < -30) {
+          playerBullets.splice(i, 1);
+        }
+      }
+      ctx.shadowBlur = 0; // 리셋
+
+      // -----------------------------------------------------------
+      // 4. 적 생성 & 업데이트 & 렌더링 (일반 자코 + 그룹 편대 + 소형/중형/대형 자코)
+      // -----------------------------------------------------------
+      if (gameStarted && !isGameOver && !isVictoryState) {
+        updateDifficulty(); // 점수 기반 난이도 배율 갱신 (10,000점당 +10%, 최대 6.0배)
+
+        // [A] 그룹 편대(Type 4) 스폰 타이머 (좌->우 or 우->좌 3~5대 횡대 편대)
+        squadSpawnTimer += delta;
+        if (squadSpawnTimer > Math.max(5, 11 / difficultyMultiplier)) {
+          squadSpawnTimer = 0;
+          const sDir = Math.random() > 0.5 ? 1 : -1;
+          const sRowY = 140 + Math.random() * 450;
+          const sCount = 3 + Math.floor(Math.random() * 3); // 3~5대
+          for (let c = 0; c < sCount; c++) {
+            enemies.push(new Enemy(4, { dir: sDir, rowY: sRowY, col: c }));
+          }
+        }
+
+        // [B] 소형 자코(Type 5) 급습 타이머 (상단/측면 급속 등장 후 이탈)
+        scoutSpawnTimer += delta;
+        if (scoutSpawnTimer > Math.max(1.8, 4.0 / difficultyMultiplier)) {
+          scoutSpawnTimer = 0;
+          enemies.push(new Enemy(5));
+        }
+
+        // [C] 대형 요새형 자코(Type 7) - 1분 30초(90초)마다 정확히 1번씩만 단독 등장
+        fortressTimer += delta;
+        if (fortressTimer >= 90) {
+          fortressTimer = 0;
+          const fortressExists = enemies.some(e => e.type === 7);
+          if (!fortressExists) {
+            enemies.push(new Enemy(7));
+          }
+        }
+
+        // [D] 일반 순환 스폰 (Type 1~3 기본 적 + Type 6 중형)
+        const spawnInterval = 0.65 / difficultyMultiplier;
+        enemySpawnTimer += delta;
+        if (enemySpawnTimer > spawnInterval && enemies.length < targetEnemyCount) {
+          enemySpawnTimer = 0;
+          // 가중치 확률: 기본 1~3(75%), 중형 6(25%) - 대형 7은 여기서 안 나옴
+          const roll = Math.random();
+          let nextType = 1;
+          if (roll < 0.75) {
+            spawnCycleIndex = (spawnCycleIndex + 1) % 3;
+            nextType = spawnCycleIndex + 1; // Type 1, 2, 3
+          } else {
+            nextType = 6; // 중형 자코
+          }
+          enemies.push(new Enemy(nextType));
+        }
+
+        // 목표 동시 등장 수 재조정 타이머 (난이도에 따라 상한이 5~8에서 점차 확장)
+        targetRecalcTimer += delta;
+        if (targetRecalcTimer > 4) {
+          targetRecalcTimer = 0;
+          const extraCap = Math.floor((difficultyMultiplier - 1) * 3);
+          targetEnemyCount = 5 + Math.floor(Math.random() * 4) + extraCap;
+        }
+      }
+
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        enemy.update();
+        enemy.draw();
+
+        // 적과 플레이어의 직접 충돌 검사 (피격점을 기체 끝이 아닌 안쪽 중심부로 축소: 18 -> 8)
+        if (!isGameOver && !isContinueState && playerInvulnerable <= 0) {
+          if (Math.hypot(playerX - enemy.x, playerY - enemy.y) < enemy.radius + 8) {
+            enemy.dead = true;
+            createExplosion(enemy.x, enemy.y, 45, '#f59e0b', 24);
+            enemies.splice(i, 1);
+            hitPlayer();
+            continue;
+          }
+        }
+
+        if (enemy.dead) {
+          enemies.splice(i, 1);
+        }
+      }
+
+      // -----------------------------------------------------------
+      // 5. 적 총알 이동, 렌더링 & 플레이어 피격 검사 (피격점 안쪽 축소: 12 -> 5)
+      // -----------------------------------------------------------
+      for (let i = enemyBullets.length - 1; i >= 0; i--) {
+        const eb = enemyBullets[i];
+        eb.x += eb.vx;
+        eb.y += eb.vy;
+
+        // 총알 드로잉 (글로우 이펙트)
+        ctx.fillStyle = eb.color;
+        ctx.beginPath();
+        ctx.arc(eb.x, eb.y, eb.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 플레이어 피격 판정 (비행기 외곽 끝이 아닌 중심 콕핏 안쪽 5px 코어 판정)
+        if (!isGameOver && !isContinueState && playerInvulnerable <= 0) {
+          if (Math.hypot(playerX - eb.x, playerY - eb.y) < eb.radius + 5) {
+            enemyBullets.splice(i, 1);
+            hitPlayer();
+            continue;
+          }
+        }
+
+        // 화면 밖으로 벗어나면 소멸
+        if (eb.x < -30 || eb.x > WIDTH + 30 || eb.y < -30 || eb.y > HEIGHT + 30) {
+          enemyBullets.splice(i, 1);
+        }
+      }
+
+      // -----------------------------------------------------------
+      // 6. 폭탄 충격파 & 전체 화면 폭발 렌더링
+      // -----------------------------------------------------------
+      for (let i = bombShockwaves.length - 1; i >= 0; i--) {
+        const sw = bombShockwaves[i];
+        sw.radius += 28;
+        sw.alpha -= 0.022;
+
+        // 전체 화면 플래시
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, sw.alpha * 0.45)})`;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // 원형 충격파 링
+        ctx.strokeStyle = `rgba(239, 68, 68, ${Math.max(0, sw.alpha)})`;
+        ctx.lineWidth = 12;
+        ctx.beginPath();
+        ctx.arc(playerX, playerY, sw.radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (sw.alpha <= 0 || sw.radius >= sw.maxRadius) {
+          bombShockwaves.splice(i, 1);
+        }
+      }
+
+      // -----------------------------------------------------------
+      // 7. 파티클 폭발 이펙트 렌더링
+      // -----------------------------------------------------------
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        const exp = explosions[i];
+        // 충격파 링
+        if (exp.ringAlpha > 0) {
+          ctx.strokeStyle = `rgba(250, 204, 21, ${exp.ringAlpha})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(exp.x, exp.y, exp.ringRadius, 0, Math.PI * 2);
+          ctx.stroke();
+          exp.ringRadius += 2.5;
+          exp.ringAlpha -= 0.05;
+        }
+
+        // 개별 파티클
+        let aliveParticles = 0;
+        exp.particles.forEach(p => {
+          if (p.alpha > 0) {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.alpha -= p.decay;
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = Math.max(0, p.alpha);
+            ctx.beginPath();
+            ctx.arc(exp.x + p.x, exp.y + p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+            aliveParticles++;
+          }
+        });
+
+        if (aliveParticles === 0 && exp.ringAlpha <= 0) {
+          explosions.splice(i, 1);
+        }
+      }
+
+      // -----------------------------------------------------------
+      // 7.5 'R' 형태 아이템 이동, 렌더링 & 플레이어 획득 검사
+      // -----------------------------------------------------------
+      if (gameStarted && !isGameOver && !isVictoryState) {
+        // 자연 스폰 빈도 대폭 완화 (기존 18초 -> 45초마다 1개씩 하강)
+        itemSpawnTimer += delta;
+        if (itemSpawnTimer > 45) {
+          itemSpawnTimer = 0;
+          items.push({
+            x: 80 + Math.random() * (WIDTH - 160),
+            y: -30,
+            vy: 1.8,
+            radius: 18,
+            angle: 0
+          });
+        }
+      }
+
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i];
+        it.y += it.vy;
+        it.angle += 0.04;
+
+        // 아이템 드로잉 (황금빛 원형 배지 + 중앙 붉은색 "R" 알파벳)
+        ctx.save();
+        ctx.translate(it.x, it.y);
+
+        // 외곽 회전 네온 링
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#facc15';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(0, 0, it.radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 내부 배경 디스크
+        ctx.fillStyle = '#1e1b4b';
+        ctx.beginPath();
+        ctx.arc(0, 0, it.radius - 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // 'R' 레트로 굵은 폰트 렌더링
+        ctx.fillStyle = '#f43f5e';
+        ctx.font = 'bold 20px "Press Start 2P", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('R', 0, 2);
+
+        ctx.restore();
+
+        // 플레이어 획득 검사 (충돌 반경 28px)
+        if (gameStarted && !isGameOver && !isContinueState) {
+          if (Math.hypot(playerX - it.x, playerY - it.y) < it.radius + 20) {
+            // 총알 속도 5% 증가 (최대 +60% 캡)
+            if (rapidBoost < 60) {
+              rapidBoost = Math.min(60, rapidBoost + 5);
+              updateRapidDisplay();
+            }
+            score += 500;
+            updateScoreDisplay();
+            createExplosion(it.x, it.y, 35, '#facc15', 25);
+            items.splice(i, 1);
+            continue;
+          }
+        }
+
+        // 화면 아래로 벗어나면 소멸
+        if (it.y > HEIGHT + 40) {
+          items.splice(i, 1);
+        }
+      }
+
+      // 7.8 꽃가루(Confetti) 렌더링 & 3D 펄럭임 물리 시뮬레이션
+      if (confettis.length > 0) {
+        confettis.forEach(c => {
+          c.wobble += c.wobbleSpeed;
+          c.x += c.vx + Math.sin(c.wobble) * 2.2;
+          c.y += c.vy;
+          c.rot += c.vRot;
+
+          ctx.save();
+          ctx.translate(c.x, c.y);
+          ctx.rotate(c.rot);
+          ctx.fillStyle = c.color;
+          ctx.fillRect(-c.w / 2, -c.h / 2 * Math.cos(c.wobble), c.w, c.h);
+          ctx.restore();
+
+          if (c.y > HEIGHT + 20) {
+            c.y = -20;
+            c.x = Math.random() * WIDTH;
+          }
+        });
+      }
+
+      // -----------------------------------------------------------
+      // 8. 플레이어 기체 부드러운 추종 및 렌더링 (모든 방향 이동 가능, 피격 무적 시 깜빡임)
+      // -----------------------------------------------------------
+      if (Number.isFinite(targetX)) playerX = targetX;
+      if (Number.isFinite(targetY)) playerY = targetY;
+
+      // 화면 밖으로 나가지 않도록 경계값 고정 (여유 마진 40px)
+      playerX = Math.max(40, Math.min(WIDTH - 40, playerX));
+      playerY = Math.max(60, Math.min(HEIGHT - 40, playerY));
+
+      if (gameStarted && !isGameOver) {
+        if (playerInvulnerable % 6 < 3) {
+          drawPlayer(playerX, playerY);
+        }
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    requestAnimationFrame(gameLoop);
+
+    // -------------------------------------------------------------
+    // 타이틀 화면 제어 (주인공/적 없이 배경만 흐르는 상태 유지 후 시작)
+    // -------------------------------------------------------------
+    const titleScreen = document.getElementById('title-screen');
+
+    function startGame() {
+      if (gameStarted) return;
+      initAudio(); // 브라우저 오디오 권한 언락
+      gameStarted = true;
+      titleScreen.style.display = 'none';
+      // 시작 시 플레이어 위치 초기화 및 무적 부여
+      playerX = WIDTH / 2;
+      playerY = HEIGHT * 0.8;
+      targetX = playerX;
+      targetY = playerY;
+      playerInvulnerable = 90;
+    }
+
+    // 타이틀 화면 시작 이벤트
+    titleScreen.addEventListener('click', startGame);
+    titleScreen.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startGame();
+    }, { passive: false });
+
+    // 전역 윈도우 클릭/키보드로도 컨티뉴 즉시 처리
+    window.addEventListener('click', () => {
+      if (isContinueState && credits > 0) {
+        handleContinueAction();
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (!gameStarted && (e.code === 'Space' || e.code === 'Enter')) {
+        startGame();
+      } else if (isContinueState && (e.code === 'Space' || e.code === 'Enter')) {
+        handleContinueAction();
+      }
+    });
+  </script>
+</body>
+</html>
