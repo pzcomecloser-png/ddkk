@@ -174,11 +174,19 @@ html,body{
 .pin{
   position:absolute; width:4px; height:4px; margin:-2px 0 0 -2px;
   border-radius:50%;
-  background:radial-gradient(circle at 40% 40%,#fff,#E8EAEF 60%,#A3A7B5);
+  /* ★ 기본은 거의 완전한 검정 — 빛나기 전엔 배경에 묻힌다 */
+  background:radial-gradient(circle at 40% 40%,#1C1E24,#121319 60%,#080910);
   transform:translateZ(0);          /* 합성 레이어 승격 */
 }
 /* 발광 — 미리 그려둔 그라데이션. 크기·투명도만 애니메이션 */
-.pin::after{
+/* ★ 성능 핵심 — 호흡 애니메이션은 전체 핀의 10%에만 부여한다.
+   이전: 152개가 모두 무한 애니메이션 + will-change → 레이어 152개 상시 점유
+         (게다가 광량 .02~.14로 사실상 보이지도 않았다)
+   개선: 15개만 천천히 숨쉬게 하고 광량을 올려 오히려 더 잘 보이게.
+         나머지 137개는 정적 요소가 되어 GPU가 한 번 그린 뒤 방치한다. */
+.pin::after{ content:none; }          /* 기본 핀 — 노드·레이어 생성 안 함 */
+
+.pin.breathe::after{
   content:''; position:absolute;
   left:-7px; top:-7px; width:18px; height:18px;
   border-radius:50%; pointer-events:none;
@@ -186,86 +194,65 @@ html,body{
     rgba(225,238,255,.85) 0%,
     rgba(200,222,255,.42) 32%,
     rgba(180,210,255,0)   70%);
-  will-change:opacity, transform;
-  animation:twinkle var(--tw-dur,3s) ease-in-out var(--tw-delay,0s) infinite alternate;
+  will-change:opacity;
+  animation:twinkle var(--tw-dur,10s) ease-in-out var(--tw-delay,0s) infinite alternate;
 }
 /* 별처럼 희미해지다 밝아지기를 반복 — 핀마다 주기/위상/밝기가 다름 */
 @keyframes twinkle{
-  0%   { opacity:var(--tw-lo, .22); transform:scale(.55); }
-  100% { opacity:var(--tw-hi, .95); transform:scale(1.15); }
+  /* ★ A안: 10%만 빛나므로 광량을 올려도 어둠이 유지된다.
+     transform은 제외 — opacity만 바꾸면 합성만으로 처리된다. */
+  0%   { opacity:var(--tw-lo, .05); }
+  100% { opacity:var(--tw-hi, .45); }
 }
 /* 구슬 충돌 시 발광 — 인라인 twinkle 애니메이션을 덮어써야 하므로 !important */
 /* ★ 네온 발광 — 흰 코어 + 색 하이라이트 + 넓은 확산의 3중 그림자
    실제 네온사인처럼 중심은 하얗게 타고 주변으로 색이 번진다.
    인라인 twinkle 애니메이션을 덮어써야 하므로 !important        */
 /* 충돌 발광 중에는 ::after 깜빡임을 멈춰 겹침 방지 */
-.pin.hitY, .pin.hitO, .pin.hitR, .pin.hitG, .pin.hitB{
-  z-index:4;
-}
-.pin.hitY::after, .pin.hitO::after, .pin.hitR::after,
-.pin.hitG::after, .pin.hitB::after{
-  animation-play-state:paused; opacity:0;
-}
-.pin.hitY{ animation:hitY .45s cubic-bezier(.1,.8,.2,1) !important; }
-.pin.hitO{ animation:hitO .50s cubic-bezier(.1,.8,.2,1) !important; }
-.pin.hitG{ animation:hitG .55s cubic-bezier(.1,.8,.2,1) !important; }
-.pin.hitR{ animation:hitR .62s cubic-bezier(.1,.8,.2,1) !important; }
-.pin.hitB{ animation:hitB .75s cubic-bezier(.1,.8,.2,1) !important; }
+.pin.lit{ z-index:4; }
+.pin.lit::after{ animation-play-state:paused; opacity:0; }
+/* ★ 색상은 변수로만 주입 — 어두운 기본색에서 각 색으로 점등 */
+.pin.lit{ animation:litCore var(--lit-dur,.45s) cubic-bezier(.1,.8,.2,1) !important; }
+.pin.lit::before{ animation:litPulse var(--lit-dur,.45s) cubic-bezier(.1,.8,.2,1); }
+
+.pin.hitY{ --lit:rgba(255,216,77,.90); --lit2:rgba(255,200,40,.34); --lit-dur:.45s;
+           background:radial-gradient(circle at 40% 40%,#fff,#FFE89A 62%,#B9963A); }
+.pin.hitO{ --lit:rgba(255,150,60,.90); --lit2:rgba(255,120,30,.34); --lit-dur:.50s;
+           background:radial-gradient(circle at 40% 40%,#fff,#FFCE96 62%,#B9742A); }
+.pin.hitG{ --lit:rgba(120,255,170,.90);--lit2:rgba(60,230,130,.34); --lit-dur:.55s;
+           background:radial-gradient(circle at 40% 40%,#fff,#B6FFD5 62%,#379A68); }
+.pin.hitR{ --lit:rgba(255,61,110,.92); --lit2:rgba(255,20,90,.36);  --lit-dur:.62s;
+           background:radial-gradient(circle at 40% 40%,#fff,#FFA8B8 62%,#B93655); }
+.pin.hitB{ --lit:rgba(41,212,255,.92); --lit2:rgba(0,190,255,.36);  --lit-dur:.75s;
+           background:radial-gradient(circle at 40% 40%,#fff,#A8E6FF 62%,#2986B9); }
 
 /* 노랑 (기본) */
-@keyframes hitY{
-  0%{   transform:scale(2.5); opacity:1;
-        background:radial-gradient(circle,#fff 30%,#FFE89A 70%);
-        box-shadow:0 0 5px 2px #fff, 0 0 14px 5px #FFD84D, 0 0 30px 10px rgba(255,200,40,.55); }
-  45%{  transform:scale(1.5);
-        box-shadow:0 0 3px 1px #fff, 0 0 9px 3px #FFD84D, 0 0 20px 6px rgba(255,200,40,.3); }
-  100%{ transform:scale(1); opacity:1;
-        background:radial-gradient(circle at 40% 40%,#fff,#E8EAEF 60%,#A3A7B5);
-        box-shadow:0 0 4px rgba(255,255,255,.35); }
+/* ★ B) GPU 최적화 — box-shadow 애니메이션 전면 제거.
+   기존: 5종 keyframes가 box-shadow 3겹(최대 46px 블러)을 매 프레임 재페인트
+   개선: 발광을 ::before 자식 레이어로 분리해 transform/opacity만 사용.
+         색은 --lit 변수로 주입하므로 애니메이션 정의는 2종을 공유한다. */
+
+/* 발광 레이어 — 어두운 핀 위에서 확 터지는 빛 */
+.pin::before{
+  content:''; position:absolute;
+  left:50%; top:50%; width:38px; height:38px; margin:-19px 0 0 -19px;
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,
+    rgba(255,255,255,.95) 0%,
+    var(--lit,  rgba(255,216,77,.88)) 24%,
+    var(--lit2, rgba(255,200,40,.34)) 50%,
+    transparent 72%);
+  opacity:0; transform:scale(.2) translateZ(0);
 }
-/* 주황 */
-@keyframes hitO{
-  0%{   transform:scale(2.7); opacity:1;
-        background:radial-gradient(circle,#fff 28%,#FFC48A 70%);
-        box-shadow:0 0 5px 2px #fff, 0 0 16px 6px #FF9E3D, 0 0 34px 12px rgba(255,130,30,.55); }
-  45%{  transform:scale(1.55);
-        box-shadow:0 0 3px 1px #fff, 0 0 10px 4px #FF9E3D, 0 0 22px 7px rgba(255,130,30,.3); }
-  100%{ transform:scale(1); opacity:1;
-        background:radial-gradient(circle at 40% 40%,#fff,#E8EAEF 60%,#A3A7B5);
-        box-shadow:0 0 4px rgba(255,255,255,.35); }
+@keyframes litPulse{
+  0%   { opacity:1;   transform:scale(1)   translateZ(0); }
+  45%  { opacity:.5;  transform:scale(.60) translateZ(0); }
+  100% { opacity:0;   transform:scale(.26) translateZ(0); }
 }
-/* 녹색 */
-@keyframes hitG{
-  0%{   transform:scale(2.9); opacity:1;
-        background:radial-gradient(circle,#fff 28%,#9CFFC4 70%);
-        box-shadow:0 0 5px 2px #fff, 0 0 17px 6px #35FF8A, 0 0 36px 13px rgba(20,255,120,.55); }
-  45%{  transform:scale(1.6);
-        box-shadow:0 0 3px 1px #fff, 0 0 11px 4px #35FF8A, 0 0 24px 8px rgba(20,255,120,.3); }
-  100%{ transform:scale(1); opacity:1;
-        background:radial-gradient(circle at 40% 40%,#fff,#E8EAEF 60%,#A3A7B5);
-        box-shadow:0 0 4px rgba(255,255,255,.35); }
-}
-/* 빨강 (희귀) */
-@keyframes hitR{
-  0%{   transform:scale(3.1); opacity:1;
-        background:radial-gradient(circle,#fff 26%,#FFA8B8 70%);
-        box-shadow:0 0 6px 2px #fff, 0 0 19px 7px #FF3D6E, 0 0 40px 14px rgba(255,20,90,.6); }
-  45%{  transform:scale(1.7);
-        box-shadow:0 0 4px 1px #fff, 0 0 12px 5px #FF3D6E, 0 0 26px 9px rgba(255,20,90,.32); }
-  100%{ transform:scale(1); opacity:1;
-        background:radial-gradient(circle at 40% 40%,#fff,#E8EAEF 60%,#A3A7B5);
-        box-shadow:0 0 4px rgba(255,255,255,.35); }
-}
-/* 청록/파랑 (최희귀) */
-@keyframes hitB{
-  0%{   transform:scale(3.4); opacity:1;
-        background:radial-gradient(circle,#fff 24%,#A8E6FF 70%);
-        box-shadow:0 0 7px 3px #fff, 0 0 22px 8px #29D4FF, 0 0 46px 16px rgba(0,190,255,.62); }
-  45%{  transform:scale(1.85);
-        box-shadow:0 0 5px 2px #fff, 0 0 14px 6px #29D4FF, 0 0 30px 11px rgba(0,190,255,.35); }
-  100%{ transform:scale(1); opacity:1;
-        background:radial-gradient(circle at 40% 40%,#fff,#E8EAEF 60%,#A3A7B5);
-        box-shadow:0 0 4px rgba(255,255,255,.35); }
+@keyframes litCore{
+  0%   { transform:scale(2.6)  translateZ(0); }
+  45%  { transform:scale(1.45) translateZ(0); }
+  100% { transform:scale(1)    translateZ(0); }
 }
 /* 충돌 링 웨이브 — 희귀 색상에서만 발생 */
 .ring{
@@ -1451,6 +1438,30 @@ function musicStart(day){
 function musicStop(){
   if(AU.timer){ clearInterval(AU.timer); AU.timer=null; }
   AU.section=null;
+
+  /* ★ 겹침 버그 수정
+     schedule()은 2마디(약 7.7초) 앞서 오실레이터를 예약해 둔다.
+     타이머만 끄면 예약된 소리는 그대로 울려 다음 구간 음악과 겹친다.
+     → musicBus를 짧게 페이드아웃하고 새 버스로 교체해
+       이미 예약된 노드를 통째로 끊어낸다. */
+  if(AU.ctx && AU.musicBus){
+    const old = AU.musicBus;
+    const t = AU.ctx.currentTime;
+    try{
+      old.gain.cancelScheduledValues(t);
+      old.gain.setValueAtTime(old.gain.value, t);
+      old.gain.linearRampToValueAtTime(0, t + 0.28);   // 자연스럽게 감쇠
+    }catch(e){}
+    /* 페이드가 끝나면 연결을 끊어 예약분을 완전히 폐기 */
+    setTimeout(()=>{ try{ old.disconnect(); }catch(e){} }, 400);
+
+    /* 새 버스로 교체 — 이후 예약은 여기로 들어간다 */
+    const bus = AU.ctx.createGain();
+    bus.gain.value = AU.musicOn ? 0.9 : 0;
+    bus.connect(AU.master);
+    if(AU.reverb) bus.connect(AU.reverb);
+    AU.musicBus = bus;
+  }
 }
 function schedule(){
   if(!AU.ctx || !AU.section || !AU.musicOn) return;
@@ -1787,7 +1798,7 @@ const S = {
    ※ 수정 시 규칙
      · 시스템 추가·교체 → minor 올리고 patch 0
      · 조정·버그수정    → patch +1                                  */
-const VERSION = '2.0.1';
+const VERSION = '2.2.0';
 
 const HAND_MAX = 5, CATCH_MAX = 5;
 
@@ -2076,16 +2087,19 @@ function buildPins(){
       if(x<-2||x>W+2) continue;
       const p=document.createElement('div');
       p.className='pin'; p.style.left=x+'px'; p.style.top=y+'px';
-      /* ★ 성능: 애니메이션을 ::after(발광)에만 적용.
-         filter는 제거하고 CSS 변수로 밝기 편차를 표현 → 레이어 폭증 방지 */
-      const dur   = (1.8 + Math.random()*3.4).toFixed(2);
-      const delay = (-Math.random()*6).toFixed(2);
-      const hi    = (0.55 + Math.random()*0.45).toFixed(2);   // 최대 밝기 편차
-      const lo    = (0.10 + Math.random()*0.18).toFixed(2);   // 최소 밝기 편차
-      p.style.setProperty('--tw-hi', hi);
-      p.style.setProperty('--tw-lo', lo);
-      p.style.setProperty('--tw-dur', dur+'s');
-      p.style.setProperty('--tw-delay', delay+'s');
+      /* ★ 호흡은 10%에만 — 152개 → 약 15개로 애니메이션 90% 감소.
+         나머지는 어둠 속 정적 핀으로 남아 연산을 쓰지 않는다. */
+      if(Math.random() < 0.10){
+        p.classList.add('breathe');
+        const dur   = (8 + Math.random()*4).toFixed(2);        // 8~12초, 느리게
+        const delay = (-Math.random()*12).toFixed(2);          // 위상 분산
+        const hi    = (0.36 + Math.random()*0.16).toFixed(2);  // 0.36~0.52
+        const lo    = (0.03 + Math.random()*0.05).toFixed(2);  // 0.03~0.08
+        p.style.setProperty('--tw-hi', hi);
+        p.style.setProperty('--tw-lo', lo);
+        p.style.setProperty('--tw-dur', dur+'s');
+        p.style.setProperty('--tw-delay', delay+'s');
+      }
       ui.pinScale.appendChild(p);
       const obj={el:p,x,y,r,c};
       pins.push(obj);
@@ -2264,6 +2278,38 @@ function lanternTangentV(){
 /* 핀 충돌 이펙트 — ★ 성능: 격자 인덱스로 O(1) 조회
    기존에는 매 충돌마다 152개 전체를 순회해 거리를 계산했다(구슬 1개당 1,976회).
    핀은 규칙적인 삼각격자이므로 (행, 열)을 직접 계산하면 즉시 찾을 수 있다. */
+/* ═══ C) 파티클 DOM 재사용 풀 ═══════════════════════════════
+   폭죽 1회에 파티클 수십 개를 만들고 버리므로 GC 압력이 크다.
+   클래스별로 유휴 노드를 모아 재활용한다. */
+const POOL = new Map();
+const POOL_MAX = 64;
+
+function pget(cls, parent){
+  const arr = POOL.get(cls);
+  let el = arr && arr.pop();
+  if(el){
+    el.getAnimations().forEach(a=>a.cancel());
+    el.style.cssText = '';
+    el.className = cls;
+  }else{
+    el = document.createElement('div');
+    el.className = cls;
+  }
+  (parent || APP).appendChild(el);
+  return el;
+}
+
+function pfree(el){
+  if(!el || !el.isConnected) return;
+  const cls = el.className;
+  let arr = POOL.get(cls);
+  if(!arr){ arr = []; POOL.set(cls, arr); }
+  el.remove();
+  if(arr.length < POOL_MAX) arr.push(el);
+}
+
+function pfreeAfter(el, ms){ setTimeout(()=>pfree(el), ms); }
+
 const PINMAP = new Map();          // "row,col" → pin 객체
 
 function pinKey(r,c){ return r*100+c; }
@@ -2295,24 +2341,22 @@ function hitPin(x, y, colW){
   else if(rr < 0.40){   cls='hitO'; litMs=510; }
   else {                cls='hitY'; litMs=460; }
 
-  /* ★ void offsetWidth(강제 레이아웃) 대신 애니메이션 재시작 API 사용 */
+  /* ★ B) 애니메이션 재시작을 getAnimations()로 처리 — 리플로우가 전혀 없다.
+     'lit'은 공용 애니메이션, cls는 색상 변수만 담당한다. */
   const el = best.el;
-  el.classList.remove('hitY','hitO','hitG','hitR','hitB');
-  el.style.animation = 'none';
-  el.offsetHeight;                       // 이 한 번은 불가피 (배치 처리됨)
-  el.style.animation = '';
-  el.classList.add(cls);
+  el.classList.remove('hitY','hitO','hitG','hitR','hitB','lit');
+  el.getAnimations().forEach(a=>a.cancel());
+  el.classList.add(cls,'lit');
   sfxPin(cls);
-  setTimeout(()=>best.el.classList.remove(cls), litMs);
+  setTimeout(()=>el.classList.remove(cls,'lit'), litMs);
 
   // 희귀 색상(빨강·청록)은 링 웨이브 추가
   if(ringCol){
-    const ring=document.createElement('div'); ring.className='ring';
+    const ring = pget('ring', ui.pinScale);
     ring.style.left=best.x+'px'; ring.style.top=best.y+'px';
     ring.style.borderColor=ringCol;
     ring.style.boxShadow=`0 0 12px ${ringCol}`;
-    ui.pinScale.appendChild(ring);
-    setTimeout(()=>ring.remove(), 660);
+    pfreeAfter(ring, 660);
   }
 }
 
@@ -2953,11 +2997,10 @@ function dvFlashPin(cls){
     p.el.classList.add(cls);
     setTimeout(()=>p.el.classList.remove(cls), litMs);
     if(ringCol){
-      const ring=document.createElement('div'); ring.className='ring';
+      const ring = pget('ring', ui.pinScale);
       ring.style.left=p.x+'px'; ring.style.top=p.y+'px';
       ring.style.borderColor=ringCol; ring.style.boxShadow=`0 0 12px ${ringCol}`;
-      ui.pinScale.appendChild(ring);
-      setTimeout(()=>ring.remove(), 660);
+      pfreeAfter(ring, 660);
     }
   }
   sfxPin(cls);
@@ -3002,8 +3045,7 @@ function tutForce(){
 ========================================================= */
 function popText(x,y,txt,cls){
   const e=document.createElement('div'); e.className='popTxt '+cls; e.textContent=txt;
-  e.style.left=x+'px'; e.style.top=y+'px';
-  APP.appendChild(e); setTimeout(()=>e.remove(),1100);
+  e.style.left=x+'px'; e.style.top=y+'px'; pfreeAfter(e, 1100);
 }
 /* =========================================================
    폭죽 — 7종 불꽃 · 곡선 상승 · 실제 불꽃놀이 형태
@@ -3052,11 +3094,9 @@ function fireworks(x, baseY, m){
   const wob  = 1.4 + Math.random()*1.2;
   const dur  = 500 + g.size*70;
 
-  const rk = document.createElement('div');
-  rk.className = 'fw fwRocket';
+  const rk = pget('fw fwRocket');
   rk.style.position='absolute';
   rk.style.left=x+'px'; rk.style.top=baseY+'px';
-  APP.appendChild(rk);
 
   const STEPS=16, frames=[];
   for(let i=0;i<=STEPS;i++){
@@ -3092,19 +3132,17 @@ function fireworks(x, baseY, m){
 
 function spawnTrail(x,y,pal){
   if(!canSpawn(1)) return;
-  const t=document.createElement('div');
-  t.className='fwTrail';
+  const t = pget('fwTrail');
   const h=pick(pal), sz=2+Math.random()*2;
   t.style.width=t.style.height=sz+'px';
   t.style.background=`hsl(${h},100%,${64+Math.random()*16}%)`;
   t.style.boxShadow=`0 0 ${5+sz}px hsl(${h},100%,56%), 0 0 ${9+sz*2}px hsl(${h},100%,44%)`;
   t.style.left=x+'px'; t.style.top=y+'px';
-  APP.appendChild(t);
   trackParticle(t, 720);
   t.animate([
     {transform:'translate(0,0) scale(1)',opacity:.95},
     {transform:`translate(${(Math.random()-.5)*14}px, ${11+Math.random()*18}px) scale(.15)`,opacity:0}
-  ],{duration:420+Math.random()*300,easing:'ease-out'}).onfinish=()=>t.remove();
+  ],{duration:420+Math.random()*300,easing:'ease-out'}).onfinish = ()=>pfree(t);
 }
 
 /* ── 폭발 ── */
@@ -3125,18 +3163,16 @@ function burst(x, y, g, pal, type){
                                size: g.size*0.8 });
   }
   // 중심 섬광
-  const fl=document.createElement('div');
-  fl.className='fwFlash';
+  const fl = pget('fwFlash');
   const fs=15+g.size*11;
   fl.style.left=x+'px'; fl.style.top=y+'px';
   fl.style.width=fl.style.height=fs+'px';
   fl.style.margin=`${-fs/2}px 0 0 ${-fs/2}px`;
-  APP.appendChild(fl);
   fl.animate([
     {transform:'scale(.2)',opacity:1,offset:0},
     {transform:'scale(1.5)',opacity:1,offset:.18},      // 순간 확 밝아짐
     {transform:'scale(2.3)',opacity:0,offset:1}
-  ],{duration:380,easing:'cubic-bezier(.08,.9,.2,1)'}).onfinish=()=>fl.remove();
+  ],{duration:380,easing:'cubic-bezier(.08,.9,.2,1)'}).onfinish = ()=>pfree(fl);
 
   // 충격 링 (큰 것만)
   if(g.size>=2) shockRing(x,y,g,pal);
@@ -3160,8 +3196,7 @@ function burst(x, y, g, pal, type){
 
 /* 충격 링 */
 function shockRing(x,y,g,pal){
-  const r=document.createElement('div');
-  r.className='fwRing';
+  const r = pget('fwRing');
   const h=pick(pal);
   r.style.borderColor=`hsla(${h},100%,76%,.9)`;
   r.style.boxShadow=`0 0 12px hsla(${h},100%,58%,.7)`;
@@ -3169,11 +3204,10 @@ function shockRing(x,y,g,pal){
   r.style.width=r.style.height=s0+'px';
   r.style.left=x+'px'; r.style.top=y+'px';
   r.style.margin=`${-s0/2}px 0 0 ${-s0/2}px`;
-  APP.appendChild(r);
   r.animate([
     {transform:'scale(.4)',opacity:.95},
     {transform:`scale(${5+g.size*3})`,opacity:0}
-  ],{duration:520,easing:'cubic-bezier(.15,.8,.2,1)'}).onfinish=()=>r.remove();
+  ],{duration:520,easing:'cubic-bezier(.15,.8,.2,1)'}).onfinish = ()=>pfree(r);
 }
 
 /* ① 모란(Peony) — 구형으로 퍼져 중력 낙하. 가장 기본 */
@@ -3216,14 +3250,12 @@ function fwWillow(x,y,g,pal){
   const cnt=Math.round(g.petals*0.7);
   for(let i=0;i<cnt;i++){
     const a=(i/cnt)*Math.PI*2+Math.random()*0.3;
-    const s=document.createElement('div');
-    s.className='fwSpark';
+    const s = pget('fwSpark');
     const h=pick(pal);
     s.style.width=s.style.height='3.4px';
     s.style.background=`radial-gradient(circle,#fff 0%,hsl(${h},100%,68%) 45%,hsl(${h},100%,50%) 100%)`;
     s.style.boxShadow=`0 0 10px hsl(${h},100%,58%), 0 0 20px hsl(${h},100%,46%)`;
     s.style.left=x+'px'; s.style.top=y+'px';
-    APP.appendChild(s);
     const ex=Math.cos(a)*34*g.size, ey=Math.sin(a)*20*g.size;
     s.animate([
       // ① 폭발
@@ -3242,7 +3274,7 @@ function fwWillow(x,y,g,pal){
        opacity:.88,offset:.68,easing:'cubic-bezier(.35,0,.7,.4)'},
       {transform:`translate(${(ex*1.14).toFixed(1)}px,${(ey+255).toFixed(1)}px) scale(.1)`,
        opacity:0,offset:1}
-    ],{duration:2400+Math.random()*700,fill:'forwards'}).onfinish=()=>s.remove();
+    ],{duration:2400+Math.random()*700,fill:'forwards'}).onfinish = ()=>pfree(s);
   }
 }
 
@@ -3255,15 +3287,13 @@ function fwPalm(x,y,g,pal){
     const len=42*g.size*(0.85+Math.random()*0.3);
     // 줄기: 여러 파편을 시간차로 뿜어 굵게
     for(let k=0;k<5;k++){
-      const s=document.createElement('div');
-      s.className='fwSpark';
+      const s = pget('fwSpark');
       const h=pick(pal);
       const sz=3.6-k*0.4;
       s.style.width=s.style.height=sz+'px';
       s.style.background=`radial-gradient(circle,#fff 0%,hsl(${h},100%,70%) 42%,hsl(${h},100%,52%) 100%)`;
       s.style.boxShadow=`0 0 ${8+sz*2}px hsl(${h},100%,60%), 0 0 ${14+sz*3}px hsl(${h},100%,46%)`;
       s.style.left=x+'px'; s.style.top=y+'px';
-      APP.appendChild(s);
       const f=(k+1)/5;
       const ex=Math.cos(a)*len*f, ey=Math.sin(a)*len*f;
       s.animate([
@@ -3283,7 +3313,7 @@ function fwPalm(x,y,g,pal){
          opacity:.82,offset:.72,easing:'cubic-bezier(.32,0,.7,.38)'},
         {transform:`translate(${(ex*1.1).toFixed(1)}px,${(ey+150*g.size*0.6).toFixed(1)}px) scale(.14)`,
          opacity:0,offset:1}
-      ],{duration:1900+k*110+Math.random()*380,fill:'forwards'}).onfinish=()=>s.remove();
+      ],{duration:1900+k*110+Math.random()*380,fill:'forwards'}).onfinish = ()=>pfree(s);
     }
   }
 }
@@ -3298,14 +3328,12 @@ function fwRing(x,y,g,pal){
     const a=(i/cnt)*Math.PI*2;
     const ex=Math.cos(a+rot)*R;
     const ey=Math.sin(a+rot)*R*tilt;
-    const s=document.createElement('div');
-    s.className='fwSpark';
+    const s = pget('fwSpark');
     const h=pick(pal);
     s.style.width=s.style.height='2.8px';
     s.style.background=`radial-gradient(circle,#fff 0%,hsl(${h},100%,72%) 40%,hsl(${h},100%,54%) 100%)`;
     s.style.boxShadow=`0 0 9px hsl(${h},100%,62%), 0 0 18px hsl(${h},100%,48%)`;
     s.style.left=x+'px'; s.style.top=y+'px';
-    APP.appendChild(s);
     s.animate([
       // ① 폭발 — 링 형태로 퍼짐
       {transform:'translate(0,0) scale(1.4)',opacity:1,offset:0,
@@ -3323,7 +3351,7 @@ function fwRing(x,y,g,pal){
        opacity:.78,offset:.78,easing:'cubic-bezier(.3,0,.7,.4)'},
       {transform:`translate(${(ex*1.1).toFixed(1)}px,${(ey+108).toFixed(1)}px) scale(.14)`,
        opacity:0,offset:1}
-    ],{duration:1600+Math.random()*420,fill:'forwards'}).onfinish=()=>s.remove();
+    ],{duration:1600+Math.random()*420,fill:'forwards'}).onfinish = ()=>pfree(s);
   }
 }
 
@@ -3334,14 +3362,12 @@ function fwCrossette(x,y,g,pal){
   for(let i=0;i<cnt;i++){
     const a=(i/cnt)*Math.PI*2+rot;
     const d=30*g.size;
-    const s=document.createElement('div');
-    s.className='fwSpark';
+    const s = pget('fwSpark');
     const h=pick(pal);
     s.style.width=s.style.height='3.6px';
     s.style.background=`radial-gradient(circle,#fff 0%,hsl(${h},100%,72%) 40%,hsl(${h},100%,54%) 100%)`;
     s.style.boxShadow=`0 0 11px hsl(${h},100%,62%), 0 0 20px hsl(${h},100%,48%)`;
     s.style.left=x+'px'; s.style.top=y+'px';
-    APP.appendChild(s);
     const ex=Math.cos(a)*d, ey=Math.sin(a)*d;
     s.animate([
       {transform:'translate(0,0) scale(1.45)',opacity:1,offset:0,
@@ -3385,15 +3411,13 @@ function fwFountain(x,y,g,pal){
    ④ 중력 낙하(0.45~1.0) 아래로 떨어지며 소멸
 */
 function spawnSpark(x,y,ang,dist,g,pal,o){
-  const s=document.createElement('div');
-  s.className='fwSpark';
+  const s = pget('fwSpark');
   const h=pick(pal);
   const sz=o.sz*(0.8+Math.random()*0.4);
   s.style.width=s.style.height=sz.toFixed(1)+'px';
   s.style.background=`radial-gradient(circle,#fff 0%,hsl(${h},100%,74%) 38%,hsl(${h},100%,52%) 100%)`;
   s.style.boxShadow=`0 0 ${5+sz*2}px hsl(${h},100%,62%), 0 0 ${11+sz*3}px hsl(${h},100%,48%)`;
   s.style.left=x+'px'; s.style.top=y+'px';
-  APP.appendChild(s);
   trackParticle(s, o.dur*1.4);
 
   const ex=Math.cos(ang)*dist, ey=Math.sin(ang)*dist;
@@ -3419,18 +3443,16 @@ function spawnSpark(x,y,ang,dist,g,pal,o){
       opacity:.82, offset:.72, easing:'cubic-bezier(.3,0,.7,.35)' },
     { transform:`translate(${(ex*1.05).toFixed(1)}px,${(ey+gv*1.55).toFixed(1)}px) scale(.12)`,
       opacity:0, offset:1 }
-  ],{ duration:life, fill:'forwards' }).onfinish=()=>s.remove();
+  ],{ duration:life, fill:'forwards' }).onfinish = ()=>pfree(s);
 }
 
 /* 반짝이며 낙하하는 잔광 */
 function spawnGlitter(x,y,g,pal){
-  const el=document.createElement('div');
-  el.className='fwGlitter';
+  const el = pget('fwGlitter');
   const h=pick(pal);
   el.style.background=`hsl(${h},100%,84%)`;
   el.style.boxShadow=`0 0 7px hsl(${h},100%,68%), 0 0 13px hsl(${h},100%,52%)`;
   el.style.left=x+'px'; el.style.top=y+'px';
-  APP.appendChild(el);
   trackParticle(el, 2400);
   const dx=(Math.random()-.5)*80*g.size, dy=52+Math.random()*110;
   el.animate([
@@ -3450,32 +3472,30 @@ function spawnGlitter(x,y,g,pal){
     {transform:`translate(${(dx*.93).toFixed(1)}px,${(dy*.86).toFixed(1)}px) scale(1.1)`,
      opacity:.85,offset:.86,easing:'ease-out'},
     {transform:`translate(${dx.toFixed(1)}px,${dy.toFixed(1)}px) scale(.12)`,opacity:0,offset:1}
-  ],{duration:1600+Math.random()*800,delay:Math.random()*300,fill:'forwards'}).onfinish=()=>el.remove();
+  ],{duration:1600+Math.random()*800,delay:Math.random()*300,fill:'forwards'}).onfinish = ()=>pfree(el);
 }
 
 /* 빛 구름이 구슬 카운터로 회수 */
 function reclaim(x,y){
-  const c=document.createElement('div'); c.className='smokeCloud';
+  const c = pget('smokeCloud');
   c.style.position='absolute'; c.style.left=x+'px'; c.style.top=y+'px';
-  APP.appendChild(c);
   const tr=cRect(ui.beadVal);      // ★ 캔버스 좌표계
   const midX=(tr.left+8-x)*0.5+(Math.random()-.5)*40;
   c.animate([
     {transform:'translate(0,0) scale(1.5)',opacity:.9,offset:0},
     {transform:`translate(${midX}px,${(tr.top+8-y)*0.45}px) scale(1)`,opacity:.6,offset:.55},
     {transform:`translate(${tr.left+8-x}px,${tr.top+8-y}px) scale(.18)`,opacity:0,offset:1}
-  ],{duration:900,easing:'cubic-bezier(.35,.1,.3,1)'}).onfinish=()=>c.remove();
+  ],{duration:900,easing:'cubic-bezier(.35,.1,.3,1)'}).onfinish = ()=>pfree(c);
 }
 
 function extinguish(x,baseY){
   for(let i=0;i<8;i++){
-    const a=document.createElement('div'); a.className='ash';
+    const a = pget('ash');
     a.style.left=x+'px'; a.style.top=baseY+'px'; a.style.position='absolute';
-    APP.appendChild(a);
     const dx=(Math.random()-.5)*30;
     a.animate([{transform:'translate(0,0)',opacity:.7},
       {transform:`translate(${dx}px,-${15+Math.random()*25}px)`,opacity:0}],
-      {duration:900+Math.random()*500,easing:'ease-out'}).onfinish=()=>a.remove();
+      {duration:900+Math.random()*500,easing:'ease-out'}).onfinish = ()=>pfree(a);
   }
 }
 
