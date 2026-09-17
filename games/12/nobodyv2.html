@@ -10,14 +10,24 @@
   *{box-sizing:border-box;margin:0;padding:0;-webkit-user-select:none;user-select:none;
     -webkit-tap-highlight-color:transparent}
   html,body{height:100%;overflow:hidden}
+  /* ══ 레터박스 — 화면 비율이 1170:2080 과 다르면 남는 곳은 검게 둔다 ══ */
   body{background:#000;color:#d8d8d8;
        font-family:"SFMono-Regular","Menlo","Consolas",monospace;
-       display:flex;justify-content:center;align-items:stretch}
+       display:flex;justify-content:center;align-items:center;
+       width:100vw;height:100dvh;
+       padding:env(safe-area-inset-top) env(safe-area-inset-right)
+               env(safe-area-inset-bottom) env(safe-area-inset-left)}
 
-  .cabinet{width:100%;max-width:560px;height:100dvh;
+  /* ══ 화면 — 1170 × 2080 비율 고정 ══
+     세로가 남으면 위아래 레터박스, 가로가 남으면 좌우 레터박스 */
+  .cabinet{
+    --ar: 1170 / 2080;
+    aspect-ratio: var(--ar);
+    width:  min(100%, calc(100dvh * 1170 / 2080));
+    height: min(100%, calc(100vw  * 2080 / 1170));
+    max-width:none; max-height:100%;
     border:2px solid #cfcfcf;background:#000;position:relative;overflow:hidden;
-    display:flex;flex-direction:column;
-    margin:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+    display:flex;flex-direction:column;flex:0 0 auto}
 
   .cabinet::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:60;
     background:linear-gradient(rgba(0,0,0,0) 50%,rgba(0,0,0,.38) 50%);
