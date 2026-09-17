@@ -185,9 +185,45 @@
       display: none;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      /* 파일럿 그림을 위쪽에 두고 글씨는 아래로 배치 */
+      justify-content: flex-start;
+      padding-top: 8%;
       z-index: 50;
       backdrop-filter: blur(4px);
+    }
+
+    /* 패배한 파일럿 (코피 + 눈물) */
+    .defeat-pilot {
+      width: clamp(150px, 34vw, 230px);
+      margin-bottom: 4%;
+      filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.7));
+      animation: pilotSob 2.4s ease-in-out infinite;
+    }
+    .defeat-pilot svg { width: 100%; height: auto; display: block; }
+    /* 흐느끼며 어깨가 떨리는 느낌 */
+    @keyframes pilotSob {
+      0%, 100% { transform: translateY(0) rotate(-1deg); }
+      50%      { transform: translateY(5px) rotate(1deg); }
+    }
+    /* 눈물이 흘러내리며 사라짐 (양쪽 각 3방울, 시차를 두고 반복) */
+    .tear { animation: tearFall 1.8s ease-in infinite; }
+    .tear-a { animation-delay: 0s;    }
+    .tear-b { animation-delay: 0.3s;  }
+    .tear-c { animation-delay: 0.6s;  }
+    .tear-d { animation-delay: 0.15s; }
+    .tear-e { animation-delay: 0.45s; }
+    .tear-f { animation-delay: 0.75s; }
+    @keyframes tearFall {
+      0%   { opacity: 0; transform: translateY(-4px); }
+      25%  { opacity: 0.95; }
+      100% { opacity: 0; transform: translateY(26px); }
+    }
+    /* 코피가 뚝뚝 떨어짐 */
+    .blood-drop { animation: bloodDrip 2.2s ease-in infinite; }
+    @keyframes bloodDrip {
+      0%, 40% { opacity: 0; transform: translateY(-6px) scale(0.6); }
+      60%     { opacity: 1; transform: translateY(0) scale(1); }
+      100%    { opacity: 0; transform: translateY(22px) scale(0.85); }
     }
     .overlay-title {
       font-family: "Press Start 2P", monospace;
@@ -198,20 +234,9 @@
       padding: 0 16px;
       animation: pulseTitle 0.8s infinite alternate;
     }
-    .continue-text {
-      color: #38bdf8;
-      text-shadow: 4px 4px 0 #0369a1, 0 0 20px rgba(56, 189, 248, 0.8);
-    }
     .gameover-text {
       color: #ef4444;
       text-shadow: 4px 4px 0 #991b1b, 0 0 25px rgba(239, 68, 68, 0.8);
-    }
-    .countdown-number {
-      font-family: "Press Start 2P", monospace;
-      font-size: clamp(48px, 14vw, 80px);
-      color: #facc15;
-      text-shadow: 6px 6px 0 #854d0e, 0 0 25px rgba(250, 204, 21, 0.9);
-      margin-bottom: 28px;
     }
     .final-score-box {
       font-family: "Press Start 2P", monospace;
@@ -231,22 +256,6 @@
       color: #facc15;
       text-shadow: 2px 2px 0 #854d0e, 0 0 15px rgba(250, 204, 21, 0.7);
       letter-spacing: 2px;
-    }
-    .continue-btn {
-      font-family: "Press Start 2P", monospace;
-      font-size: 14px;
-      background: #facc15;
-      color: #1e1b4b;
-      padding: 14px 28px;
-      border: 4px solid #fef08a;
-      border-radius: 8px;
-      cursor: pointer;
-      box-shadow: 0 6px 0 #854d0e;
-      transition: transform 0.1s;
-    }
-    .continue-btn:active {
-      transform: translateY(4px);
-      box-shadow: 0 2px 0 #854d0e;
     }
     .back-title-btn {
       font-family: "Press Start 2P", monospace;
@@ -525,16 +534,72 @@
     </div>
 
 
-    <!-- 오락실 CONTINUE & GAMEOVER 오버레이 -->
+    <!-- GAME OVER 오버레이 -->
     <div id="retro-overlay">
-      <div id="overlay-title" class="overlay-title continue-text">CONTINUE?</div>
-      <div id="countdown-display" class="countdown-number">10</div>
+      <!-- 패배한 파일럿 (코피 흘리며 우는 얼굴) -->
+      <div id="defeatPilot" class="defeat-pilot">
+        <svg viewBox="0 0 200 210" xmlns="http://www.w3.org/2000/svg">
+          <!-- 어깨 / 목 -->
+          <rect x="52" y="168" width="96" height="42" fill="#1e3a8a"/>
+          <rect x="82" y="152" width="36" height="22" fill="#b8785f"/>
+
+          <!-- 헬멧 (금이 간 붉은 헬멧) -->
+          <path d="M42 96 A58 58 0 0 1 158 96 L158 118 L42 118 Z" fill="#b91c1c"/>
+          <rect x="42" y="104" width="116" height="9" fill="#ca8a04"/>
+          <rect x="96" y="42" width="8" height="60" fill="#e2e8f0"/>
+          <!-- 헬멧 균열 -->
+          <path d="M62 62 L74 78 L66 84 L80 98" stroke="#450a0a" stroke-width="3" fill="none"/>
+          <path d="M140 58 L130 74 L138 80" stroke="#450a0a" stroke-width="3" fill="none"/>
+
+          <!-- 얼굴 -->
+          <ellipse cx="100" cy="140" rx="46" ry="42" fill="#dba384"/>
+
+          <!-- 멍자국 (왼쪽 눈가에 크게, 오른쪽 볼에 작게) -->
+          <ellipse cx="72" cy="137" rx="19" ry="15" fill="#7c3aed" opacity="0.45"/>
+          <ellipse cx="70" cy="135" rx="12" ry="9" fill="#4c1d95" opacity="0.4"/>
+          <ellipse cx="136" cy="156" rx="11" ry="8" fill="#7c3aed" opacity="0.35"/>
+          <!-- 이마 혹 -->
+          <ellipse cx="118" cy="122" rx="9" ry="7" fill="#9333ea" opacity="0.3"/>
+
+          <!-- 축 처진 눈썹 (슬픔) -->
+          <path d="M58 118 Q72 110 86 121" stroke="#1f2937" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <path d="M142 118 Q128 110 114 121" stroke="#1f2937" stroke-width="6" fill="none" stroke-linecap="round"/>
+
+          <!-- 꽉 감은 눈: 위로 볼록한 아치 (∩ 모양 = 우는 눈)
+               아래로 볼록(∪)하면 웃는 눈이 되므로 제어점 y를 양끝보다 '작게' 둔다 -->
+          <path d="M62 141 Q74 128 86 141" stroke="#1f2937" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path d="M114 141 Q126 128 138 141" stroke="#1f2937" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <!-- 눈가 주름 (찡그림) -->
+          <path d="M56 130 L63 134" stroke="#1f2937" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M144 130 L137 134" stroke="#1f2937" stroke-width="2.5" stroke-linecap="round"/>
+
+          <!-- 눈물: 눈꼬리에서 뺨을 타고 흘러내림 (양쪽 각 3방울) -->
+          <ellipse class="tear tear-a" cx="64" cy="150" rx="5" ry="9" fill="#7dd3fc"/>
+          <ellipse class="tear tear-b" cx="62" cy="164" rx="4" ry="8" fill="#7dd3fc"/>
+          <ellipse class="tear tear-c" cx="60" cy="178" rx="4" ry="7" fill="#7dd3fc"/>
+          <ellipse class="tear tear-d" cx="136" cy="150" rx="5" ry="9" fill="#7dd3fc"/>
+          <ellipse class="tear tear-e" cx="138" cy="164" rx="4" ry="8" fill="#7dd3fc"/>
+          <ellipse class="tear tear-f" cx="140" cy="178" rx="4" ry="7" fill="#7dd3fc"/>
+
+          <!-- 코피 (콧구멍에서 턱까지) -->
+          <path d="M96 152 L96 176 Q96 184 100 186 Q104 184 104 176 L104 152 Z" fill="#dc2626"/>
+          <ellipse class="blood-drop" cx="100" cy="192" rx="6" ry="8" fill="#b91c1c"/>
+
+          <!-- 벌어진 입 (흐느낌) -->
+          <ellipse cx="100" cy="166" rx="13" ry="9" fill="#7f1d1d"/>
+
+          <!-- 볼 상처 -->
+          <path d="M56 156 L68 162" stroke="#991b1b" stroke-width="3" stroke-linecap="round"/>
+          <path d="M144 150 L134 158" stroke="#991b1b" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <div id="overlay-title" class="overlay-title gameover-text">GAME OVER</div>
       <!-- 게임오버 시 노출되는 최종 점수 박스 -->
       <div id="finalScoreBox" class="final-score-box">
         <span class="final-score-label">FINAL SCORE</span>
         <span id="finalScoreVal" class="final-score-val">000000000</span>
       </div>
-      <button id="continueBtn" class="continue-btn">PRESS START</button>
       <button id="backTitleBtn" class="back-title-btn">GO TITLE</button>
       <div id="continue-info" class="continue-info">GO TITLE TO RESTART</div>
     </div>
@@ -1393,11 +1458,6 @@
 
     // 윈도우 전역 터치 조작 (게임 캔버스뿐만 아니라 하단 여백 화면 어디든 스와이프해도 기체 조작 & 2손가락 폭탄)
     window.addEventListener('touchstart', (e) => {
-      // 컨티뉴 카운트다운 중이면 화면 아무 곳 터치 시 즉시 부활 처리
-      if (isContinueState && credits > 0) {
-        handleContinueAction();
-        return;
-      }
       // 손가락 2개 이상 터치 시 폭탄 즉시 발동
       if (e.touches.length >= 2) {
         triggerBomb();
@@ -1624,17 +1684,14 @@
     // 슈팅 게임 코어 시스템 (점수, 잔기, 폭탄, 탄환, 피격, 폭발, 컨티뉴)
     // -------------------------------------------------------------
     let score = 0; // 기본값 0점 (5자리 포맷: 00000)
-    let lives = 2; // 잔기 2개 (2번 맞을 수 있고, 잔기 0 상태에서 1번 더 맞으면 컨티뉴)
+    let lives = 2; // 잔기 2개 (2번 맞을 수 있고, 잔기 0 상태에서 1번 더 맞으면 게임오버)
     let bombs = 2; // 폭탄 2개
-    let credits = 2; // 컨티뉴 기회 2번
     let isGameOver = false;
-    let isContinueState = false;
-    let continueTimer = 10;
-    let continueInterval = null;
+    let isContinueState = false; // 연출 중 입력/피격 차단용 플래그로만 사용
 
     let playerInvulnerable = 0; // 피격 후 무적 시간 (프레임)
     let autoShootTimer = 0; // 플레이어 자동 발사 타이머
-    let rapidBoost = 0;     // R 아이템 획득 시 총알 속도 증가치 (5%씩 최대 60%)
+    let rapidBoost = 0;     // R 아이템 획득 시 연사력 증가치 (5%씩 최대 60%, 발사 간격 단축)
     let items = [];         // R 아이템 목록
     let itemSpawnTimer = 0; // R 아이템 스폰 타이머
 
@@ -1657,13 +1714,129 @@
     let combineTimer = 0;
     let rewindMessage = "";
     let rewindMsgTimer = 0;
+    const REWIND_MSG_DURATION = 150; // 열혈 대사 표시 지속 프레임 (2.5초)
+
+    // ★ 로봇 모드 버티기(1회 생존) 시스템
+    let robotGuardUsed = false;   // 합체 로봇의 1회 버티기 소모 여부
+    let isPilotCutin = false;     // 파일럿 컷인 연출 중 (게임 정지)
+    let pilotCutinTimer = 0;
+    const PILOT_CUTIN_DURATION = 200; // 약 3.3초 (충분히 눈에 들어오도록)
+
+    // 찡그리지만 열혈인 파일럿 얼굴 (캔버스 도형으로 직접 그림)
+    function drawPilotFace(cx, cy, scale) {
+      ctx.save();
+      ctx.globalAlpha = 1; // ★ 외부에서 흘러온 투명도를 반드시 초기화 (얼굴이 묻히는 것 방지)
+      ctx.translate(cx, cy);
+      ctx.scale(scale, scale);
+
+      // 헬멧 뒤 후광
+      const glow = ctx.createRadialGradient(0, 0, 20, 0, 0, 150);
+      glow.addColorStop(0, 'rgba(250, 204, 21, 0.5)');
+      glow.addColorStop(1, 'rgba(250, 204, 21, 0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(-160, -160, 320, 320);
+
+      // 목/어깨
+      ctx.fillStyle = '#1e3a8a';
+      ctx.fillRect(-52, 58, 104, 46);
+      ctx.fillStyle = '#c2846a';
+      ctx.fillRect(-20, 44, 40, 24);
+
+      // 헬멧 (붉은 파일럿 헬멧)
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.arc(0, -6, 62, Math.PI, 0);
+      ctx.lineTo(62, 26);
+      ctx.lineTo(-62, 26);
+      ctx.closePath();
+      ctx.fill();
+
+      // 헬멧 중앙 라인 + 노란 밴드
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(-62, -14, 124, 9);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(-4, -68, 8, 54);
+
+      // 얼굴 (헬멧 안쪽 피부)
+      ctx.fillStyle = '#e8b48f';
+      ctx.beginPath();
+      ctx.ellipse(0, 20, 44, 40, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 찡그린 눈썹 (강하게 아래로 꺾임)
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-34, 2); ctx.lineTo(-10, 12);
+      ctx.moveTo(34, 2);  ctx.lineTo(10, 12);
+      ctx.stroke();
+
+      // 이를 악문 눈 (한쪽은 찡그려 감고, 한쪽은 불타는 눈)
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(-32, 22); ctx.lineTo(-12, 22); // 감은 눈
+      ctx.stroke();
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.ellipse(22, 22, 13, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(23, 22, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      // 눈동자 하이라이트 (열혈)
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(25, 20, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 이를 악문 입 (그리드 형태로 악문 치아)
+      ctx.fillStyle = '#7f1d1d';
+      ctx.beginPath();
+      ctx.moveTo(-24, 42);
+      ctx.lineTo(24, 42);
+      ctx.lineTo(18, 56);
+      ctx.lineTo(-18, 56);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(-22, 42, 44, 6);
+      ctx.strokeStyle = '#7f1d1d';
+      ctx.lineWidth = 1.5;
+      for (let i = -18; i <= 18; i += 9) {
+        ctx.beginPath();
+        ctx.moveTo(i, 42); ctx.lineTo(i, 48);
+        ctx.stroke();
+      }
+
+      // 볼 상처 + 땀방울
+      ctx.strokeStyle = '#b91c1c';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-40, 34); ctx.lineTo(-30, 40);
+      ctx.stroke();
+
+      ctx.fillStyle = '#7dd3fc';
+      ctx.beginPath();
+      ctx.ellipse(46, 8, 5, 9, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // 리와인드 발동 최소 히스토리 (20프레임 = 약 0.33초)
+    // 이보다 짧으면 되감기 연출이 성립하지 않으므로 발동하지 않는다
+    const MIN_REWIND_HISTORY = 20;
 
     function triggerRewind() {
-      if (historyData.length < 60) return false;
+      if (historyData.length < MIN_REWIND_HISTORY) return false;
       isRewinding = true;
       rewindProgress = historyData.length - 1;
       rewindMessage = "아차 피격당했다. 타임! 리와인드!";
-      rewindMsgTimer = 180;
+      rewindMsgTimer = REWIND_MSG_DURATION;
       return true;
     }
 
@@ -1710,10 +1883,8 @@
 
     const retroOverlay = document.getElementById('retro-overlay');
     const overlayTitle = document.getElementById('overlay-title');
-    const countdownDisplay = document.getElementById('countdown-display');
     const finalScoreBox = document.getElementById('finalScoreBox');
     const finalScoreVal = document.getElementById('finalScoreVal');
-    const continueBtn = document.getElementById('continueBtn');
     const continueInfo = document.getElementById('continue-info');
     const backTitleBtn = document.getElementById('backTitleBtn');
 
@@ -1826,7 +1997,6 @@
 
     // 타이틀 화면으로 완전히 돌아가기 (RESET)
     function returnToTitleScreen() {
-      if (continueInterval) clearInterval(continueInterval);
       isContinueState = false;
       isGameOver = false;
       isVictoryState = false;
@@ -1841,7 +2011,6 @@
       score = 0;
       lives = 2;
       bombs = 2;
-      credits = 2;
       rapidBoost = 0;
       updateScoreDisplay();
       updateLivesDisplay();
@@ -1863,10 +2032,12 @@
       isRewinding = false;
       rewindProgress = 0;
       robotMode = false;
+      robotGuardUsed = false;
+      isPilotCutin = false;
+      pilotCutinTimer = 0;
       deathBlowCount = 0;
       isCombining = false;
       combineTimer = 0;
-      difficultyBonus = 0;
       rewindMsgTimer = 0;
 
       playerX = WIDTH / 2;
@@ -2089,13 +2260,14 @@
       if (enemies.length > 0) {
         playExplosionSound(true); // 폭탄 사용 시 묵직한 대폭발음 출력
       }
-      enemies = [];
+      // ★ 배열 재대입 금지: 순회 중인 for 루프가 옛 배열을 참조해 예외가 난다
+      enemies.length = 0;
 
       // 2. 모든 적 총알 소멸 및 보너스 파편화
       enemyBullets.forEach(b => {
         createExplosion(b.x, b.y, 14, '#38bdf8', 6);
       });
-      enemyBullets = [];
+      enemyBullets.length = 0;
 
       updateScoreDisplay();
 
@@ -2144,11 +2316,30 @@
 
     // 플레이어 피격 처리
     function hitPlayer() {
-      // ★ 리와인드/합체 연출 중에는 피격 무효 (중복 발동으로 상태 깨지는 것 방지)
-      if (playerInvulnerable > 0 || isGameOver || isContinueState || isRewinding || isCombining) return;
+      // ★ 리와인드/합체/컷인/승리 연출 중에는 피격 무효 (중복 발동으로 상태 깨지는 것 방지)
+      if (playerInvulnerable > 0 || isGameOver || isContinueState || isRewinding || isCombining || isPilotCutin || isVictoryState) return;
 
       // 1. 피격 즉시 2초 무적 선적용 (1프레임 다중 피격 원천 차단)
       playerInvulnerable = 120;
+
+      // ★ 로봇 모드 버티기: 잔기와 무관하게 최초 1회는 파일럿의 근성으로 버틴다
+      if (robotMode && !robotGuardUsed) {
+        robotGuardUsed = true;
+        isPilotCutin = true;
+        pilotCutinTimer = 0;
+        playerInvulnerable = PILOT_CUTIN_DURATION + 120; // 컷인 시간 + 복귀 후 2초 무적
+        // ★ 배열을 '교체'하면 호출부의 for 루프가 옛 배열 인덱스를 참조해
+        //   undefined.x 예외가 나고, 그 예외 복구 로직이 컷인을 취소해버린다.
+        //   반드시 length=0 으로 '비우기'만 한다.
+        enemyBullets.length = 0;
+        try {
+          createExplosion(playerX, playerY, 90, '#facc15', 45);
+          playExplosionSound(true);
+        } catch (err) {
+          console.warn('버티기 이펙트 오류 무시:', err);
+        }
+        return;
+      }
 
       // 2. 피격 이펙트 및 사운드 방어 실행
       try {
@@ -2159,20 +2350,39 @@
       }
 
       // 3. 잔기(Life) 차감 로직
-      // lives === 2 (첫 피격) -> lives 1 (생존, 아이콘 1개 꺼짐)
-      // lives === 1 (두번째 피격) -> lives 0 (생존, 마지막 기체, 아이콘 모두 꺼짐)
-      // lives === 0 (세번째 피격) -> 비로소 사망 및 컨티뉴/게임오버 진입
+      // ★ C안: 리와인드 성공 여부를 '먼저' 판정한 뒤 잔기를 소모한다.
+      //   (기존에는 잔기를 먼저 깎고 리와인드를 시도해서, 히스토리가 부족하면
+      //    잔기만 조용히 사라지고 리와인드가 안 되는 버그가 있었음)
       if (lives > 0) {
-        lives--;
-        updateLivesDisplay();
-
-        // ★ 타임 리와인드 발동: 잔기가 남아있고 아직 로봇 합체 전이라면 3초 전으로 되감기
-        if (!robotMode && triggerRewind()) {
+        // 로봇 합체 전이라면 타임 리와인드를 시도
+        if (!robotMode) {
+          if (triggerRewind()) {
+            // 되감기 성공 → 잔기 1 소모하고 연출로 진입
+            lives--;
+            updateLivesDisplay();
+            return;
+          }
+          // 되감기 실패(히스토리 0.33초 미만) → 잔기를 소모하지 않고 무적만 부여
+          // 게임 시작 직후나 리와인드 직후의 짧은 구간을 보호한다
+          // ★ 배열 재대입 금지 (호출부 for 루프가 깨져 예외 발생) → 제자리에서 제거
+          for (let bi = enemyBullets.length - 1; bi >= 0; bi--) {
+            const b = enemyBullets[bi];
+            if (b && Math.hypot(b.x - playerX, b.y - playerY) <= 220) enemyBullets.splice(bi, 1);
+          }
+          playerInvulnerable = 150;
           return;
         }
 
+        // 로봇 모드(버티기 소진 후)는 기존대로 잔기를 소모
+        lives--;
+        updateLivesDisplay();
+
         // 적 총알 화면 주변 제거 (회복 시간 제공)
-        enemyBullets = enemyBullets.filter(b => Math.hypot(b.x - playerX, b.y - playerY) > 200);
+        // ★ 배열 재대입 금지 (호출부 for 루프가 깨져 예외 발생) → 제자리에서 제거
+        for (let bi = enemyBullets.length - 1; bi >= 0; bi--) {
+          const b = enemyBullets[bi];
+          if (b && Math.hypot(b.x - playerX, b.y - playerY) <= 200) enemyBullets.splice(bi, 1);
+        }
       } else {
         // 잔기가 0인 상태에서 추가 피격 -> 기체 대폭발 후 컨티뉴/게임오버 진입
         try {
@@ -2193,45 +2403,30 @@
     function triggerGameOver() {
       isContinueState = false;
       isGameOver = true;
-      if (continueInterval) clearInterval(continueInterval);
 
       // ★ 진행 중인 리와인드/합체 연출 강제 종료 (게임오버 화면이 가려지는 것 방지)
       isRewinding = false;
       isCombining = false;
+      isPilotCutin = false;
       historyData = [];
       clones = [];
 
       overlayTitle.className = 'overlay-title gameover-text';
       overlayTitle.innerText = 'GAME OVER';
-      countdownDisplay.style.display = 'none'; // 0 미표시
 
       // 최종 점수 9자리 포맷으로 표시
       finalScoreVal.innerText = score.toString().padStart(9, '0');
       finalScoreBox.style.display = 'flex';
 
-      continueBtn.style.display = 'none';
       backTitleBtn.style.display = 'inline-block'; // 타이틀 복귀 버튼 노출
       continueInfo.innerText = 'GO TITLE TO RESTART';
       retroOverlay.style.display = 'flex';
     }
 
-    // 컨티뉴 시스템 제거 — 호출부 호환을 위해 빈 동작만 유지
-    function handleContinueAction() {
-      return;
-    }
-
-    continueBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleContinueAction();
-    });
+    // 게임오버 오버레이의 'GO TITLE' 버튼만 사용 (컨티뉴 시스템은 제거됨)
     retroOverlay.addEventListener('click', (e) => {
       e.stopPropagation();
-      handleContinueAction();
     });
-    retroOverlay.addEventListener('touchstart', (e) => {
-      e.stopPropagation();
-      handleContinueAction();
-    }, { passive: false });
 
     // -------------------------------------------------------------
     // 적 기체 타입 시스템 (기존 3종 + 신규 3종: 그룹편대, 소형/중형/대형 자코)
@@ -2268,11 +2463,10 @@
     // 미적용 대상: 체력(hp), 플레이어 스탯 — 항상 고정
     // -------------------------------------------------------------
     let difficultyMultiplier = 0.5;
-    let difficultyBonus = 0; // 리와인드 성공(+0.2) / 합체(+0.6) 페널티 누적치
     function updateDifficulty() {
       const cappedScore = Math.min(score, 500000);
       const level = Math.floor(cappedScore / 10000); // 0 ~ 50
-      difficultyMultiplier = (0.5 + level * 0.10) * (1 + difficultyBonus);
+      difficultyMultiplier = 0.5 + level * 0.10; // 0.5 ~ 5.5
     }
 
     class Enemy {
@@ -2808,29 +3002,71 @@
     }
 
     // 메인 루프
-    let lastTime = performance.now();
     let frameCount = 0;
     let fpsTimer = 0;
 
-    // ★ 안전 래퍼: 루프 내부에서 예외가 나도 다음 프레임 예약이 끊기지 않도록 보장
+    // -------------------------------------------------------------
+    // ★ 고정 타임스텝(Fixed Timestep) 시스템
+    // -------------------------------------------------------------
+    // requestAnimationFrame은 모니터 주사율(60/120/144/240Hz)에 맞춰 호출되므로,
+    // 프레임당 고정 픽셀로 움직이는 이 게임은 고주사율 환경에서 그대로 배속돼 버린다.
+    // → 논리 업데이트를 '항상 초당 60회'로 고정하고, 남는 호출은 건너뛴다.
+    //   이렇게 하면 기존 물리/타이머 상수를 하나도 바꾸지 않고 60Hz 감각이 보존된다.
+    const LOGIC_FPS = 60;
+    const FIXED_STEP = 1000 / LOGIC_FPS; // 16.667ms
+    const MAX_STEPS_PER_FRAME = 3;       // 탭 복귀 등 폭주 방지 상한
+    let accumulator = 0;
+    let lastRAF = performance.now();
+
+    // ★ 안전 래퍼: 예외가 나도 다음 프레임 예약이 끊기지 않도록 보장
     // 예약은 여기서 '무조건 한 번만' 수행한다 (본문은 예약하지 않음)
     function gameLoop(now) {
-      try {
-        gameLoopBody(now);
-      } catch (err) {
-        console.error('gameLoop 예외 발생 - 프레임 건너뜀:', err);
-        // 손상 가능한 상태를 안전하게 회복
-        isRewinding = false;
-        isCombining = false;
-        historyData = [];
+      // 실제 경과 시간을 누적 (탭 비활성 복귀 시 과도한 점프는 상한으로 절단)
+      let elapsed = now - lastRAF;
+      lastRAF = now;
+      if (!Number.isFinite(elapsed) || elapsed < 0) elapsed = 0;
+      if (elapsed > 250) elapsed = 250; // 0.25초 이상 공백은 버림
+      accumulator += elapsed;
+
+      let steps = 0;
+      // ★ 정지형 연출(컷인/합체) 중에는 한 프레임에 1스텝만 진행한다.
+      //   고정 타임스텝은 밀린 시간을 따라잡기 위해 한 프레임에 최대 3스텝을 돌리는데,
+      //   화면은 마지막 스텝만 보이므로 연출이 2~3배 빠르게 지나가 버린다.
+      const inCutscene = isPilotCutin || isCombining;
+      const maxSteps = inCutscene ? 1 : MAX_STEPS_PER_FRAME;
+      while (accumulator >= FIXED_STEP && steps < maxSteps) {
+        accumulator -= FIXED_STEP;
+        steps++;
+        try {
+          // 논리 1스텝 = 정확히 1/60초. 본문에는 항상 고정 delta를 넘긴다.
+          gameLoopBody(FIXED_STEP / 1000);
+        } catch (err) {
+          console.error('gameLoop 예외 발생 - 스텝 건너뜀:', err);
+          // 손상 가능한 상태를 안전하게 회복
+          isRewinding = false;
+          isCombining = false;
+          isPilotCutin = false;
+          historyData = [];
+        }
       }
+
+      // 연출 중 누산기 상한 (고주사율에서 누산기를 0으로 비우면
+      // FIXED_STEP에 영원히 도달하지 못해 연출이 멈추므로 '비우지 않고' 상한만 둔다)
+      if (inCutscene) {
+        if (accumulator > FIXED_STEP) accumulator = FIXED_STEP;
+      } else if (accumulator > FIXED_STEP * MAX_STEPS_PER_FRAME) {
+        // 누산기가 계속 밀리면(성능 부족) 오차 누적을 막기 위해 초기화
+        accumulator = 0;
+      }
+
       requestAnimationFrame(gameLoop);
     }
 
-    function gameLoopBody(now) {
-      const delta = (now - lastTime) / 1000;
-      lastTime = now;
+    function gameLoopBody(fixedDelta) {
+      // 항상 1/60초 고정 (주사율과 무관하게 게임 속도 일정)
+      const delta = fixedDelta;
 
+      // 논리 스텝 수 기반 FPS 표시 (고정 60에 수렴하면 정상)
       frameCount++;
       fpsTimer += delta;
       if (fpsTimer >= 0.5) {
@@ -2840,9 +3076,12 @@
       }
 
       // 1. 배경 좌표 아래로 이동 및 3대 바이옴 순환 스크롤
-      bgSegments.forEach(seg => {
-        seg.y += baseSpeed;
-      });
+      // (연출 정지 중에는 배경도 멈춘다)
+      if (!isPilotCutin && !isCombining) {
+        bgSegments.forEach(seg => {
+          seg.y += baseSpeed;
+        });
+      }
 
       // 아래 화면 밖으로 완전히 벗어난 세그먼트는 다른 세그먼트의 바로 위로 재배치하고 다음 바이옴 텍스처 인덱스로 갱신
       if (bgSegments[0].y >= HEIGHT) {
@@ -2861,6 +3100,109 @@
       });
 
       // ===========================================================
+      // ★ 파일럿 컷인 연출 (로봇 버티기 - 게임 정지 후 약 2.2초)
+      // ===========================================================
+      if (isPilotCutin) {
+        pilotCutinTimer++;
+        const T = pilotCutinTimer;
+        const p = T / PILOT_CUTIN_DURATION;
+
+        if (T === 1) playHitSound();
+        if (T === 14) playVictoryAudio();
+
+        // 배경은 이미 루프 상단에서 그려졌으므로 어두운 막만 덮는다 (중복 렌더 제거)
+        ctx.fillStyle = 'rgba(60, 8, 8, 0.72)';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // 피격 충격 화면 흔들림 (초반에 강하게)
+        const shake = Math.max(0, 16 * (1 - T / 26));
+        ctx.save();
+        ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+
+        // 붉은 분노 집중선
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 7;
+        for (let i = 0; i < 26; i++) {
+          const a = (Math.PI * 2 / 26) * i - T * 0.03;
+          ctx.beginPath();
+          ctx.moveTo(WIDTH / 2 + Math.cos(a) * 240, HEIGHT / 2 + Math.sin(a) * 240);
+          ctx.lineTo(WIDTH / 2 + Math.cos(a) * 1100, HEIGHT / 2 + Math.sin(a) * 1100);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // 파일럿 얼굴 (왼쪽에서 슬라이드 인 + 살짝 떨림)
+        const slideIn = Math.min(1, T / 14);
+        const ease = 1 - Math.pow(1 - slideIn, 3);
+        const faceX = -180 + (WIDTH * 0.30 + 180) * ease;
+        const faceY = HEIGHT * 0.44 + (Math.random() - 0.5) * shake * 0.4;
+        const faceScale = 1.75 + Math.sin(T * 0.22) * 0.035;
+
+        // 컷인 프레임 (기울어진 검은 띠)
+        ctx.save();
+        ctx.translate(WIDTH / 2, HEIGHT * 0.44);
+        ctx.rotate(-0.05);
+        ctx.fillStyle = 'rgba(8, 10, 18, 0.9)';
+        ctx.fillRect(-WIDTH, -172, WIDTH * 2, 344);
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(-WIDTH, -172); ctx.lineTo(WIDTH, -172);
+        ctx.moveTo(-WIDTH, 172);  ctx.lineTo(WIDTH, 172);
+        ctx.stroke();
+        ctx.restore();
+
+        drawPilotFace(faceX, faceY, faceScale);
+
+        // 대사 (얼굴 오른쪽)
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, Math.max(0, (T - 12) / 10));
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 46px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+        const lineX = WIDTH * 0.30 + 128;
+        ctx.lineWidth = 9;
+        ctx.strokeStyle = '#000';
+        ctx.strokeText('큭!', lineX, HEIGHT * 0.38);
+        ctx.fillStyle = '#facc15';
+        ctx.fillText('큭!', lineX, HEIGHT * 0.38);
+
+        ctx.font = 'bold 33px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = '#000';
+        ctx.strokeText('이정도로', lineX, HEIGHT * 0.455);
+        ctx.strokeText('쓰러지지 않는다', lineX, HEIGHT * 0.515);
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillText('이정도로', lineX, HEIGHT * 0.455);
+        ctx.fillText('쓰러지지 않는다', lineX, HEIGHT * 0.515);
+        ctx.restore();
+
+        ctx.restore(); // shake 해제
+
+        // 후반부: 컷인 띠와 어두운 막이 걷히며 마무리 (배경을 덮어쓰지 않는다)
+        if (p > 0.88) {
+          const outP = (p - 0.88) / 0.12;
+          // 화면 전체를 밝게 플래시하며 전환
+          ctx.save();
+          ctx.globalAlpha = outP * 0.85;
+          ctx.fillStyle = '#facc15';
+          ctx.fillRect(0, 0, WIDTH, HEIGHT);
+          ctx.restore();
+        }
+
+        if (T > PILOT_CUTIN_DURATION) {
+          isPilotCutin = false;
+          rewindMessage = '아직 쓰러지지 않는다!';
+          rewindMsgTimer = REWIND_MSG_DURATION;
+          createExplosion(playerX, playerY, 130, '#facc15', 55);
+        }
+
+        return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
+      }
+
+      // ===========================================================
       // ★ 합체 연출 모드 (게임 완전 정지 + 3초간 코믹 합체 씬)
       // 총 180프레임(3초) = 소집(0~50) / 도킹(50~100) / 변신(100~145) / 포즈(145~180)
       // ===========================================================
@@ -2874,10 +3216,7 @@
         if (T === 100) playExplosionSound(true);          // 변신 섬광
         if (T === 146) playVictoryAudio();                // 완성 팡파레
 
-        // --- 배경: 정지된 지면 + 어두운 무대 조명 ---
-        bgSegments.forEach(seg => {
-          ctx.drawImage(groundTextures[seg.texIdx], 0, Math.floor(seg.y));
-        });
+        // --- 배경: 이미 루프 상단에서 렌더됨 → 어두운 무대 조명만 덮는다 ---
         ctx.fillStyle = 'rgba(5, 8, 16, 0.72)';
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
@@ -3070,9 +3409,8 @@
           isCombining = false;
           clones = [];
           robotMode = true;
-          // 최종 페널티: 난이도 60% 상승 + 데스블로우 6발
-          difficultyBonus += 0.6;
-          deathBlowCount = 6;
+          // 최종 페널티: 데스블로우 2발 (난이도 상승 없음)
+          deathBlowCount = 2;
           // 플레이어를 무대 위치에서 원래 자리로
           playerX = targetX = stageX;
           playerY = targetY = HEIGHT * 0.8;
@@ -3112,6 +3450,9 @@
           enemies = snap.enemies;
           enemyBullets = snap.ebullets;
           playerBullets = snap.pbullets;
+          // 되감긴 적을 다시 격추해 점수를 중복 획득하는 것을 방지
+          score = snap.score;
+          updateScoreDisplay();
           bgSegments[0].y = snap.bg0y; bgSegments[0].texIdx = snap.bg0t;
           bgSegments[1].y = snap.bg1y; bgSegments[1].texIdx = snap.bg1t;
 
@@ -3124,7 +3465,7 @@
 
           // ★ 3초 전의 나와 재회하는 순간의 열혈 대사
           rewindMessage = '어~! 3초전의 나다! 같이 싸우자!';
-          rewindMsgTimer = 150;
+          rewindMsgTimer = REWIND_MSG_DURATION;
 
           return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
         }
@@ -3174,7 +3515,7 @@
       }
 
       // ★ 매 프레임 게임 상태 스냅샷 저장 (최근 3초분 보관)
-      if (gameStarted && !isGameOver && !isContinueState && !isVictoryState) {
+      if (gameStarted && !isGameOver && !isContinueState && !isVictoryState && !isPilotCutin) {
         historyData.push({
           px: playerX, py: playerY,
           enemies: enemies.map(e => {
@@ -3185,6 +3526,7 @@
           }),
           ebullets: enemyBullets.map(b => ({ ...b })),
           pbullets: playerBullets.map(b => ({ ...b })),
+          score: score,
           bg0y: bgSegments[0].y, bg0t: bgSegments[0].texIdx,
           bg1y: bgSegments[1].y, bg1t: bgSegments[1].texIdx
         });
@@ -3197,15 +3539,18 @@
       }
 
       // -----------------------------------------------------------
-      // 3. 플레이어 자동 총알 발사 (R 아이템 획득 시 총알 탄속 rapidBoost% 가속)
+      // 3. 플레이어 자동 총알 발사
+      //    R 아이템(rapidBoost)은 '발사 간격'을 단축시켜 실제 연사력(DPS)을 높인다.
+      //    간격: 8프레임(+0%) → 5프레임(+60%) / 초당 탄수 15발 → 24발 (정확히 +60%)
+      //    탄속은 -15로 고정 (연사 아이템이므로 탄속에는 관여하지 않음)
       // -----------------------------------------------------------
       if (gameStarted && !isGameOver && !isContinueState && !isVictoryState) {
-        autoShootTimer++;
+        // rapidBoost 0~60% 를 발사 속도 배율로 사용 (간격 8→5프레임)
+        // 정수 프레임 반올림으로 증가가 계단식이 되지 않게 '누적 가산' 방식 사용
+        autoShootTimer += (1 + rapidBoost / 100);
         if (autoShootTimer >= 8) {
-          autoShootTimer = 0;
-          // 기본 탄속 -15에서 rapidBoost(최대 +40%)만큼 탄속 증가
-          const speedFactor = 1 + (rapidBoost / 100);
-          const bulletSpeed = -15 * speedFactor;
+          autoShootTimer -= 8;
+          const bulletSpeed = -15;
 
           if (robotMode) {
             // ★ 합체 로봇: 좌 / 앞 / 우 3방향 발사
@@ -3386,6 +3731,7 @@
 
       for (let i = enemies.length - 1; i >= 0; i--) {
         const enemy = enemies[i];
+        if (!enemy) continue; // 콜백에서 배열이 비워진 경우 방어
         enemy.update();
         enemy.draw();
 
@@ -3410,6 +3756,7 @@
       // -----------------------------------------------------------
       for (let i = enemyBullets.length - 1; i >= 0; i--) {
         const eb = enemyBullets[i];
+        if (!eb) continue; // 콜백에서 배열이 비워진 경우 방어
         eb.x += eb.vx;
         eb.y += eb.vy;
 
@@ -3551,7 +3898,7 @@
         // 플레이어 획득 검사 (충돌 반경 28px)
         if (gameStarted && !isGameOver && !isContinueState) {
           if (Math.hypot(playerX - it.x, playerY - it.y) < it.radius + 20) {
-            // 총알 속도 5% 증가 (최대 +60% 캡)
+            // 연사력 5% 증가 (최대 +60% 캡) — 발사 간격 단축에 반영됨
             if (rapidBoost < 60) {
               rapidBoost = Math.min(60, rapidBoost + 5);
               updateRapidDisplay();
@@ -3649,12 +3996,11 @@
             createExplosion(c.x, c.y, 60, '#facc15', 35);
             playVictoryAudio();
 
-            // 페널티: 난이도 20% 상승 + 데스블로우 2발
-            difficultyBonus += 0.2;
-            deathBlowCount = Math.max(deathBlowCount, 2);
+            // 페널티: 데스블로우 1발 (난이도 상승 없음)
+            deathBlowCount = Math.max(deathBlowCount, 1);
 
             rewindMessage = '아까의 나, 생존 성공!';
-            rewindMsgTimer = 150;
+            rewindMsgTimer = REWIND_MSG_DURATION;
 
             // 아군이 2대가 되면 → 3기 합체 발동!
             const aiCount = clones.filter(cl => cl.phase === 'ai').length;
@@ -3710,12 +4056,14 @@
       }
 
       // ★ 리와인드 관련 상태 메시지 & HUD 표시
-      if (rewindMsgTimer > 0 && !isRewinding && !isCombining) {
+      if (rewindMsgTimer > 0 && !isRewinding && !isCombining && !isPilotCutin) {
         rewindMsgTimer--;
         ctx.save();
         // 등장 시 살짝 튀어오르는 스케일 + 사라질 때 페이드아웃
-        const life = rewindMsgTimer / 150;
-        const pop = rewindMsgTimer > 130 ? 1 + (150 - rewindMsgTimer) * 0.02 : 1 + Math.sin(rewindMsgTimer * 0.25) * 0.03;
+        // (총 지속시간을 상수로 계산해 어떤 초기값이 와도 정확히 동작)
+        const life = rewindMsgTimer / REWIND_MSG_DURATION;
+        const elapsed = REWIND_MSG_DURATION - rewindMsgTimer;
+        const pop = elapsed < 20 ? 1 + elapsed * 0.02 : 1 + Math.sin(rewindMsgTimer * 0.25) * 0.03;
         ctx.globalAlpha = Math.min(1, life * 4);
         ctx.translate(WIDTH / 2, HEIGHT * 0.3);
         ctx.scale(pop, pop);
@@ -3730,7 +4078,9 @@
         ctx.font = 'bold 15px "Press Start 2P", monospace';
         ctx.fillStyle = robotMode ? '#facc15' : '#e879f9';
         ctx.fillText(
-          robotMode ? 'ROBOT MODE / DEATH BLOW x6' : `ALLY x${clones.filter(c => c.phase === 'ai').length} / DEATH BLOW x${deathBlowCount}`,
+          robotMode
+            ? `ROBOT MODE / DEATH BLOW x${deathBlowCount}${robotGuardUsed ? '' : ' / GUARD 1'}`
+            : `ALLY x${clones.filter(c => c.phase === 'ai').length} / DEATH BLOW x${deathBlowCount}`,
           WIDTH / 2, HEIGHT - 24
         );
         ctx.restore();
@@ -3766,18 +4116,29 @@
       startGame();
     }, { passive: false });
 
-    // 전역 윈도우 클릭/키보드로도 컨티뉴 즉시 처리
-    window.addEventListener('click', () => {
-      if (isContinueState && credits > 0) {
-        handleContinueAction();
-      }
-    });
-
     window.addEventListener('keydown', (e) => {
       if (!gameStarted && (e.code === 'Space' || e.code === 'Enter')) {
         startGame();
-      } else if (isContinueState && (e.code === 'Space' || e.code === 'Enter')) {
-        handleContinueAction();
+      }
+      // ★ 개발/테스트용 단축키 (연출 즉시 확인)
+      if (!gameStarted) return;
+      if (e.code === 'KeyP') {
+        // P: 로봇 모드 + 파일럿 컷인 강제 발동
+        robotMode = true;
+        deathBlowCount = 2;
+        clones = [];
+        robotGuardUsed = false;
+        playerInvulnerable = 0;
+        hitPlayer();
+      } else if (e.code === 'KeyO') {
+        // O: 3단 합체 연출 강제 발동
+        robotMode = false;
+        isCombining = true;
+        combineTimer = 0;
+        enemyBullets = [];
+      } else if (e.code === 'KeyI') {
+        // I: 타임 리와인드 강제 발동
+        if (!robotMode) triggerRewind();
       }
     });
   </script>
