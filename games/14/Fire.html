@@ -215,15 +215,15 @@ html,body{
 .pin.lit{ animation:litCore var(--lit-dur,.45s) cubic-bezier(.1,.8,.2,1) !important; }
 .pin.lit::before{ animation:litPulse var(--lit-dur,.45s) cubic-bezier(.1,.8,.2,1); }
 
-.pin.hitY{ --lit:rgba(255,216,77,.90); --lit2:rgba(255,200,40,.34); --lit-dur:.45s;
+.pin.hitY{ --lit:rgba(255,216,77,.90); --lit-dur:.45s;
            background:radial-gradient(circle at 40% 40%,#fff,#FFE89A 62%,#B9963A); }
-.pin.hitO{ --lit:rgba(255,150,60,.90); --lit2:rgba(255,120,30,.34); --lit-dur:.50s;
+.pin.hitO{ --lit:rgba(255,150,60,.90); --lit-dur:.50s;
            background:radial-gradient(circle at 40% 40%,#fff,#FFCE96 62%,#B9742A); }
-.pin.hitG{ --lit:rgba(120,255,170,.90);--lit2:rgba(60,230,130,.34); --lit-dur:.55s;
+.pin.hitG{ --lit:rgba(120,255,170,.90);--lit-dur:.55s;
            background:radial-gradient(circle at 40% 40%,#fff,#B6FFD5 62%,#379A68); }
-.pin.hitR{ --lit:rgba(255,61,110,.92); --lit2:rgba(255,20,90,.36);  --lit-dur:.62s;
+.pin.hitR{ --lit:rgba(255,61,110,.92); --lit-dur:.62s;
            background:radial-gradient(circle at 40% 40%,#fff,#FFA8B8 62%,#B93655); }
-.pin.hitB{ --lit:rgba(41,212,255,.92); --lit2:rgba(0,190,255,.36);  --lit-dur:.75s;
+.pin.hitB{ --lit:rgba(41,212,255,.92); --lit-dur:.75s;
            background:radial-gradient(circle at 40% 40%,#fff,#A8E6FF 62%,#2986B9); }
 
 /* 노랑 (기본) */
@@ -233,16 +233,23 @@ html,body{
          색은 --lit 변수로 주입하므로 애니메이션 정의는 2종을 공유한다. */
 
 /* 발광 레이어 — 어두운 핀 위에서 확 터지는 빛 */
-.pin::before{
+/* ★ A) 발광 레이어는 충돌 순간에만 생성한다.
+   이전: 152개가 opacity:0 + translateZ(0) 상태로 상시 GPU 레이어 점유.
+         핀 본체(4px)의 90배 면적(38px)에 4색 그라데이션을 각각 들고 있었다.
+   개선: content:none으로 평소엔 노드조차 없고, .lit이 붙는 순간 생성된다.
+         동시 발광은 많아도 3개 → 상시 레이어 152개가 0개로.
+   ★ F) 그라데이션 정지점 4개 → 3개로 축소 (픽셀 계산량 감소) */
+.pin::before{ content:none; }
+
+.pin.lit::before{
   content:''; position:absolute;
   left:50%; top:50%; width:38px; height:38px; margin:-19px 0 0 -19px;
   border-radius:50%; pointer-events:none;
   background:radial-gradient(circle,
-    rgba(255,255,255,.95) 0%,
-    var(--lit,  rgba(255,216,77,.88)) 24%,
-    var(--lit2, rgba(255,200,40,.34)) 50%,
-    transparent 72%);
-  opacity:0; transform:scale(.2) translateZ(0);
+    rgba(255,255,255,.92) 0%,
+    var(--lit, rgba(255,216,77,.85)) 30%,
+    transparent 70%);
+  opacity:0;
 }
 @keyframes litPulse{
   0%   { opacity:1;   transform:scale(1)   translateZ(0); }
@@ -571,8 +578,19 @@ html,body{
 #buffBar{
   position:absolute; left:0; right:0; top:calc(var(--hud-h) + 2px);
   display:flex; gap:5px; justify-content:center; flex-wrap:wrap;
+  /* 바 자체는 클릭을 통과시키고(핀 필드를 가리지 않게),
+     탭이 필요한 드림캐쳐 칩만 예외로 이벤트를 받는다 */
   z-index:6; pointer-events:none; padding:0 10px;
 }
+/* 탭 가능한 드림캐쳐 칩 — 금색으로 구분 */
+.buff.catcher{
+  pointer-events:auto;
+  border-color:rgba(255,217,138,.5);
+  color:var(--gold);
+  background:rgba(28,22,8,.72);
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+.buff.catcher:active{ transform:scale(.94); }
 .buff{
   font-size:9.5px; padding:3px 8px; border-radius:10px;
   background:rgba(8,12,26,.72); border:1px solid rgba(140,200,255,.45); color:#BEE0FF;
@@ -718,6 +736,192 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
   color:rgba(210,215,225,.38); pointer-events:none;
   font-family:-apple-system,'SF Mono',monospace;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   드림캐쳐 발동 연출 (Attunement) — 스테이지 시작 전
+   각 드림캐쳐가 하나씩 포커스되며 대상 UI로 빛을 보낸다.
+   ═══════════════════════════════════════════════════════════ */
+#atOv{
+  position:absolute; inset:0; z-index:34;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:rgba(3,5,11,0.88);
+  opacity:0; pointer-events:none; transition:opacity .45s ease;
+}
+#atOv.on{ opacity:1; pointer-events:auto; }
+
+#atTitle{
+  font-family:serif; font-size:13px; letter-spacing:.32em;
+  color:rgba(255,217,138,.72); margin-bottom:6px;
+}
+#atDay{
+  font-family:serif; font-size:26px; color:var(--txt);
+  letter-spacing:.06em; margin-bottom:30px;
+}
+#atDay small{ font-size:13px; color:rgba(213,216,224,.5); }
+
+/* 발동 중인 드림캐쳐 카드 */
+#atCard{
+  position:relative;
+  width:150px; min-height:150px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:8px; padding:18px 14px;
+  border:1px solid rgba(255,217,138,.34);
+  border-radius:4px;
+  background:linear-gradient(180deg, rgba(20,24,38,.92), rgba(10,13,22,.92));
+  opacity:0;
+}
+#atCard .ico{ font-size:40px; line-height:1; }
+#atCard .nm{ font-family:serif; font-size:15px; color:var(--gold); letter-spacing:.04em; }
+#atCard .dsc{ font-size:11px; color:rgba(213,216,224,.66); text-align:center; line-height:1.5; }
+
+/* 카드 등장 → 확대 + 흔들림 → 발사 */
+@keyframes atEnter{
+  /* 살짝 지나쳐서 안착 — 급하게 튀어나오지 않는다 */
+  0%   { opacity:0; transform:scale(.80) translateY(14px); }
+  62%  { opacity:1; transform:scale(1.03) translateY(-2px); }
+  100% { opacity:1; transform:scale(1)   translateY(0); }
+}
+@keyframes atCharge{
+  /* 숨을 들이켜듯 살짝 작아진 뒤(예비동작) 점점 커지며 떨린다 */
+  0%   { transform:scale(1)    rotate(0deg); }
+  12%  { transform:scale(.97)  rotate(0deg); }
+  26%  { transform:scale(1.05) rotate(-1.1deg); }
+  38%  { transform:scale(1.07) rotate(1.3deg); }
+  50%  { transform:scale(1.09) rotate(-1.5deg); }
+  62%  { transform:scale(1.11) rotate(1.7deg); }
+  74%  { transform:scale(1.13) rotate(-1.9deg); }
+  86%  { transform:scale(1.15) rotate(1.4deg); }
+  100% { transform:scale(1.16) rotate(0deg); }
+}
+@keyframes atExit{
+  /* 힘을 다 쓴 듯 가라앉으며 사라진다 */
+  0%   { opacity:1; transform:scale(1.16) translateY(0); }
+  100% { opacity:0; transform:scale(.96)  translateY(8px); }
+}
+#atCard.enter { animation:atEnter .58s cubic-bezier(.2,.9,.3,1) forwards; }
+#atCard.charge{ animation:atCharge .82s cubic-bezier(.35,0,.5,1) forwards; }
+#atCard.exit  { animation:atExit .44s ease-in forwards; }
+
+/* 카드에서 터지는 발광 */
+#atCard .flare{
+  position:absolute; left:50%; top:50%;
+  width:190px; height:190px; margin:-95px 0 0 -95px;
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,
+    rgba(255,255,255,.85) 0%,
+    var(--flare, rgba(255,217,138,.6)) 26%,
+    transparent 66%);
+  opacity:0;
+}
+@keyframes atFlare{
+  0%   { opacity:0;   transform:scale(.3); }
+  28%  { opacity:1;   transform:scale(1.02); }
+  100% { opacity:0;   transform:scale(1.5); }
+}
+#atCard .flare.go{ animation:atFlare .72s ease-out; }
+
+/* 대상까지 날아가는 빛줄기 */
+.atBolt{
+  position:absolute; z-index:36; pointer-events:none;
+  width:12px; height:12px; margin:-6px 0 0 -6px;
+  border-radius:50%;
+  background:radial-gradient(circle,
+    #fff 0%, var(--flare, rgba(255,217,138,.9)) 45%, transparent 72%);
+}
+
+/* 대상 UI가 빛을 받았을 때 */
+@keyframes atHit{
+  0%   { box-shadow:0 0 0 0 rgba(255,217,138,0); }
+  22%  { box-shadow:0 0 22px 7px rgba(255,217,138,.72); }
+  55%  { box-shadow:0 0 12px 3px rgba(255,217,138,.36); }
+  100% { box-shadow:0 0 0 0 rgba(255,217,138,0); }
+}
+.atHit{ animation:atHit .92s ease-out; }
+
+/* 증가 수치 팝업 */
+.atGain{
+  position:absolute; z-index:37; pointer-events:none;
+  font-family:serif; font-size:17px; font-weight:600;
+  color:var(--gold); text-shadow:0 0 12px rgba(255,217,138,.85);
+  white-space:nowrap;
+}
+
+/* 하단 진행 점 */
+#atDots{ display:flex; gap:6px; margin-top:26px; }
+#atDots i{
+  width:5px; height:5px; border-radius:50%;
+  background:rgba(213,216,224,.24); transition:background .3s ease;
+}
+#atDots i.on{ background:var(--gold); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   아이템 정보 시트 — 드림캐쳐 / 소망 카드 탭 시 중앙에 표시
+   카드는 사용 여부를 묻고, 드림캐쳐는 설명만 보여준다.
+   ═══════════════════════════════════════════════════════════ */
+#infoOv{
+  position:absolute; inset:0; z-index:38;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(3,5,11,0.82);
+  opacity:0; pointer-events:none; transition:opacity .26s ease;
+}
+#infoOv.on{ opacity:1; pointer-events:auto; }
+
+#infoCard{
+  width:246px; padding:22px 20px 18px;
+  border:1px solid rgba(255,217,138,.34); border-radius:5px;
+  background:linear-gradient(180deg, rgba(22,26,42,.97), rgba(11,14,24,.97));
+  text-align:center;
+  transform:scale(.9) translateY(8px); opacity:0;
+  transition:transform .28s cubic-bezier(.2,.9,.3,1), opacity .22s ease;
+}
+#infoOv.on #infoCard{ transform:scale(1) translateY(0); opacity:1; }
+
+/* 상단 분류 라벨 */
+#infoKind{
+  font-family:serif; font-size:9.5px; letter-spacing:.3em;
+  color:rgba(255,217,138,.6); margin-bottom:12px;
+}
+#infoIco{ font-size:42px; line-height:1; margin-bottom:10px; }
+#infoNm{
+  font-family:serif; font-size:17px; color:var(--gold);
+  letter-spacing:.05em; margin-bottom:4px;
+}
+#infoRar{
+  font-size:10px; letter-spacing:.14em; margin-bottom:12px;
+  color:rgba(213,216,224,.5);
+}
+#infoRar.epic  { color:#FFC8E0; }
+#infoRar.rare  { color:#A8D8FF; }
+#infoRar.common{ color:rgba(213,216,224,.5); }
+
+#infoDsc{
+  font-size:12.5px; line-height:1.75; color:rgba(232,238,255,.86);
+  padding:12px 4px; margin-bottom:4px;
+  border-top:1px solid rgba(210,215,225,.14);
+  border-bottom:1px solid rgba(210,215,225,.14);
+}
+/* 지금 적용 중인지 알려주는 보조 문구 */
+#infoNote{
+  font-size:10.5px; color:rgba(180,255,220,.72);
+  margin-top:10px; line-height:1.6; min-height:14px;
+}
+
+#infoBtns{ display:flex; gap:8px; margin-top:16px; }
+.infoBtn{
+  flex:1 1 0; padding:11px 0;
+  font-family:serif; font-size:12.5px; letter-spacing:.06em;
+  border:1px solid rgba(210,215,225,.26); border-radius:3px;
+  background:rgba(255,255,255,.04); color:rgba(232,238,255,.82);
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+.infoBtn.use{
+  border-color:rgba(255,217,138,.5);
+  background:linear-gradient(180deg, rgba(255,217,138,.18), rgba(255,217,138,.06));
+  color:var(--gold);
+}
+.infoBtn:active{ transform:scale(.97); }
+
 </style>
 </head>
 <body>
@@ -869,6 +1073,8 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
       <div class="dev-row tight"><label>상점 자금</label><input type="number" class="dev-input" id="dvMoney"></div>
       <div class="dev-row tight"><label>발사 간격 강제 (ms)</label><input type="number" class="dev-input" id="dvFire" placeholder="자동"></div>
       <button class="dev-btn action" onclick="dvApply()">값 적용</button>
+      <div class="dev-sub" style="margin-top:10px">드림캐쳐 발동 연출 확인 (보유한 것만 재생)</div>
+      <button class="dev-btn" onclick="dvAttune()">발동 연출 미리보기</button>
     </div>
 
     <div class="dev-section">
@@ -1091,6 +1297,32 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
 
   </div>
 </div>
+
+<!-- ══════════ 드림캐쳐 발동 연출 ══════════ -->
+<div id="atOv">
+  <div id="atTitle">DREAMCATCHER</div>
+  <div id="atDay">DAY <b id="atDayNo">2</b> <small>준비</small></div>
+  <div id="atCard">
+    <div class="flare"></div>
+    <div class="ico"></div>
+    <div class="nm"></div>
+    <div class="dsc"></div>
+  </div>
+  <div id="atDots"></div>
+</div>
+
+<!-- ══════════ 아이템 정보 시트 ══════════ -->
+<div id="infoOv" onclick="closeInfo(event)">
+  <div id="infoCard" onclick="event.stopPropagation()">
+    <div id="infoKind">ITEM</div>
+    <div id="infoIco"></div>
+    <div id="infoNm"></div>
+    <div id="infoRar"></div>
+    <div id="infoDsc"></div>
+    <div id="infoNote"></div>
+    <div id="infoBtns"></div>
+  </div>
+</div>
 </div><!-- /#app -->
 
 <script>
@@ -1219,7 +1451,7 @@ const CATCHERS = [
   { id:'greatluck', ico:'🎴', nm:'대행운', dsc:'매 라운드 꽝칸 2개→배수칸',        rar:'epic'   },
   { id:'desire',    ico:'🩸', nm:'욕망',   dsc:'꽝 손실 2배, 배수칸 효과 2배',     rar:'epic'   },
   { id:'care',      ico:'🤍', nm:'배려',   dsc:'매 라운드 목표 10% 감소',          rar:'rare'   },
-  { id:'guard',     ico:'🛡', nm:'수호',   dsc:'꽝 손실 절반(내림)',               rar:'common' },
+  { id:'guard',     ico:'🛡', nm:'수호',   dsc:'꽝 손실 50% 확률로 무시',           rar:'common' },
   { id:'starlight', ico:'✨', nm:'별빛',   dsc:'특수 구슬 확률 2배',               rar:'rare'   },
   { id:'machine',   ico:'⚙',  nm:'기계',   dsc:'8초마다 구슬 1개 자동 생산',       rar:'common' },
   { id:'twinshot',  ico:'⚌',  nm:'쌍발',   dsc:'더블샷 영구 적용',                 rar:'epic'   },
@@ -1782,7 +2014,7 @@ const S = {
   catchers:[],                // 드림캐쳐 (최대 5)
   upg:{},                     // 라운드 내 강화 레벨
   buffs:{},                   // 이번 라운드 활성 효과
-  running:false, loopId:null, prodId:null,
+  running:false, loopId:null, prodId:null, attuning:false,
   active:0,                   // 낙하 중 구슬
   lastSlot:-1, chain:0,
   feverUntil:0,
@@ -1798,7 +2030,7 @@ const S = {
    ※ 수정 시 규칙
      · 시스템 추가·교체 → minor 올리고 patch 0
      · 조정·버그수정    → patch +1                                  */
-const VERSION = '2.2.0';
+const VERSION = '2.5.0';
 
 const HAND_MAX = 5, CATCH_MAX = 5;
 
@@ -1914,6 +2146,180 @@ function startGame(devSkipPrologue){
   }, total + 1600);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   드림캐쳐 발동 연출 (Attunement)
+   스테이지 시작 직전, 보유한 드림캐쳐가 하나씩 포커스되며
+   자신이 영향을 주는 UI로 빛을 날려보낸다.
+
+   흐름: 카드 등장 → 확대·흔들림(충전) → 발광 → 빛줄기 이동
+        → 대상 UI 반응 + 수치 팝업 → 카드 퇴장 → 다음
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 드림캐쳐별 연출 정의 — 어디로 빛을 보내고 무슨 문구를 띄울지 */
+const AT_FX = {
+  abundance: { t:()=>ui.beadVal,     lbl:'+50',        col:'255,217,138' },
+  wind:      { t:()=>ui.lanternPivot,lbl:'속도 ×2',    col:'170,225,255' },
+  thunder:   { t:()=>ui.lanternPivot,lbl:'속도 ×3',    col:'255,240,140' },
+  storm:     { t:()=>ui.lanternPivot,lbl:'속도 ×4',    col:'190,200,255' },
+  twinshot:  { t:()=>ui.lanternPivot,lbl:'쌍발',       col:'255,200,120' },
+  machine:   { t:()=>ui.beadVal,     lbl:'8초마다 +1', col:'200,210,225' },
+  care:      { t:()=>ui.goalVal,     lbl:'목표 −10%',  col:'180,255,220' },
+  luck:      { t:()=>ui.slotBar,     lbl:'꽝 1칸 전환', col:'150,255,180' },
+  greatluck: { t:()=>ui.slotBar,     lbl:'꽝 2칸 전환', col:'150,255,180' },
+  prism:     { t:()=>ui.slotBar,     lbl:'2배 → 3배',  col:'160,220,255' },
+  crown:     { t:()=>ui.slotBar,     lbl:'5배칸 +2',   col:'255,225,150' },
+  destiny:   { t:()=>ui.slotBar,     lbl:'양끝 ×2',    col:'255,190,160' },
+  desire:    { t:()=>ui.slotBar,     lbl:'배수 ×2',    col:'255,140,160' },
+  guard:     { t:()=>ui.slotBar,     lbl:'손실 절반',  col:'200,220,255' },
+  passion:   { t:()=>ui.slotBar,     lbl:'피버존',     col:'255,170,120' },
+  echo:      { t:()=>ui.beadVal,     lbl:'8% 2배',     col:'255,230,180' },
+  starlight: { t:()=>ui.lanternPivot,lbl:'특수 ×2',    col:'230,240,255' },
+  harvest:   { t:()=>ui.beadVal,     lbl:'자금 +150',  col:'255,220,150' },
+  insight:   { t:()=>ui.cards,       lbl:'카드 −25%',  col:'210,225,255' },
+  eternal:   { t:()=>ui.cards,       lbl:'카드 +1',    col:'255,205,235' },
+};
+
+/* 대상 위로 빛줄기를 날리고, 도착하면 반응을 일으킨다 */
+function atBolt(fromEl, toEl, col, lbl, done){
+  if(!toEl){ done && done(); return; }
+  const a = cRect(fromEl), b = cRect(toEl);
+  const x1 = a.left + a.width/2,  y1 = a.top + a.height/2;
+  const x2 = b.left + b.width/2,  y2 = b.top + b.height/2;
+
+  const bolt = pget('atBolt');
+  bolt.style.setProperty('--flare', 'rgba('+col+',.9)');
+  bolt.style.left = x1+'px';
+  bolt.style.top  = y1+'px';
+
+  /* 살짝 호를 그리며 이동 */
+  const mx = (x1+x2)/2 + (x2>x1 ? -26 : 26);
+  const my = (y1+y2)/2 - 40;
+
+  bolt.animate([
+    /* 카드에서 잠깐 머문 뒤 천천히 출발 → 호를 그리며 이동 → 대상에서 수축 */
+    { transform:'translate(0,0) scale(.5)',  opacity:0,  offset:0 },
+    { transform:'translate(0,0) scale(1.7)', opacity:1,  offset:.14 },
+    { transform:`translate(${((mx-x1)*0.55).toFixed(1)}px,${((my-y1)*0.9).toFixed(1)}px) scale(1.3)`,
+      opacity:1, offset:.42 },
+    { transform:`translate(${(mx-x1).toFixed(1)}px,${(my-y1).toFixed(1)}px) scale(1.15)`,
+      opacity:.95, offset:.66 },
+    { transform:`translate(${(x2-x1).toFixed(1)}px,${(y2-y1).toFixed(1)}px) scale(.7)`,
+      opacity:0, offset:1 }
+  ], { duration:720, easing:'cubic-bezier(.32,.02,.38,1)' });
+
+  pfreeAfter(bolt, 760);
+
+  /* 도착 시점에 대상이 반응 */
+  setTimeout(()=>{
+    toEl.classList.add('atHit');
+    setTimeout(()=>toEl.classList.remove('atHit'), 700);
+    sfxAttuneHit();
+
+    if(lbl){
+      const g = pget('atGain');
+      g.textContent = lbl;
+      g.style.left = (x2 - 14)+'px';
+      g.style.top  = (y2 - 26)+'px';
+      g.animate([
+        /* 튀어오른 뒤 잠시 머물러 읽을 시간을 준다 */
+        { transform:'translateY(6px) scale(.86)',  opacity:0, offset:0 },
+        { transform:'translateY(-10px) scale(1.14)', opacity:1, offset:.18 },
+        { transform:'translateY(-16px) scale(1)',  opacity:1, offset:.34 },
+        { transform:'translateY(-20px) scale(1)',  opacity:1, offset:.72 },
+        { transform:'translateY(-34px) scale(.94)', opacity:0, offset:1 }
+      ], { duration:1080, easing:'cubic-bezier(.2,.8,.3,1)' });
+      /* 1980(도착) + 1080 = 3060ms → 다음 카드(3100ms) 직전에 정확히 끝난다 */
+      pfreeAfter(g, 1120);
+    }
+    done && done();
+  }, 680);      // 이동 720ms의 대부분이 지난 시점
+}
+
+/* 드림캐쳐 충전음 — 낮은 음에서 위로 훑어 올라간다 */
+function sfxAttune(){
+  if(!AU.sfxOn || !AU.ctx) return;
+  const t = AU.ctx.currentTime;
+  [0, 0.07, 0.15].forEach((d,i)=>{
+    tone({ f: 420*Math.pow(1.5,i), wave:'sine', t:t+d, bus:AU.sfxBus,
+      g:0.030, a:0.01, d:0.10, s:0.012, hold:0.05, r:0.24, lp:5200 });
+  });
+}
+
+/* 빛이 대상에 닿는 소리 */
+function sfxAttuneHit(){
+  if(!AU.sfxOn || !AU.ctx) return;
+  const t = AU.ctx.currentTime;
+  tone({ f:1760, wave:'sine', t, bus:AU.sfxBus,
+    g:0.034, a:0.002, d:0.05, s:0.008, hold:0.02, r:0.32, lp:9000 });
+  tone({ f:2640, wave:'sine', t:t+0.02, bus:AU.sfxBus,
+    g:0.020, a:0.002, d:0.04, s:0.005, hold:0.02, r:0.26, lp:9000 });
+}
+
+/* 발동 시퀀스 전체 */
+function runAttunement(day, onDone){
+  const list = S.catchers.slice();
+  const ov   = $('atOv');
+  const card = $('atCard');
+  const flare= card.querySelector('.flare');
+  const dots = $('atDots');
+
+  /* 보유한 드림캐쳐가 없으면 건너뛴다 */
+  if(!list.length){ onDone(); return; }
+
+  $('atDayNo').textContent = day;
+
+  /* 진행 표시 점 */
+  dots.innerHTML = list.map(()=>'<i></i>').join('');
+  const dotEls = [...dots.children];
+
+  ov.classList.add('on');
+
+  let idx = 0;
+  const step = ()=>{
+    if(idx >= list.length){
+      /* 마무리 — 여운을 남기고 천천히 사라진다 */
+      setTimeout(()=>{
+        ov.classList.remove('on');
+        setTimeout(onDone, 560);
+      }, 520);
+      return;
+    }
+
+    const c  = list[idx];
+    const fx = AT_FX[c.id] || { t:()=>ui.beadVal, lbl:'', col:'255,217,138' };
+    dotEls.forEach((d,i)=>d.classList.toggle('on', i<=idx));
+
+    /* 카드 내용 채우기 */
+    card.querySelector('.ico').textContent = c.ico;
+    card.querySelector('.nm').textContent  = c.nm + '의 드림캐쳐';
+    card.querySelector('.dsc').textContent = c.dsc;
+    card.style.setProperty('--flare', 'rgba('+fx.col+',.6)');
+    flare.style.setProperty('--flare', 'rgba('+fx.col+',.6)');
+    card.style.borderColor = 'rgba('+fx.col+',.45)';
+
+    /* ① 등장 — 카드를 읽을 시간을 준다 (0.58s + 여유) */
+    card.className = 'enter';
+
+    /* ② 충전 — 예비동작 후 확대·떨림 (0.82s) */
+    setTimeout(()=>{ card.className = 'charge'; sfxAttune(); }, 700);
+
+    /* ③ 발광 + 빛줄기 발사 — 충전이 정점에 이른 순간 */
+    setTimeout(()=>{
+      flare.classList.remove('go');
+      void flare.offsetWidth;
+      flare.classList.add('go');
+      atBolt(card, fx.t(), fx.col, fx.lbl, null);
+    }, 1300);
+
+    /* ④ 퇴장 — 수치 팝업을 충분히 보여준 뒤 (도착 1980ms + 620ms) */
+    setTimeout(()=>{ card.className = 'exit'; }, 2600);
+    setTimeout(()=>{ idx++; step(); }, 3100);
+  };
+
+  /* 오버레이가 뜨고 잠시 호흡한 뒤 시작 */
+  setTimeout(step, 760);
+}
+
 function setupStage(day){
   S.day = clamp(day,1,10);
   const cfg = ST();
@@ -1927,7 +2333,7 @@ function setupStage(day){
   S.gained = 0; S.active = 0; S.shots = 0;
   S.lastSlot=-1; S.chain=0; S.feverUntil=0;
   S.upg = {}; S.buffs = {};
-  if(!TUT.active) S.paused = false;
+  if(!TUT.active && !S.attuning) S.paused = false;   // ★ 발동 연출 중이면 유지
   S.baseLayout = cfg.layout.slice();
 
   // 영구 드림캐쳐: 매 라운드 자동 적용
@@ -2341,14 +2747,34 @@ function hitPin(x, y, colW){
   else if(rr < 0.40){   cls='hitO'; litMs=510; }
   else {                cls='hitY'; litMs=460; }
 
-  /* ★ B) 애니메이션 재시작을 getAnimations()로 처리 — 리플로우가 전혀 없다.
-     'lit'은 공용 애니메이션, cls는 색상 변수만 담당한다. */
+  /* ★ D) 재시작 비용 최소화
+     기존 getAnimations().forEach(cancel)는 매 충돌마다 애니메이션 목록을
+     조회·취소해 47회/초 상황에서 부담이 컸다.
+
+     여기서 주의할 점: 같은 핀에 같은 색이 연속으로 오면
+     remove→add를 한 태스크에서 처리해도 브라우저가 '변화 없음'으로 보고
+     애니메이션을 재시작하지 않는다.
+     → 이미 발광 중일 때는 클래스를 건드리지 않고
+       Animation.currentTime = 0 으로 되감아 확실히 재시작한다.
+       (레이아웃·스타일 재계산이 발생하지 않아 가장 저렴하다) */
   const el = best.el;
-  el.classList.remove('hitY','hitO','hitG','hitR','hitB','lit');
-  el.getAnimations().forEach(a=>a.cancel());
-  el.classList.add(cls,'lit');
+  clearTimeout(el._ht);
+
+  if(el._hc === cls){
+    /* 같은 색 연속 — 진행 중인 애니메이션만 되감는다 */
+    const as = el.getAnimations();
+    for(let i=0;i<as.length;i++) as[i].currentTime = 0;
+  }else{
+    if(el._hc) el.classList.remove(el._hc);
+    el.classList.add(cls, 'lit');
+    el._hc = cls;
+  }
+
   sfxPin(cls);
-  setTimeout(()=>el.classList.remove(cls,'lit'), litMs);
+  el._ht = setTimeout(()=>{
+    el.classList.remove(cls, 'lit');
+    el._hc = null;
+  }, litMs);
 
   // 희귀 색상(빨강·청록)은 링 웨이브 추가
   if(ringCol){
@@ -2382,7 +2808,6 @@ function land(idx, kind){
   if(m>0){
     // ── 배수 보정 ──
     if(S.buffs.goldrush) m += 1;
-    if(has('desire')) m *= 2;
     if(type==='m5'){
       if(has('crown')) m += 2;
       if(S.buffs.jackpot) m *= 3;
@@ -2398,6 +2823,10 @@ function land(idx, kind){
       else S.chain=0;
     }
     S.lastSlot = idx;
+    /* ★ 욕망: '배수칸 효과 2배'는 다른 모든 보정을 적용한 뒤
+       마지막에 곱해야 설명과 일치한다.
+       예) 5배칸 + 왕관 → 이전 (5×2)+2=12 → 현재 (5+2)×2=14 */
+    if(has('desire')) m *= 2;
     // 피버존
     if(performance.now()<S.feverUntil) m *= 2;
 
@@ -2424,7 +2853,10 @@ function land(idx, kind){
     S.lastSlot=-1; S.chain=0;
     let loss = 1;
     if(has('desire')) loss = 2;
-    if(has('guard')) loss = Math.floor(loss/2);
+    /* ★ 수호: 기존 floor(loss/2)는 기본 손실 1을 0으로 만들어
+       common 등급인데 '꽝 완전 무효'가 되어 있었다.
+       → 50% 확률로 손실을 무시하는 방식으로 변경 (기대값 = 절반) */
+    if(has('guard') && Math.random() < 0.5) loss = 0;
     if(S.buffs.shield) loss = 0;
     S.beads = Math.max(0, S.beads - loss);
     sfxMiss();
@@ -2592,7 +3024,28 @@ function renderShop(){
 function leaveShop(){
   hideOv(ui.shopOv);
   S.ended=false;
-  setTimeout(()=>setupStage(S.day+1), 520);
+  const next = S.day + 1;
+  setTimeout(()=>{
+    /* ★ 드림캐쳐 발동 연출
+       setupStage를 먼저 호출해 수치를 실제로 적용해 둔다.
+       그래야 빛이 도착했을 때 HUD 숫자가 이미 바뀐 상태로 보인다.
+       단, 발사 루프는 연출이 끝난 뒤에 시작한다(setupStage가 S.paused를 존중). */
+    S.attuning = true;
+    S.paused   = true;
+    setupStage(next);          // 수치 먼저 적용 → 빛 도착 시 이미 반영된 상태
+    runAttunement(next, ()=>{
+      S.attuning = false;
+      S.paused   = false;
+      resumeAfterAttune();
+    });
+  }, 520);
+}
+
+/* 연출 종료 후 실제 라운드 진행을 시작한다 */
+function resumeAfterAttune(){
+  if(S.ended) return;
+  startProduction();
+  refireLoop();
 }
 
 /* =========================================================
@@ -2606,26 +3059,112 @@ function renderHand(){
     d.className='card'+(c?' filled':'');
     if(c){
       d.innerHTML=`<span class="cIco">${c.ico}</span>`;
-      d.onclick=()=>useCard(i);
+      d.onclick=()=>useCard(i);      // → 정보 시트를 띄운다
+      d.style.cursor='pointer';
     }
     ui.cards.appendChild(d);
   }
 }
-function useCard(i){
-  const c=S.hand[i];
-  if(!c) return;
-  const el=ui.cards.children[i];
-  if(!el.classList.contains('armed')){
-    [...ui.cards.children].forEach(x=>x.classList.remove('armed'));
-    el.classList.add('armed');
-    toast(`${c.nm} — 한 번 더 눌러 사용`);
-    return;
+/* ═══════════════════════════════════════════════════════════════
+   아이템 정보 시트
+   · 소망 카드 탭  → 효과 설명 + [사용한다] / [닫기]
+   · 드림캐쳐 탭   → 효과 설명 + 현재 적용 상태 + [닫기]
+   기존 '두 번 탭해서 사용' 방식을 대체한다.
+   ═══════════════════════════════════════════════════════════════ */
+const RAR_NM = { common:'흔한', rare:'드문', epic:'귀한' };
+
+/* 드림캐쳐가 지금 무엇을 하고 있는지 한 줄로 알려준다 */
+function catcherNote(c){
+  switch(c.id){
+    case 'abundance': return '이번 라운드 시작 구슬 150개';
+    case 'wind': case 'thunder': case 'storm':
+      return '현재 발사 간격 ' + Math.round(fireInterval()) + 'ms';
+    case 'care':      return '목표가 ' + fmt(S.goal) + '개로 조정됨';
+    case 'machine':   return '8초마다 구슬이 늘어납니다';
+    case 'luck':      return '이번 배치에서 꽝칸 1개가 배수칸으로 바뀜';
+    case 'greatluck': return '이번 배치에서 꽝칸 2개가 배수칸으로 바뀜';
+    case 'prism':     return '배치의 2배칸이 모두 3배칸이 됨';
+    case 'passion':   return performance.now() < S.feverUntil
+                             ? '피버존 발동 중 — 모든 획득 2배'
+                             : '중앙 2칸에서 3% 확률로 발동';
+    case 'guard':     return '꽝에 들어가도 절반은 손실 없음';
+    case 'desire':    return '배수는 2배, 꽝 손실은 2개';
+    case 'harvest':   return '클리어 시 상점 자금이 150 더 늘어남';
+    case 'insight':   return '상점 카드 가격 25% 할인 중';
+    case 'eternal':   return '매 라운드 시작 시 카드 1장 지급';
+    case 'twinshot':  return '한 번 발사할 때 구슬 2개';
+    case 'starlight': return '빨강·파랑·별 구슬이 2배 자주 나옴';
+    default: return '';
   }
-  sfxCard();
-  applyCard(c);
-  S.hand.splice(i,1);
-  S.usedCards.push(c.nm);
-  renderHand(); renderBuffs();
+}
+
+let INFO_ctx = null;      // { type:'card'|'catcher', idx, item }
+
+function openInfo(type, idx){
+  const item = (type === 'card') ? S.hand[idx] : S.catchers[idx];
+  if(!item) return;
+  INFO_ctx = { type, idx, item };
+
+  $('infoKind').textContent = (type === 'card') ? 'WISH CARD' : 'DREAMCATCHER';
+  $('infoIco').textContent  = item.ico;
+  $('infoNm').textContent   = item.nm + (type === 'card' ? '' : '의 드림캐쳐');
+  $('infoDsc').textContent  = item.dsc.trim();
+
+  const rar = $('infoRar');
+  rar.textContent = (RAR_NM[item.rar] || '') + ' 등급';
+  rar.className   = item.rar || '';
+
+  /* 드림캐쳐는 현재 상태를, 카드는 사용 시점 안내를 보여준다 */
+  $('infoNote').textContent = (type === 'catcher')
+    ? catcherNote(item)
+    : '사용하면 이번 라운드에 바로 적용됩니다';
+
+  const btns = $('infoBtns');
+  btns.innerHTML = '';
+  if(type === 'card'){
+    const use = document.createElement('div');
+    use.className = 'infoBtn use';
+    use.textContent = '사용한다';
+    use.onclick = confirmUseCard;
+    btns.appendChild(use);
+  }
+  const close = document.createElement('div');
+  close.className = 'infoBtn';
+  close.textContent = (type === 'card') ? '아직' : '닫기';
+  close.onclick = ()=>closeInfo();
+  btns.appendChild(close);
+
+  $('infoOv').classList.add('on');
+}
+
+function closeInfo(e){
+  if(e && e.target !== $('infoOv')) return;    // 카드 내부 탭은 무시
+  $('infoOv').classList.remove('on');
+  INFO_ctx = null;
+}
+
+/* 카드 사용 확정 */
+function confirmUseCard(){
+  if(!INFO_ctx || INFO_ctx.type !== 'card') return;
+  const { idx, item } = INFO_ctx;
+  /* 시트를 먼저 닫아 효과 연출이 가려지지 않게 한다 */
+  $('infoOv').classList.remove('on');
+  INFO_ctx = null;
+  setTimeout(()=>{
+    if(S.hand[idx] !== item) return;      // 그 사이 손패가 바뀌었다면 취소
+    sfxCard();
+    applyCard(item);
+    S.hand.splice(idx, 1);
+    S.usedCards.push(item.nm);
+    renderHand(); renderBuffs(); updateHUD();
+  }, 220);
+}
+
+/* ★ 두 번 탭 방식 → 정보 시트에서 확인 후 사용하는 방식으로 변경.
+   효과를 모르고 눌러 소모하는 일이 없도록 한다. */
+function useCard(i){
+  if(!S.hand[i]) return;
+  openInfo('card', i);
 }
 function applyCard(c){
   const B=S.buffs;
@@ -2681,8 +3220,12 @@ function renderBuffs(){
   if(B.jackpot) out.push(['잭팟','gold']);
   if(B.shield) out.push(['무손실','']);
   if(performance.now()<S.feverUntil) out.push(['피버존 2배','gold']);
-  S.catchers.forEach(c=>out.push([c.ico+c.nm,'']));
-  ui.buffBar.innerHTML = out.map(([t,cl])=>`<span class="buff ${cl}">${t}</span>`).join('');
+  /* 버프 칩(자동 적용 효과)은 표시만, 드림캐쳐 칩은 탭하면 설명이 열린다 */
+  let html = out.map(([t,cl])=>`<span class="buff ${cl}">${t}</span>`).join('');
+  html += S.catchers.map((c,i)=>
+    `<span class="buff catcher" onclick="openInfo('catcher',${i})">${c.ico}${c.nm}</span>`
+  ).join('');
+  ui.buffBar.innerHTML = html;
 }
 setInterval(()=>{ if(S.running||S.feverUntil>performance.now()) renderBuffs(); }, 2000);
 
@@ -3543,6 +4086,19 @@ function dvApply(){
   // 물리 값은 dvPhys()에서 별도 처리
   refireLoop(); updateHUD(); syncDev();
 }
+/* 발동 연출만 다시 재생 — 수치는 건드리지 않는다 */
+function dvAttune(){
+  if(!S.catchers.length){ toast('보유한 드림캐쳐가 없습니다'); return; }
+  closeDev();
+  setTimeout(()=>{
+    S.attuning = true; S.paused = true;
+    runAttunement(S.day, ()=>{
+      S.attuning = false; S.paused = false;
+      resumeAfterAttune();
+    });
+  }, 320);
+}
+
 function dvToggleCatcher(id){
   const i=S.catchers.findIndex(c=>c.id===id);
   if(i>=0) S.catchers.splice(i,1);
