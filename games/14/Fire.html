@@ -243,7 +243,8 @@ html,body{
 
 .pin.lit::before{
   content:''; position:absolute;
-  left:50%; top:50%; width:38px; height:38px; margin:-19px 0 0 -19px;
+  /* ★ 38px → 28px (75%). 최대로 커질 때 너무 크게 번져 핀 격자를 덮었다. */
+  left:50%; top:50%; width:28px; height:28px; margin:-14px 0 0 -14px;
   border-radius:50%; pointer-events:none;
   background:radial-gradient(circle,
     rgba(255,255,255,.92) 0%,
@@ -267,6 +268,18 @@ html,body{
   border-radius:50%; border:1.5px solid rgba(255,255,255,.95);
   animation:ringOut .65s cubic-bezier(.15,.8,.25,1) forwards;
   pointer-events:none; z-index:4;
+}
+/* ★ box-shadow(CPU 래스터화) → 자식 레이어(GPU 합성)로 대체.
+   box-shadow의 블러 반경은 transform:scale()에 반응하지 않아
+   기기 배율에 따라 발광 크기가 달라지는 문제가 있었다.
+   inset은 CSS px이므로 캔버스 scale과 함께 정확히 확대·축소된다. */
+.ring::after{
+  /* 이전 box-shadow 0 0 12px → 본체(6px) 밖 12px 까지 퍼졌다 */
+  content:''; position:absolute; inset:-12px;
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,
+    var(--gc, rgba(255,255,255,.55)) 0%,
+    transparent 62%);
 }
 @keyframes ringOut{
   0%{   transform:scale(.5); opacity:1; }
@@ -322,6 +335,16 @@ html,body{
   position:absolute; width:3px; height:3px; border-radius:50%;
   pointer-events:none; z-index:6;
 }
+.fwTrail::after{
+  /* 이전 0 0 5~9px + 0 0 9~13px → 본체 밖 약 13px */
+  content:''; position:absolute; inset:-13px;
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,
+    rgba(255,255,255,.88) 0%,
+    var(--gc,  rgba(255,230,150,.8)) 18%,
+    var(--gc2, rgba(255,190,80,.32)) 44%,
+    transparent 74%);
+}
 /* 터질 때 중심 섬광 */
 .fwFlash{
   position:absolute; width:16px; height:16px; margin:-8px 0 0 -8px;
@@ -333,14 +356,49 @@ html,body{
   position:absolute; border-radius:50%; pointer-events:none; z-index:6;
   border:1.5px solid rgba(255,255,255,.9);
 }
+.fwRing::after{
+  /* ★ 링은 scale(.4)→scale(8)까지 커지므로 inset을 %로 둔다.
+     px 고정이면 확대될 때 발광 띠가 상대적으로 얇아진다.
+     %는 본체 크기에 비례하므로 확대 내내 두께 비율이 유지된다. */
+  content:''; position:absolute; inset:-14%;
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,
+    transparent 62%,
+    var(--gc, rgba(255,220,140,.6)) 80%,
+    transparent 97%);
+}
 /* 파편 */
 .fwSpark{
   position:absolute; border-radius:50%; pointer-events:none; z-index:6;
+}
+/* ★ 폭죽 스파크 — 그림자 2겹을 단일 그라데이션으로 통합.
+   동시에 60개까지 생성되므로 여기서 얻는 이득이 가장 크다. */
+.fwSpark::after{
+  /* 이전 0 0 10px + 0 0 20px (2겹) → 본체 밖 약 20px.
+     본체 3.4px 기준 inset -20px = -588% 이지만
+     % 는 부모 크기에 비례하므로 px 로 고정해 일관성을 유지한다. */
+  content:''; position:absolute; inset:-19px;
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,
+    rgba(255,255,255,.92) 0%,
+    var(--gc,  rgba(255,220,120,.85)) 16%,
+    var(--gc2, rgba(255,180,60,.34)) 42%,
+    transparent 72%);
 }
 /* 낙하하는 잔광 (glitter) */
 .fwGlitter{
   position:absolute; width:2px; height:2px; border-radius:50%;
   pointer-events:none; z-index:6;
+}
+.fwGlitter::after{
+  /* 이전 0 0 7px + 0 0 13px → 본체 밖 약 13px */
+  content:''; position:absolute; inset:-12px;
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,
+    rgba(255,255,255,.9) 0%,
+    var(--gc,  rgba(255,240,190,.9)) 14%,
+    var(--gc2, rgba(255,210,110,.3)) 40%,
+    transparent 72%);
 }
 /* 회수되는 빛 구름 */
 .smokeCloud{
@@ -580,7 +638,8 @@ html,body{
   display:flex; gap:5px; justify-content:center; flex-wrap:wrap;
   /* 바 자체는 클릭을 통과시키고(핀 필드를 가리지 않게),
      탭이 필요한 드림캐쳐 칩만 예외로 이벤트를 받는다 */
-  z-index:6; pointer-events:none; padding:0 10px;
+  /* 홈 버튼(우측 26px + 여백)과 겹치지 않도록 오른쪽을 비워둔다 */
+  z-index:6; pointer-events:none; padding:0 42px 0 10px;
 }
 /* 탭 가능한 드림캐쳐 칩 — 금색으로 구분 */
 .buff.catcher{
@@ -601,16 +660,45 @@ html,body{
 /* 슬롯 변경 표시 */
 .slot.changed{ box-shadow:inset 0 0 0 1px rgba(255,217,138,.55); animation:changedGlow 2s ease-in-out infinite alternate; }
 @keyframes changedGlow{ from{ box-shadow:inset 0 0 0 1px rgba(255,217,138,.22);} to{ box-shadow:inset 0 0 0 1px rgba(255,217,138,.75), 0 0 10px rgba(255,217,138,.3);} }
-.slot.fever{ box-shadow:inset 0 0 0 1px rgba(255,120,200,.7); animation:feverGlow 1.2s ease-in-out infinite alternate; }
-@keyframes feverGlow{ from{ box-shadow:inset 0 0 0 1px rgba(255,120,200,.3);} to{ box-shadow:inset 0 0 0 1px rgba(255,120,200,.9), 0 0 14px rgba(255,120,200,.4);} }
-
-/* 개발자 모드 보강 */
-.dev-sub{ font-size:10.5px; color:#777; margin:-4px 0 10px; line-height:1.5; }
-.dev-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:7px; margin-top:8px; }
-.dev-grid .dev-btn{ margin-top:0; font-size:11.5px; padding:9px 6px; }
-.dev-chip{
-  display:inline-block; font-size:10px; padding:4px 8px; margin:3px 4px 0 0;
-  border:1px solid #3a3a3a; border-radius:10px; color:#bbb; background:#1c1c1c;
+/* ★ 피버칸 — 1px 테두리로는 전혀 보이지 않아 전면 개편.
+   칸 전체를 분홍빛으로 물들이고 상단에 표식을 둔다. */
+.slot.fever{
+  background:linear-gradient(180deg,
+    rgba(255,120,200,.20) 0%,
+    rgba(255,90,180,.09) 55%,
+    rgba(255,120,200,.16) 100%);
+  box-shadow:inset 0 0 0 1px rgba(255,140,210,.55),
+             inset 0 0 12px rgba(255,110,195,.22);
+  animation:feverGlow 1.6s ease-in-out infinite alternate;
+}
+/* 상단 표식 — 여기가 피버칸임을 알린다 */
+.slot.fever::before{
+  content:'◆';
+  position:absolute; top:2px; left:50%; transform:translateX(-50%);
+  font-size:7px; color:rgba(255,160,220,.9);
+  text-shadow:0 0 6px rgba(255,120,200,.9);
+  pointer-events:none; z-index:2;
+}
+/* 발동 중에는 더 강하게 빛난다 */
+.slot.fever.hot{
+  background:linear-gradient(180deg,
+    rgba(255,140,210,.42) 0%,
+    rgba(255,110,195,.22) 55%,
+    rgba(255,140,210,.36) 100%);
+  box-shadow:inset 0 0 0 1px rgba(255,180,230,.85),
+             inset 0 0 20px rgba(255,120,200,.5);
+  animation:feverGlow .7s ease-in-out infinite alternate;
+}
+/* 발동 순간 터지는 연출 */
+@keyframes feverBurst{
+  0%   { transform:scale(1);    filter:brightness(1); }
+  22%  { transform:scale(1.14); filter:brightness(2.1); }
+  100% { transform:scale(1);    filter:brightness(1); }
+}
+.slot.feverPop{ animation:feverBurst .62s cubic-bezier(.2,.9,.3,1); z-index:3; }
+@keyframes feverGlow{
+  0%   { opacity:.82; }
+  100% { opacity:1; }
 }
 .dev-chip.on{ border-color:#FFD98A; color:#FFD98A; background:#2a2214; }
 .dev-note{ font-size:10px; color:#666; margin-top:8px; line-height:1.6; }
@@ -746,6 +834,8 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   background:rgba(3,5,11,0.88);
   opacity:0; pointer-events:none; transition:opacity .45s ease;
+  /* ★ 확대되는 카드·발광이 캔버스 밖으로 새지 않도록 차단 */
+  overflow:hidden;
 }
 #atOv.on{ opacity:1; pointer-events:auto; }
 
@@ -772,7 +862,11 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
 }
 #atCard .ico{ font-size:40px; line-height:1; }
 #atCard .nm{ font-family:serif; font-size:15px; color:var(--gold); letter-spacing:.04em; }
-#atCard .dsc{ font-size:11px; color:rgba(213,216,224,.66); text-align:center; line-height:1.5; }
+#atCard .dsc{
+  font-size:11px; color:rgba(213,216,224,.66); text-align:center; line-height:1.5;
+  /* 긴 설명도 카드 안에서 줄바꿈되도록 */
+  word-break:keep-all; overflow-wrap:anywhere;
+}
 
 /* 카드 등장 → 확대 + 흔들림 → 발사 */
 @keyframes atEnter{
@@ -840,10 +934,16 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
 
 /* 증가 수치 팝업 */
 .atGain{
+  /* ★ 화면 밖으로 나가지 않도록 중앙 정렬 방식으로 배치한다.
+     left에 '팝업 중심'을 지정하고 translateX(-50%)로 보정하므로
+     JS는 텍스트 폭을 몰라도 위치를 정할 수 있다. */
   position:absolute; z-index:37; pointer-events:none;
   font-family:serif; font-size:17px; font-weight:600;
   color:var(--gold); text-shadow:0 0 12px rgba(255,217,138,.85);
   white-space:nowrap;
+  transform:translateX(-50%);
+  /* 캔버스 폭을 넘지 않게 상한을 둔다 */
+  max-width:340px; text-align:center;
 }
 
 /* 하단 진행 점 */
@@ -922,6 +1022,150 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
 }
 .infoBtn:active{ transform:scale(.97); }
 
+
+/* ═══════════════════════════════════════════════════════════
+   개발자 모드 — 카테고리 방식 재구성
+   첫 화면에 진입 버튼만 두고, 각 카테고리는 개별 페이지로 분리.
+   ═══════════════════════════════════════════════════════════ */
+
+/* 카테고리 진입 목록 */
+#devHome{ padding:4px 0; }
+.devCat{
+  display:flex; align-items:center; gap:12px;
+  padding:14px 16px; margin-bottom:8px;
+  background:#1a1a1a; border:1px solid #2c2c2c; border-radius:6px;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+.devCat:active{ background:#242424; }
+.devCat .no{
+  flex:0 0 26px; height:26px; border-radius:50%;
+  background:#2a2a2a; color:#FFD98A;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:bold;
+}
+.devCat .tx{ flex:1 1 auto; min-width:0; }
+.devCat .nm{ font-size:13.5px; color:#eee; margin-bottom:3px; }
+.devCat .ds{ font-size:10.5px; color:#777; line-height:1.45; }
+.devCat .ar{ flex:0 0 auto; color:#555; font-size:16px; }
+
+/* 카테고리 페이지 */
+.devPage{ display:none; }
+.devPage.on{ display:block; }
+
+/* 뒤로가기 + 페이지 제목 */
+#devBack{
+  display:none; align-items:center; gap:8px;
+  padding:10px 12px; margin-bottom:16px;
+  background:#1c1c1c; border:1px solid #2c2c2c; border-radius:5px;
+  font-size:12px; color:#bbb; cursor:pointer;
+}
+#devBack.on{ display:flex; }
+#devBack:active{ background:#252525; }
+
+/* 각 페이지 하단 저장 버튼 */
+.devSave{
+  position:sticky; bottom:0;
+  margin:18px -20px -20px; padding:14px 20px;
+  background:linear-gradient(180deg, rgba(17,17,17,0), #111 34%);
+  border-top:1px solid #2a2a2a;
+}
+.devSave button{
+  width:100%; padding:13px 0;
+  background:linear-gradient(180deg,#3a3320,#2a2416);
+  border:1px solid rgba(255,217,138,.4); border-radius:5px;
+  color:#FFD98A; font-size:13.5px; font-weight:bold;
+  letter-spacing:.04em;
+}
+.devSave button:active{ transform:scale(.985); }
+.devSave .hint{ font-size:9.5px; color:#666; text-align:center; margin-top:7px; }
+
+/* 아이템 카드 — 이름만으로 알 수 없는 효과를 설명과 함께 */
+.devItem{
+  display:flex; align-items:flex-start; gap:10px;
+  padding:10px 12px; margin-bottom:6px;
+  background:#1a1a1a; border:1px solid #2a2a2a; border-radius:5px;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+.devItem:active{ background:#222; }
+.devItem.on{
+  background:#241f10; border-color:rgba(255,217,138,.45);
+}
+.devItem .ico{ flex:0 0 24px; font-size:19px; text-align:center; line-height:1.2; }
+.devItem .bd{ flex:1 1 auto; min-width:0; }
+.devItem .nm{ font-size:12.5px; color:#ddd; margin-bottom:3px; }
+.devItem.on .nm{ color:#FFD98A; }
+.devItem .ds{ font-size:10.5px; color:#7a7a7a; line-height:1.5; }
+.devItem .rr{
+  flex:0 0 auto; font-size:9px; padding:2px 6px; border-radius:8px;
+  border:1px solid #333; color:#666; align-self:center;
+}
+.devItem .rr.epic{ color:#FFC8E0; border-color:rgba(255,200,224,.3); }
+.devItem .rr.rare{ color:#A8D8FF; border-color:rgba(168,216,255,.3); }
+.devItem .lv{
+  flex:0 0 auto; font-size:11px; color:#FFD98A; align-self:center;
+  min-width:30px; text-align:right;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   우측 상단 보조 버튼 — 타이틀 복귀 / 프롤로그 스킵
+   ═══════════════════════════════════════════════════════════ */
+#homeBtn{
+  /* HUD(높이 76px)가 좌우를 꽉 쓰므로 그 아래에 배치해 겹침을 피한다 */
+  position:absolute; top:calc(var(--hud-h) + 4px); right:8px; z-index:12;
+  width:26px; height:26px; border-radius:4px;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(8,12,24,.55);
+  border:1px solid rgba(210,215,225,.18);
+  color:rgba(213,216,224,.6); font-size:13px; line-height:1;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+#homeBtn:active{ transform:scale(.94); background:rgba(20,26,42,.8); }
+
+/* 프롤로그 스킵 — 오버레이 위에 떠야 하므로 z-index를 더 높인다 */
+#skipBtn{
+  position:absolute; top:14px; right:14px; z-index:32;
+  padding:7px 13px; border-radius:3px;
+  background:rgba(8,12,24,.55);
+  border:1px solid rgba(255,217,138,.3);
+  color:rgba(255,217,138,.78);
+  font-family:serif; font-size:11px; letter-spacing:.1em;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+  opacity:0; pointer-events:none; transition:opacity .5s ease;
+}
+#skipBtn.on{ opacity:1; pointer-events:auto; }
+#skipBtn:active{ transform:scale(.96); }
+
+/* 타이틀 복귀 확인 시트 */
+#quitOv{
+  position:absolute; inset:0; z-index:39;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(3,5,11,.84);
+  opacity:0; pointer-events:none; transition:opacity .24s ease;
+}
+#quitOv.on{ opacity:1; pointer-events:auto; }
+#quitCard{
+  width:236px; padding:24px 20px 18px; text-align:center;
+  border:1px solid rgba(255,217,138,.3); border-radius:5px;
+  background:linear-gradient(180deg, rgba(22,26,42,.97), rgba(11,14,24,.97));
+  transform:scale(.92); transition:transform .26s cubic-bezier(.2,.9,.3,1);
+}
+#quitOv.on #quitCard{ transform:scale(1); }
+#quitCard .t{ font-family:serif; font-size:15px; color:var(--gold); margin-bottom:8px; }
+#quitCard .d{ font-size:11.5px; color:rgba(213,216,224,.66); line-height:1.7; margin-bottom:18px; }
+#quitCard .btns{ display:flex; gap:8px; }
+#quitCard .btns div{
+  flex:1 1 0; padding:11px 0; border-radius:3px;
+  font-family:serif; font-size:12.5px;
+  border:1px solid rgba(210,215,225,.24);
+  background:rgba(255,255,255,.04); color:rgba(232,238,255,.82);
+  cursor:pointer;
+}
+#quitCard .btns div.go{
+  border-color:rgba(255,124,138,.45); color:#FF9BA8;
+  background:linear-gradient(180deg, rgba(255,124,138,.14), rgba(255,124,138,.05));
+}
+
 </style>
 </head>
 <body>
@@ -941,6 +1185,8 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
 
 <!-- ══════════ 인게임 ══════════ -->
 <div id="game" class="screen">
+  <!-- 타이틀로 돌아가기 -->
+  <div id="homeBtn" onclick="askQuit()" title="타이틀로">⌂</div>
 
   <div id="hud">
     <div class="frame">
@@ -993,6 +1239,8 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
 </div>
 
 <!-- ══════════ 프롤로그 ══════════ -->
+<div id="skipBtn" onclick="skipPrologue()">건너뛰기 ›</div>
+
 <div class="ov" id="prologue">
   <p>악몽은 어둠 속에서 찾아온다.</p>
   <p>밤이 깊어질수록, 악몽은 더욱 선명해진다.</p>
@@ -1063,235 +1311,302 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
   </div>
   <div class="dev-body">
 
-    <div class="dev-section">
-      <div class="dev-title">1 · 현재 상태</div>
-      <div class="dev-note" id="dvInfo" style="margin:0 0 12px"></div>
+    <!-- 뒤로가기 (카테고리 진입 시에만 표시) -->
+    <div id="devBack" onclick="devGo('')"><span>‹</span><span id="devBackNm">돌아가기</span></div>
+
+    <!-- ══════════ 카테고리 목록 ══════════ -->
+    <div id="devHome">
+      <div class="devCat" onclick="devGo('state')">
+        <div class="no">1</div>
+        <div class="tx"><div class="nm">현재 상태 · 재화</div>
+          <div class="ds">DAY, 보유 구슬, 목표치, 상점 자금을 직접 입력합니다</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('stage')">
+        <div class="no">2</div>
+        <div class="tx"><div class="nm">스테이지 이동</div>
+          <div class="ds">원하는 DAY로 즉시 이동합니다 (구슬 초기화)</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('catcher')">
+        <div class="no">3</div>
+        <div class="tx"><div class="nm">드림캐쳐</div>
+          <div class="ds">영구 효과 20종 — 효과 설명을 보고 켜고 끕니다 (최대 5개)</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('card')">
+        <div class="no">4</div>
+        <div class="tx"><div class="nm">소망 카드</div>
+          <div class="ds">1회용 카드 20종 — 손패에 지급합니다 (최대 5장)</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('upg')">
+        <div class="no">5</div>
+        <div class="tx"><div class="nm">랜턴 강화</div>
+          <div class="ds">발사 속도, 자동 생산, 더블샷 등 상점 강화 레벨</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('force')">
+        <div class="no">6</div>
+        <div class="tx"><div class="nm">진행 강제 · 구슬 발사</div>
+          <div class="ds">즉시 클리어, 게임 오버, 특수 구슬 강제 발사</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('screen')">
+        <div class="no">7</div>
+        <div class="tx"><div class="nm">화면 직접 열기</div>
+          <div class="ds">드림캐쳐 선택, 상점, 엔딩 인증서, 발동 연출</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('phys')">
+        <div class="no">8</div>
+        <div class="tx"><div class="nm">구슬 물리</div>
+          <div class="ds">중력, 반발, 가속 곡선 — 낙하 느낌을 조정합니다</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('fx')">
+        <div class="no">9</div>
+        <div class="tx"><div class="nm">연출 · 사운드 테스트</div>
+          <div class="ds">핀 발광 5색, 폭죽, 효과음을 개별 재생합니다</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('tut')">
+        <div class="no">10</div>
+        <div class="tx"><div class="nm">프롤로그 · 튜토리얼</div>
+          <div class="ds">인트로 재생, 튜토리얼 강제 실행 및 초기화</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('reset')">
+        <div class="no">11</div>
+        <div class="tx"><div class="nm">초기화</div>
+          <div class="ds">강화 해제, 최고 기록 삭제, 처음부터 시작</div></div>
+        <div class="ar">›</div>
+      </div>
+      <div class="devCat" onclick="devGo('info')">
+        <div class="no">12</div>
+        <div class="tx"><div class="nm">밸런스 참고 자료</div>
+          <div class="ds">현재 배치, 획득률, 물리 수치를 한눈에 확인합니다</div></div>
+        <div class="ar">›</div>
+      </div>
+    </div>
+
+    <!-- ══════════ 1 · 현재 상태 ══════════ -->
+    <div class="devPage" id="devP_state">
+      <div class="dev-sub">값을 입력한 뒤 아래 <b>저장</b>을 누르면 즉시 반영됩니다.</div>
       <div class="dev-row tight"><label>DAY (1~10)</label><input type="number" class="dev-input" id="dvDay" min="1" max="10"></div>
       <div class="dev-row tight"><label>보유 구슬</label><input type="number" class="dev-input" id="dvBead"></div>
-      <div class="dev-row tight"><label>보유 구슬(진행)</label><input type="number" class="dev-input" id="dvGain"></div>
+      <div class="dev-row tight"><label>이번 라운드 획득</label><input type="number" class="dev-input" id="dvGain"></div>
       <div class="dev-row tight"><label>목표치</label><input type="number" class="dev-input" id="dvGoal"></div>
       <div class="dev-row tight"><label>상점 자금</label><input type="number" class="dev-input" id="dvMoney"></div>
       <div class="dev-row tight"><label>발사 간격 강제 (ms)</label><input type="number" class="dev-input" id="dvFire" placeholder="자동"></div>
-      <button class="dev-btn action" onclick="dvApply()">값 적용</button>
-      <div class="dev-sub" style="margin-top:10px">드림캐쳐 발동 연출 확인 (보유한 것만 재생)</div>
-      <button class="dev-btn" onclick="dvAttune()">발동 연출 미리보기</button>
-    </div>
-
-    <div class="dev-section">
-      <div class="dev-title">2 · 스테이지 이동</div>
-      <div class="dev-sub">해당 DAY로 즉시 시작 (구슬 100개 초기화)</div>
-      <div class="dev-grid">
-        <button class="dev-btn" onclick="dvStage(1)">DAY 1</button>
-        <button class="dev-btn" onclick="dvStage(2)">DAY 2</button>
-        <button class="dev-btn" onclick="dvStage(3)">DAY 3</button>
-        <button class="dev-btn" onclick="dvStage(4)">DAY 4</button>
-        <button class="dev-btn" onclick="dvStage(5)">DAY 5</button>
-        <button class="dev-btn" onclick="dvStage(6)">DAY 6</button>
-        <button class="dev-btn" onclick="dvStage(7)">DAY 7</button>
-        <button class="dev-btn" onclick="dvStage(8)">DAY 8</button>
-        <button class="dev-btn" onclick="dvStage(9)">DAY 9</button>
-        <button class="dev-btn" onclick="dvStage(10)">DAY 10</button>
+      <div class="dev-note">
+        <b>보유 구슬</b> — 클리어 판정 기준입니다. 목표치에 도달하면 클리어됩니다.<br>
+        <b>이번 라운드 획득</b> — 통계용 누적값이며 판정에는 쓰이지 않습니다.<br>
+        <b>발사 간격</b> — 비워두면 드림캐쳐·강화에 따라 자동 계산됩니다. 최소 40ms.
+      </div>
+      <div class="devSave">
+        <button onclick="dvApply()">저장</button>
+        <div class="hint">DAY를 바꾸면 배치가 다시 생성됩니다</div>
       </div>
     </div>
 
-    <div class="dev-section">
-      <div class="dev-title">3 · 드림캐쳐 (영구 · 최대 5)</div>
-      <div class="dev-sub">탭하여 즉시 켜고 끄기</div>
+    <!-- ══════════ 2 · 스테이지 이동 ══════════ -->
+    <div class="devPage" id="devP_stage">
+      <div class="dev-sub">해당 DAY로 즉시 시작합니다. 보유 구슬은 100개로 초기화되고,
+        드림캐쳐 효과는 유지됩니다.</div>
+      <div class="dev-grid" id="dvStageGrid"></div>
+      <div class="dev-note" id="dvStageInfo"></div>
+    </div>
+
+    <!-- ══════════ 3 · 드림캐쳐 ══════════ -->
+    <div class="devPage" id="devP_catcher">
+      <div class="dev-sub">탭하면 즉시 켜고 끕니다. <b>영구 효과</b>이며 최대 5개까지 보유합니다.</div>
       <div id="dvCatchers"></div>
-    </div>
-
-    <div class="dev-section">
-      <div class="dev-title">4 · 소망 카드 지급</div>
-      <div class="dev-sub">탭하면 손패에 추가 (게임 화면에서 카드를 두 번 눌러 사용)</div>
-      <div id="dvCards"></div>
-    </div>
-
-    <div class="dev-section">
-      <div class="dev-title">5 · 랜턴 강화 레벨</div>
-      <div class="dev-sub">탭하여 레벨 +1 (최대 도달 시 0으로 순환)</div>
-      <div id="dvUpg"></div>
-    </div>
-
-    <div class="dev-section">
-      <div class="dev-title">6 · 구슬 강제 발사</div>
-      <div class="dev-grid">
-        <button class="dev-btn" onclick="dropBall('')">일반 구슬</button>
-        <button class="dev-btn" onclick="dropBall('red')">빨간 (+2)</button>
-        <button class="dev-btn" onclick="dropBall('blue')">파란 (+3)</button>
-        <button class="dev-btn action" onclick="dropBall('star')">별 (+4)</button>
+      <div class="dev-note">
+        <b>즉시 적용</b> — 탭하는 즉시 배치가 재계산되고 효과가 반영됩니다.
       </div>
-      <div class="dev-note">구슬을 소모하지 않고 발사합니다.</div>
     </div>
 
-    <div class="dev-section">
-      <div class="dev-title">7 · 진행 강제</div>
+    <!-- ══════════ 4 · 소망 카드 ══════════ -->
+    <div class="devPage" id="devP_card">
+      <div class="dev-sub">탭하면 손패에 추가됩니다. 게임 화면에서 카드를 눌러 사용하세요.</div>
+      <div id="dvCards"></div>
+      <div class="dev-note">
+        <b>1회용</b>이며 손패는 최대 5장입니다.<br>
+        대부분 <b>이번 라운드에만</b> 적용되고, 배치를 바꾸는 카드는 즉시 반영됩니다.
+      </div>
+      <div class="devSave">
+        <button onclick="dvCardClear()">손패 비우기</button>
+        <div class="hint">지급한 카드를 모두 제거합니다</div>
+      </div>
+    </div>
+
+    <!-- ══════════ 5 · 랜턴 강화 ══════════ -->
+    <div class="devPage" id="devP_upg">
+      <div class="dev-sub">탭하면 레벨이 1 올라갑니다. 최대에 도달하면 0으로 돌아갑니다.</div>
+      <div id="dvUpg"></div>
+      <div class="dev-note">
+        상점에서 자금으로 구매하는 항목입니다. <b>라운드가 바뀌면 초기화</b>됩니다.
+      </div>
+      <div class="devSave">
+        <button onclick="dvUpgSave()">저장</button>
+        <div class="hint">발사 루프와 자동 생산을 다시 시작합니다</div>
+      </div>
+    </div>
+
+    <!-- ══════════ 6 · 진행 강제 ══════════ -->
+    <div class="devPage" id="devP_force">
+      <div class="dev-sub">진행도 강제</div>
       <div class="dev-grid">
         <button class="dev-btn" onclick="dvGoal(0.5)">진행도 50%</button>
         <button class="dev-btn" onclick="dvGoal(0.9)">진행도 90%</button>
         <button class="dev-btn action" onclick="closeDev();dvGoal(1)">즉시 클리어</button>
         <button class="dev-btn" onclick="closeDev();S.beads=0;S.active=0;checkState()">게임 오버</button>
       </div>
+      <div class="dev-sub" style="margin-top:16px">구슬 강제 발사 <span style="color:#555">— 구슬을 소모하지 않습니다</span></div>
+      <div class="dev-grid">
+        <button class="dev-btn" onclick="dropBall('')">일반 구슬</button>
+        <button class="dev-btn" onclick="dropBall('red')">빨강 (+2)</button>
+        <button class="dev-btn" onclick="dropBall('blue')">파랑 (+3)</button>
+        <button class="dev-btn action" onclick="dropBall('star')">별 (+4)</button>
+      </div>
+      <div class="dev-note">
+        특수 구슬은 배수칸에 들어갈 때 <b>배수에 더해지는</b> 보너스를 줍니다.<br>
+        기본 확률 — 일반 70% / 빨강 14% / 파랑 10% / 별 6%
+      </div>
     </div>
 
-    <div class="dev-section">
-      <div class="dev-title">8 · 화면 직접 열기</div>
+    <!-- ══════════ 7 · 화면 직접 열기 ══════════ -->
+    <div class="devPage" id="devP_screen">
+      <div class="dev-sub">각 화면을 현재 상태 그대로 엽니다.</div>
       <div class="dev-grid">
         <button class="dev-btn" onclick="closeDev();openCatcher()">드림캐쳐 선택</button>
         <button class="dev-btn" onclick="closeDev();S.money+=2000;openShop()">상점 (+2000)</button>
         <button class="dev-btn" onclick="closeDev();openUpg()">랜턴 강화</button>
+        <button class="dev-btn action" onclick="dvAttune()">발동 연출</button>
+      </div>
+      <div class="dev-sub" style="margin-top:16px">엔딩</div>
+      <div class="dev-grid">
         <button class="dev-btn" onclick="closeDev();S.dayTimes=[70000,112000,162000,221000,288000,373000,476000,612000,651000,700000];S.totalGained=18492;S.maxMult=10;showEnding()">엔딩 인증서</button>
       </div>
-    </div>
-
-    <div class="dev-section">
-      <div class="dev-title">9 · 초기화</div>
-      <div class="dev-grid">
-        <button class="dev-btn" onclick="dvReset()">강화 전체 해제</button>
-        <button class="dev-btn" onclick="dvClearBest()">최고 기록 삭제</button>
-        <button class="dev-btn" onclick="closeDev();startGame(true)">처음부터 (프롤로그 생략)</button>
-        <button class="dev-btn" onclick="closeDev();backToMenu()">메인 메뉴</button>
+      <div class="dev-note">
+        <b>발동 연출</b> — 보유한 드림캐쳐가 하나씩 포커스되며 대상 UI로 빛을 보냅니다.
+        드림캐쳐가 없으면 재생되지 않습니다.
       </div>
     </div>
 
-    <div class="dev-section">
-      <div class="dev-title">10 · 프롤로그 / 튜토리얼</div>
-      <div class="dev-sub">개발 모드 — 게임 시작마다 항상 표시됩니다</div>
+    <!-- ══════════ 8 · 구슬 물리 ══════════ -->
+    <div class="devPage" id="devP_phys">
+      <div class="dev-sub">낙하 속도 <span style="color:#555">— 발사 간격과는 별개입니다</span></div>
       <div class="dev-grid">
-        <button class="dev-btn action" onclick="tutForce()">튜토리얼 지금 실행</button>
-        <button class="dev-btn" onclick="tutReset()">튜토리얼 다시 보기 설정</button>
-        <button class="dev-btn" onclick="closeDev();startGame()">프롤로그부터 재생</button>
+        <button class="dev-btn" onclick="PHYS.speed=0.5;syncDev();toast('0.5× 슬로모션')">0.5× 느리게</button>
+        <button class="dev-btn" onclick="PHYS.speed=0.75;syncDev();toast('0.75×')">0.75×</button>
+        <button class="dev-btn action" onclick="PHYS.speed=1;syncDev();toast('1× 기본')">1× 기본</button>
+        <button class="dev-btn" onclick="PHYS.speed=1.5;syncDev();toast('1.5×')">1.5×</button>
+        <button class="dev-btn" onclick="PHYS.speed=2;syncDev();toast('2×')">2× 빠르게</button>
+        <button class="dev-btn" onclick="CHARGE_MS=CHARGE_MS?0:260;syncDev();toast('장전 '+CHARGE_MS+'ms')">장전 0/260</button>
+      </div>
+
+      <div class="dev-sub" style="margin-top:16px">튕김 강도 <span style="color:#555">— 핀에 부딪힐 때 튀는 정도</span></div>
+      <div class="dev-grid">
+        <button class="dev-btn" onclick="PHYS.rest=0.24;PHYS.cap=180;syncDev();toast('약하게')">약하게</button>
+        <button class="dev-btn action" onclick="PHYS.rest=0.42;PHYS.cap=320;syncDev();toast('기본')">기본</button>
+        <button class="dev-btn" onclick="PHYS.rest=0.58;PHYS.cap=430;syncDev();toast('강하게')">강하게</button>
+        <button class="dev-btn" onclick="PHYS.rest=0.72;PHYS.cap=560;syncDev();toast('아주 강하게')">아주 강하게</button>
+      </div>
+
+      <div class="dev-sub" style="margin-top:16px">초기 가속 <span style="color:#555">— 처음 몇 행을 천천히 떨어뜨립니다</span></div>
+      <div class="dev-grid">
+        <button class="dev-btn" onclick="PHYS.gStart=1;PHYS.rampRows=1;syncDev();toast('가속 없음')">가속 없음</button>
+        <button class="dev-btn" onclick="PHYS.gStart=0.55;PHYS.rampRows=4;syncDev();toast('약한 가속')">약하게</button>
+        <button class="dev-btn action" onclick="PHYS.gStart=0.35;PHYS.rampRows=5;syncDev();toast('기본 가속')">기본</button>
+        <button class="dev-btn" onclick="PHYS.gStart=0.2;PHYS.rampRows=7;syncDev();toast('강한 가속')">강하게</button>
+      </div>
+
+      <div class="dev-sub" style="margin-top:16px">개별 수치</div>
+      <div class="dev-row tight"><label>중력 G (px/s²)</label><input type="number" class="dev-input" id="dvG" min="800" max="14000" step="200"></div>
+      <div class="dev-row tight"><label>반발계수 (0~1)</label><input type="number" class="dev-input" id="dvRest" min="0" max="1" step="0.02"></div>
+      <div class="dev-row tight"><label>반발 상한 (px/s)</label><input type="number" class="dev-input" id="dvCap" min="60" max="900" step="20"></div>
+      <div class="dev-row tight"><label>수평 반발 (px/s)</label><input type="number" class="dev-input" id="dvKick" min="40" max="500" step="10"></div>
+      <div class="dev-row tight"><label>편향 (0~1)</label><input type="number" class="dev-input" id="dvBias" min="0" max="1" step="0.05"></div>
+      <div class="dev-row tight"><label>관성 승계 (0~1)</label><input type="number" class="dev-input" id="dvInertia" min="0" max="1" step="0.05"></div>
+      <div class="dev-row tight"><label>가속 시작 배율</label><input type="number" class="dev-input" id="dvGStart" min="0.1" max="1" step="0.05"></div>
+      <div class="dev-row tight"><label>가속 구간 (행)</label><input type="number" class="dev-input" id="dvRamp" min="1" max="14" step="1"></div>
+      <div class="dev-row tight"><label>장전 시간 (ms)</label><input type="number" class="dev-input" id="dvCharge2" min="0" max="900" step="20"></div>
+      <div class="dev-note">
+        <b>반발계수</b> — 1에 가까울수록 에너지를 잃지 않고 계속 튑니다.<br>
+        <b>편향</b> — 핀 중심에서 벗어난 정도를 수평 속도로 바꾸는 비율입니다.<br>
+        <b>관성 승계</b> — 발사 순간 랜턴의 좌우 속도를 구슬이 물려받는 비율입니다.
+      </div>
+      <div class="devSave">
+        <button onclick="dvPhys()">저장</button>
+        <div class="hint">다음 발사부터 적용됩니다</div>
+      </div>
+    </div>
+
+    <!-- ══════════ 9 · 연출 · 사운드 ══════════ -->
+    <div class="devPage" id="devP_fx">
+      <div class="dev-sub">핀 발광 <span style="color:#555">— 희귀할수록 크고 오래 빛납니다</span></div>
+      <div class="dev-grid">
+        <button class="dev-btn" onclick="dvFlashPin('hitY')">노랑 60%</button>
+        <button class="dev-btn" onclick="dvFlashPin('hitO')">주황 20%</button>
+        <button class="dev-btn" onclick="dvFlashPin('hitG')">녹색 12%</button>
+        <button class="dev-btn" onclick="dvFlashPin('hitR')">빨강 6%</button>
+        <button class="dev-btn action" onclick="dvFlashPin('hitB')">청록 2%</button>
+        <button class="dev-btn" onclick="dvFlashAll()">전체 순차</button>
+      </div>
+      <div class="dev-note">
+        빨강·청록에는 <b>링 웨이브</b>가 추가됩니다.<br>
+        발광은 <code>::before</code> 레이어의 그라데이션으로 그려져 GPU에서 합성됩니다.
+      </div>
+      <div class="dev-sub" style="margin-top:16px">사운드</div>
+      <div class="dev-grid" id="dvSfxGrid"></div>
+    </div>
+
+    <!-- ══════════ 10 · 프롤로그 · 튜토리얼 ══════════ -->
+    <div class="devPage" id="devP_tut">
+      <div class="dev-sub">현재 <b>개발 모드</b>로, 게임 시작마다 항상 표시됩니다.</div>
+      <div class="dev-grid">
+        <button class="dev-btn action" onclick="tutForce()">튜토리얼 실행</button>
+        <button class="dev-btn" onclick="tutReset()">다시 보기 설정</button>
+        <button class="dev-btn" onclick="closeDev();startGame()">프롤로그부터</button>
         <button class="dev-btn" onclick="sfxPrologue()">프롤로그 사운드</button>
       </div>
       <div class="dev-note">
-        <b>흐름</b> — 프롤로그(사운드+문구 5줄 순차) → 암전 → 게임 화면 →
-        중앙 멘트 → 랜턴 → 별 → 배수칸 → <b>강화</b> → <b>발사 스위치</b><br>
-        튜토리얼 중에는 게임이 <b>일시정지</b>되며, 화면을 탭해 진행합니다.<br><br>
+        <b>흐름</b> — 프롤로그(문구 5줄) → 암전 → 게임 화면 → 중앙 멘트 →
+        랜턴 → 별 → 배수칸 → 강화 → 발사 스위치<br>
+        튜토리얼 중에는 게임이 <b>일시정지</b>되며 화면을 탭해 진행합니다.<br><br>
         <b style="color:#FFD98A">배포 전 작업</b> — <code>tutSeen()</code> 함수의
         <code>return false;</code> 줄을 삭제하면 최초 1회만 표시됩니다.
       </div>
     </div>
 
-    <div class="dev-section">
-      <div class="dev-title">11 · 핀 네온 발광 테스트</div>
-      <div class="dev-sub">무작위 핀에 해당 색상을 강제로 점등합니다</div>
+    <!-- ══════════ 11 · 초기화 ══════════ -->
+    <div class="devPage" id="devP_reset">
+      <div class="dev-sub" id="dvKeepState"></div>
       <div class="dev-grid">
-        <button class="dev-btn" onclick="dvFlashPin('hitY')">노랑 (60%)</button>
-        <button class="dev-btn" onclick="dvFlashPin('hitO')">주황 (20%)</button>
-        <button class="dev-btn" onclick="dvFlashPin('hitG')">녹색 (12%)</button>
-        <button class="dev-btn" onclick="dvFlashPin('hitR')">빨강 (6%)</button>
-        <button class="dev-btn action" onclick="dvFlashPin('hitB')">청록 (2%)</button>
-        <button class="dev-btn" onclick="dvFlashAll()">전체 순차 점등</button>
+        <button class="dev-btn action" onclick="dvDropKeep()">개발자 설정 비우기</button>
+        <button class="dev-btn" onclick="dvReset()">강화 전체 해제</button>
+        <button class="dev-btn" onclick="dvClearBest()">최고 기록 삭제</button>
+        <button class="dev-btn" onclick="closeDev();startGame(true)">처음부터 (프롤로그 생략)</button>
+        <button class="dev-btn" onclick="closeDev();backToMenu()">메인 메뉴</button>
       </div>
       <div class="dev-note">
-        희귀할수록 <b>더 크고 오래</b> 빛나며, 빨강·청록은 <b>링 웨이브</b>가 추가됩니다.<br>
-        네온 표현: 흰 코어 + 색 하이라이트 + 넓은 확산의 <b>3중 그림자</b>
+        <b>개발자 설정 비우기</b> — 여기서 지정한 드림캐쳐·카드·강화를 모두 버리고
+        순수한 플레이 상태로 돌아갑니다. 이걸 누르지 않으면 게임을 새로 시작해도
+        지정한 설정이 계속 따라붙습니다.<br>
+        <b>강화 전체 해제</b> — 랜턴 강화 레벨만 0으로 되돌립니다.<br>
+        <b>처음부터</b> — DAY 1로 돌아갑니다 (개발자 설정은 유지).
       </div>
     </div>
 
-    <div class="dev-section">
-      <div class="dev-title">12 · 구슬 물리</div>
-      <div class="dev-sub">실시간 시뮬레이션 (칸당 약 29 물리스텝) · 발사 속도와 독립</div>
-      <div class="dev-grid">
-        <button class="dev-btn" onclick="PHYS.speed=0.5;syncDev();toast('0.5× 슬로모션')">0.5× 느리게</button>
-        <button class="dev-btn" onclick="PHYS.speed=0.75;syncDev();toast('0.75×')">0.75×</button>
-        <button class="dev-btn action" onclick="PHYS.speed=1;syncDev();toast('1× 기본')">1× 기본</button>
-        <button class="dev-btn" onclick="PHYS.speed=1.5;syncDev();toast('1.5×')">1.5× 빠르게</button>
-        <button class="dev-btn" onclick="PHYS.speed=2;syncDev();toast('2×')">2× 빠르게</button>
-        <button class="dev-btn" onclick="CHARGE_MS=CHARGE_MS?0:260;syncDev();toast('장전 '+CHARGE_MS+'ms')">장전 0/260</button>
-      </div>
-
-      <div class="dev-sub" style="margin-top:14px">튕김 강도</div>
-      <div class="dev-grid">
-        <button class="dev-btn" onclick="PHYS.rest=0.24;PHYS.cap=180;syncDev();toast('약하게 — 거의 안 튐')">약하게</button>
-        <button class="dev-btn action" onclick="PHYS.rest=0.42;PHYS.cap=320;syncDev();toast('기본 튕김')">기본</button>
-        <button class="dev-btn" onclick="PHYS.rest=0.58;PHYS.cap=430;syncDev();toast('강하게 — 많이 튐')">강하게</button>
-        <button class="dev-btn" onclick="PHYS.rest=0.72;PHYS.cap=560;syncDev();toast('아주 강하게')">아주 강하게</button>
-      </div>
-
-      <div class="dev-sub" style="margin-top:14px">초기 가속 프리셋</div>
-      <div class="dev-grid">
-        <button class="dev-btn" onclick="PHYS.gStart=1;PHYS.rampRows=1;syncDev();toast('가속 없음 — 처음부터 일정')">가속 없음</button>
-        <button class="dev-btn" onclick="PHYS.gStart=0.55;PHYS.rampRows=4;syncDev();toast('약한 가속')">약하게</button>
-        <button class="dev-btn action" onclick="PHYS.gStart=0.35;PHYS.rampRows=5;syncDev();toast('기본 가속')">기본</button>
-        <button class="dev-btn" onclick="PHYS.gStart=0.2;PHYS.rampRows=7;syncDev();toast('강한 가속 — 아주 천천히 시작')">강하게</button>
-      </div>
-
-      <div class="dev-sub" style="margin-top:14px">개별 수치</div>
-      <div class="dev-row tight"><label>중력 G (px/s²)</label><input type="number" class="dev-input" id="dvG" min="800" max="14000" step="200"></div>
-      <div class="dev-row tight"><label>반발계수 (0~1)</label><input type="number" class="dev-input" id="dvRest" min="0" max="1" step="0.02"></div>
-      <div class="dev-row tight"><label>반발 상한 (px/s)</label><input type="number" class="dev-input" id="dvCap" min="60" max="900" step="20"></div>
-      <div class="dev-row tight"><label>수평 반발 (px/s)</label><input type="number" class="dev-input" id="dvKick" min="40" max="500" step="10"></div>
-      <div class="dev-row tight"><label>중앙 편향 (0~0.4)</label><input type="number" class="dev-input" id="dvBias" min="0" max="0.4" step="0.02"></div>
-      <div class="dev-row tight"><label>진자 관성 (0~2)</label><input type="number" class="dev-input" id="dvIner" min="0" max="2" step="0.1"></div>
-      <div class="dev-row tight"><label>초반 중력 비율 (0.1~1)</label><input type="number" class="dev-input" id="dvGS" min="0.1" max="1" step="0.05"></div>
-      <div class="dev-row tight"><label>가속 도달 행 (1~13)</label><input type="number" class="dev-input" id="dvRamp" min="1" max="13" step="1"></div>
-      <div class="dev-row tight"><label>물리 스텝 (Hz)</label><input type="number" class="dev-input" id="dvHz" min="60" max="480" step="30"></div>
-      <div class="dev-row tight"><label>장전 시간 (ms)</label><input type="number" class="dev-input" id="dvCharge2" min="0" max="900"></div>
-      <button class="dev-btn action" onclick="dvPhys()">물리 값 적용</button>
-      <div class="dev-note">
-        <b>기본값</b> — G 5600 · 반발 0.42 · 수평 190 · 편향 0.18 · 관성 1.0 · 180Hz<br>
-        <b>진자 관성</b>: 발사구의 <b>실제 이동 속도를 매 프레임 측정</b>해
-        구슬의 초기 수평 속도로 넘깁니다. 좌측으로 스윙 중 발사되면
-        구슬도 왼쪽으로 밀려갑니다. 위 정보란의 '현재 랜턴속도'로 확인 가능.<br>
-        <b>초기 가속</b>: 랜턴에서 나올 때 중력의 {초반 비율}만 적용되고,
-        {가속 도달 행}까지 서서히 100%가 됩니다. 처음엔 느리게 떠 있다가
-        중반부터 계획된 속도로 낙하합니다.<br>
-        총 낙하 <b>2.19초</b> · 칸당 157ms · 물리스텝 칸당 29회<br><br>
-        중력↑ 빨리 떨어짐 / 반발↑ 높이 튐 / 수평↑ 크게 흩어짐<br>
-        <b>편향</b>은 확률 분포를 결정합니다. 0이면 양끝에 몰리고,
-        0.18에서 기존 정규분포(2.2 / 13.9 / 2.2%)가 유지됩니다.
-        <b>밸런스에 직접 영향</b>하므로 바꾸면 배치 재조정이 필요합니다.
-      </div>
-    </div>
-
-    <div class="dev-section">
-      <div class="dev-title">13 · 사운드 테스트</div>
-      <div class="dev-sub">BGM 4구간 · 효과음 개별 재생</div>
-      <div class="dev-grid">
-        <button class="dev-btn action" onclick="audioResume();musicStart(1)">BGM 몽환 (1-3)</button>
-        <button class="dev-btn action" onclick="audioResume();musicStart(4)">BGM 경쾌 (4-6)</button>
-        <button class="dev-btn action" onclick="audioResume();musicStart(7)">BGM 비장 (7-9)</button>
-        <button class="dev-btn action" onclick="audioResume();musicStart(10)">BGM 에필로그 (10)</button>
-        <button class="dev-btn" onclick="musicStop()">BGM 정지</button>
-        <button class="dev-btn" onclick="toggleSound()">사운드 ON/OFF</button>
-      </div>
-      <div class="dev-sub" style="margin-top:12px">효과음</div>
-      <div class="dev-grid">
-        <button class="dev-btn" onclick="sfxLaunch(1)">발사 (소)</button>
-        <button class="dev-btn" onclick="sfxLaunch(5)">발사 (대)</button>
-        <button class="dev-btn" onclick="sfxBurst(1)">폭발 (소)</button>
-        <button class="dev-btn" onclick="sfxBurst(5)">폭발 (대·타닥)</button>
-        <button class="dev-btn" onclick="sfxCoin(5)">구슬 획득</button>
-        <button class="dev-btn" onclick="sfxMiss()">꽝</button>
-        <button class="dev-btn" onclick="sfxPin('hitY')">핀 (노랑)</button>
-        <button class="dev-btn" onclick="sfxPin('hitO')">핀 (주황)</button>
-        <button class="dev-btn" onclick="sfxPin('hitG')">핀 (녹색)</button>
-        <button class="dev-btn" onclick="sfxPin('hitR')">핀 (빨강)</button>
-        <button class="dev-btn" onclick="sfxPin('hitB')">핀 (청록)</button>
-        <button class="dev-btn" onclick="sfxCard()">카드 사용</button>
-        <button class="dev-btn" onclick="sfxCatcher()">드림캐쳐</button>
-        <button class="dev-btn" onclick="sfxFever()">피버존</button>
-        <button class="dev-btn" onclick="sfxClear()">클리어</button>
-        <button class="dev-btn" onclick="sfxOver()">게임오버</button>
-        <button class="dev-btn" onclick="sfxTap()">UI 탭</button>
-      </div>
-      <div class="dev-note">
-        구슬 획득음은 <b>연속 획득 시 음이 순차 상승</b>합니다(펜타토닉 10단계).<br>
-        0.9초 이상 끊기거나 꽝이 나오면 초기화됩니다. 여러 번 연타해 보세요.
-      </div>
-    </div>
-
-    <div class="dev-section">
-      <div class="dev-title">14 · 밸런스 참고</div>
-      <div class="dev-note">
-        칸별 낙하확률(20만회 실측): 2.2 / 4.4 / 7.0 / 10.0 / 12.4 / 13.9 / 14.0 / 12.5 / 10.0 / 6.9 / 4.5 / 2.2 %<br><br>
-        목표 −50 적용 (150 / 250 / … / 1050).<br>
-        DAY 1~4는 30초~6분. DAY 5 이후는 순증가가 작아 시간이 늘어나고,
-        DAY 9·10은 순증가가 음수여서 <b>강화 없이는 클리어 불가</b>입니다.<br><br>
-        검증된 클리어 빌드 예시 (DAY 10)<br>
-        · 행운×2 → 98.2%<br>
-        · 안정형(행운2+배려+풍요) → 99.5%<br>
-        · 고배율형(욕망+행운1) → 93.9%
+    <!-- ══════════ 12 · 밸런스 참고 ══════════ -->
+    <div class="devPage" id="devP_info">
+      <div class="dev-sub">현재 진행 상황과 물리 수치입니다.</div>
+      <div class="dev-note" id="dvInfo" style="font-size:11px; line-height:1.85"></div>
+      <div class="dev-note" style="margin-top:14px">
+        목표는 <b>보유 구슬</b> 기준입니다. 꽝칸에 들어가면 구슬이 줄어들므로,
+        획득률이 100% 아래로 내려가는 후반에는 드림캐쳐 없이 클리어할 수 없습니다.
       </div>
     </div>
 
@@ -1321,6 +1636,17 @@ select.dev-input{ width:auto; min-width:120px; text-align:left; }
     <div id="infoDsc"></div>
     <div id="infoNote"></div>
     <div id="infoBtns"></div>
+  </div>
+</div>
+<!-- ══════════ 타이틀 복귀 확인 ══════════ -->
+<div id="quitOv" onclick="if(event.target===this) closeQuit()">
+  <div id="quitCard">
+    <div class="t">타이틀로 돌아갈까요?</div>
+    <div class="d">진행 중인 밤은 사라집니다.<br>드림캐쳐와 모아둔 구슬도 함께 잃습니다.</div>
+    <div class="btns">
+      <div onclick="closeQuit()">계속한다</div>
+      <div class="go" onclick="doQuit()">돌아간다</div>
+    </div>
   </div>
 </div>
 </div><!-- /#app -->
@@ -1382,16 +1708,26 @@ const MULT = { m1:1, m2:2, m3:3, m5:5, miss:0 };
 /* ★ 범위 안전 접근 — DAY 10 초과 시에도 마지막 스테이지를 반환 */
 function ST(){ return STAGES[clamp(S.day-1,0,STAGES.length-1)]; }
 const STAGES = [
-  { day:1,  goal:150,  rate:2.00, layout:['m1','m3','m1','m2','miss','m5','m5','miss','m2','m1','m3','m1'] },
-  { day:2,  goal:250,  rate:1.80, layout:['miss','miss','m5','miss','m5','m1','m1','m5','miss','m5','miss','miss'] },
-  { day:3,  goal:350,  rate:1.60, layout:['m5','m1','m3','m3','m2','miss','miss','m2','m3','m3','m1','m5'] },
-  { day:4,  goal:450,  rate:1.40, layout:['m3','m5','m3','m2','m1','miss','miss','m1','m2','m3','m5','m3'] },
-  { day:5,  goal:550,  rate:1.20, layout:['miss','m1','m1','m3','m3','miss','miss','m3','m3','m1','m1','miss'] },
-  { day:6,  goal:650,  rate:1.00, layout:['m2','m1','m5','miss','miss','m2','m2','miss','miss','m5','m1','m2'] },
-  { day:7,  goal:750,  rate:0.80, layout:['m3','m1','m1','miss','miss','m3','m3','miss','miss','m1','m1','m3'] },
-  { day:8,  goal:850,  rate:0.60, layout:['m2','m2','miss','m2','miss','m1','m1','miss','m2','miss','m2','m2'] },
-  { day:9,  goal:950, rate:0.40, layout:['miss','m2','m3','m2','miss','miss','miss','miss','m2','m3','m2','miss'] },
-  { day:10, goal:1050, rate:0.20, layout:['m2','m3','m1','m1','miss','miss','miss','miss','m1','m1','m3','m2'] },
+  /* ═══ 칸 배치 설계 ═══════════════════════════════════════════
+     · 좌우 대칭 — 시각적으로 정돈되고 확률 계산이 명확하다
+     · 고배수는 바깥쪽에만 — 양 끝은 진입률 3%, 중앙은 13.8%로 4.4배 차이.
+       중앙에 5배를 두면 너무 쉽게 먹는다.
+     · DAY 1  올 2배 (꽝 없음) — 규칙을 배우는 구간
+     · DAY 3  꽝 첫 등장
+     · DAY 5  3배 첫 등장
+     · DAY 8  5배 첫 등장 — 도박성이 생기는 지점
+     · DAY 10 꽝 8개 — 양 끝 5배에 걸어야 하는 극한
+     실제 획득률은 전부 기획 수치와 오차 0.5%p 이내로 검증됨.  */
+  { day:1,  goal:150,  rate:2.00, layout:['m2','m2','m2','m2','m2','m2','m2','m2','m2','m2','m2','m2'] },
+  { day:2,  goal:250,  rate:1.80, layout:['m1','m2','m1','m2','m2','m2','m2','m2','m2','m1','m2','m1'] },
+  { day:3,  goal:350,  rate:1.60, layout:['m2','miss','m1','m2','m2','m2','m2','m2','m2','m1','miss','m2'] },
+  { day:4,  goal:450,  rate:1.40, layout:['miss','m2','m1','m2','m2','m1','m1','m2','m2','m1','m2','miss'] },
+  { day:5,  goal:550,  rate:1.20, layout:['m3','miss','m2','miss','m2','m2','m2','m2','miss','m2','miss','m3'] },
+  { day:6,  goal:650,  rate:1.00, layout:['m2','miss','m3','miss','m2','m1','m1','m2','miss','m3','miss','m2'] },
+  { day:7,  goal:750,  rate:0.80, layout:['m3','miss','miss','miss','m2','m2','m2','m2','miss','miss','miss','m3'] },
+  { day:8,  goal:850,  rate:0.60, layout:['m5','miss','m2','miss','miss','m2','m2','miss','miss','m2','miss','m5'] },
+  { day:9,  goal:950,  rate:0.40, layout:['m5','m5','miss','miss','m1','miss','miss','m1','miss','miss','m5','m5'] },
+  { day:10, goal:1050, rate:0.20, layout:['m5','miss','miss','miss','miss','m2','m2','miss','miss','miss','miss','m5'] },
 ];
 
 /* 구슬 종류 */
@@ -1444,11 +1780,9 @@ const CARDS = [
 const CATCHERS = [
   { id:'abundance', ico:'🌾', nm:'풍요',   dsc:'시작 구슬 +50',                    rar:'common' },
   { id:'wind',      ico:'🌬', nm:'바람',   dsc:'발사속도 2배 영구',                rar:'common' },
-  { id:'thunder',   ico:'⚡', nm:'번개',   dsc:'발사속도 3배 영구',                rar:'rare'   },
-  { id:'storm',     ico:'🌪', nm:'폭풍',   dsc:'발사속도 4배 영구',                rar:'epic'   },
-  { id:'passion',   ico:'🕳', nm:'열정',   dsc:'중앙 피버존(3%) 진입 시 60초 2배', rar:'epic'   },
+  { id:'passion',   ico:'🔆', nm:'열정',   dsc:'양 끝 칸에 닿으면 60초간 모든 획득 2배', rar:'epic'   },
   { id:'luck',      ico:'🍀', nm:'행운',   dsc:'매 라운드 꽝칸 1개→배수칸',        rar:'rare'   },
-  { id:'greatluck', ico:'🎴', nm:'대행운', dsc:'매 라운드 꽝칸 2개→배수칸',        rar:'epic'   },
+  { id:'overcome',  ico:'🔥', nm:'극복',   dsc:'꽝에 50번 들어갈 때마다 소망 카드 1장', rar:'epic'   },
   { id:'desire',    ico:'🩸', nm:'욕망',   dsc:'꽝 손실 2배, 배수칸 효과 2배',     rar:'epic'   },
   { id:'care',      ico:'🤍', nm:'배려',   dsc:'매 라운드 목표 10% 감소',          rar:'rare'   },
   { id:'guard',     ico:'🛡', nm:'수호',   dsc:'꽝 손실 50% 확률로 무시',           rar:'common' },
@@ -2030,7 +2364,7 @@ const S = {
    ※ 수정 시 규칙
      · 시스템 추가·교체 → minor 올리고 patch 0
      · 조정·버그수정    → patch +1                                  */
-const VERSION = '2.5.0';
+const VERSION = '2.11.0';
 
 const HAND_MAX = 5, CATCH_MAX = 5;
 
@@ -2107,11 +2441,36 @@ function hideOv(el){ el.classList.remove('active'); }
 /* =========================================================
    게임 시작 / 스테이지 세팅
 ========================================================= */
+/* ★ 개발자 모드에서 설정한 드림캐쳐·카드·강화를 게임 시작 시에도 유지할지.
+   개발자 모드 안에서 값을 건드리면 true가 되고,
+   메인 메뉴의 정상 시작이나 '완전 초기화'에서는 false로 되돌린다. */
+let DEV_KEEP = false;
+let DEV_UPG_KEEP = null;   // 개발자 모드로 지정한 강화 레벨 (null이면 미사용)
+
 function startGame(devSkipPrologue){
   audioResume();            // iOS 정책: 사용자 제스처에서 오디오 활성화
+
+  /* 개발자 설정 보존 — 초기화 전에 백업해 둔다 */
+  const keep = DEV_KEEP ? {
+    catchers: S.catchers.slice(),
+    hand:     S.hand.slice(),
+    upg:      Object.assign({}, S.upg),
+    money:    S.money,
+    stack:    S.overcomeStack || 0,
+  } : null;
+
   // 전체 초기화
-  S.day=1; S.money=0; S.hand=[]; S.catchers=[]; S.ended=false;
+  S.day=1; S.money=0; S.hand=[]; S.catchers=[]; S.ended=false; S.overcomeStack=0;
   S.dayTimes=[]; S.totalGained=0; S.maxMult=1; S.usedCards=[]; S.shots=0;
+
+  /* 보존 대상 복원 */
+  if(keep){
+    S.catchers = keep.catchers;
+    S.hand     = keep.hand;
+    S.money    = keep.money;
+    S.overcomeStack = keep.stack;
+    DEV_UPG_KEEP = keep.upg;      // setupStage가 덮어쓰지 않도록 따로 보관
+  }
   switchScreen('game');
   if(devSkipPrologue){ setupStage(1); return; }
 
@@ -2122,6 +2481,11 @@ function startGame(devSkipPrologue){
   // 프롤로그 사운드 — 낮은 드론 + 문장마다 종소리
   sfxPrologue();
 
+  /* ★ 스킵을 위해 예약한 타이머를 모두 추적한다 */
+  PRO.timers.length = 0;
+  PRO.els = ps;
+  PRO.active = true;
+
   // 한 줄씩 나타나고 그대로 남아 있음 (사라지지 않음)
   ps.forEach((p,i)=>{
     p.style.opacity=0;
@@ -2129,21 +2493,88 @@ function startGame(devSkipPrologue){
     p.animate([{opacity:0, transform:'translateY(6px)'},
                {opacity:1, transform:'translateY(0)'}],
               {duration:1300, delay:dly, fill:'forwards', easing:'ease-out'});
-    setTimeout(()=>sfxPrologueLine(i), dly+120);
+    PRO.timers.push(setTimeout(()=>sfxPrologueLine(i), dly+120));
   });
+
+  /* 건너뛰기 버튼 — 조금 뒤에 나타나 첫 문장을 가리지 않는다 */
+  PRO.timers.push(setTimeout(()=>{
+    if(PRO.active) $('skipBtn').classList.add('on');
+  }, 1200));
 
   // 마지막 줄이 다 나온 뒤 잠시 머물다가 암전
   const total = 700 + ps.length*1250 + 1300;
-  setTimeout(()=>{
-    pro.animate([{opacity:1},{opacity:0}],{duration:1400,fill:'forwards',easing:'ease-in'})
-      .onfinish=()=>{
-        hideOv(pro); pro.style.opacity='';
-        ps.forEach(p=>{ p.style.opacity=''; p.getAnimations().forEach(a=>a.cancel()); });
-        setupStage(1);
-        // ★ 게임 화면 등장 후 튜토리얼 시작
-        setTimeout(()=>tutStart(), 900);
-      };
-  }, total + 1600);
+  PRO.timers.push(setTimeout(()=>endPrologue(false), total + 1600));
+}
+
+/* ═══ 프롤로그 상태 · 종료 처리 ═══════════════════════════════
+   자연 종료와 건너뛰기가 같은 경로를 쓰도록 분리했다. */
+const PRO = { active:false, timers:[], els:[] };
+
+function endPrologue(skipped){
+  if(!PRO.active) return;
+  PRO.active = false;
+
+  /* 예약된 사운드·전환 타이머를 모두 취소 */
+  PRO.timers.forEach(clearTimeout);
+  PRO.timers.length = 0;
+  $('skipBtn').classList.remove('on');
+
+  const pro = $('prologue');
+  const ps  = PRO.els;
+
+  /* 건너뛸 때는 드론 사운드를 끊고 빠르게 넘긴다 */
+  if(skipped) stopPrologueSfx();
+  const dur = skipped ? 420 : 1400;
+
+  pro.animate([{opacity:1},{opacity:0}],
+              {duration:dur, fill:'forwards', easing:'ease-in'})
+    .onfinish = ()=>{
+      hideOv(pro); pro.style.opacity='';
+      ps.forEach(p=>{ p.style.opacity=''; p.getAnimations().forEach(a=>a.cancel()); });
+      setupStage(1);
+      // ★ 게임 화면 등장 후 튜토리얼 시작
+      setTimeout(()=>tutStart(), skipped ? 400 : 900);
+    };
+}
+
+function skipPrologue(){ endPrologue(true); }
+
+/* 프롤로그 드론을 즉시 끊는다 — sfxBus를 교체해 예약분까지 폐기 */
+function stopPrologueSfx(){
+  if(!AU.ctx || !AU.sfxBus) return;
+  const old = AU.sfxBus;
+  const t = AU.ctx.currentTime;
+  try{
+    old.gain.cancelScheduledValues(t);
+    old.gain.setValueAtTime(old.gain.value, t);
+    old.gain.linearRampToValueAtTime(0, t + 0.24);
+  }catch(e){}
+  setTimeout(()=>{ try{ old.disconnect(); }catch(e){} }, 360);
+
+  const bus = AU.ctx.createGain();
+  bus.gain.value = AU.sfxOn ? 1 : 0;
+  bus.connect(AU.master);
+  if(AU.reverb) bus.connect(AU.reverb);
+  AU.sfxBus = bus;
+}
+
+/* ═══ 타이틀로 돌아가기 ═══ */
+function askQuit(){
+  if(TUT.active){ toast('설명을 먼저 확인해 주세요'); return; }
+  $('quitOv').classList.add('on');
+}
+function closeQuit(){ $('quitOv').classList.remove('on'); }
+function doQuit(){
+  closeQuit();
+  /* 진행 중인 모든 것을 정리한다 */
+  stopFire();
+  clearInterval(S.prodId); S.prodId = null;
+  S.ended = true; S.paused = false; S.attuning = false;
+  ['msgOverlay','catcherOv','shopOv','endOv','atOv','infoOv'].forEach(id=>{
+    const e=$(id); if(e) e.classList.remove('on','active');
+  });
+  hideOv($('msgOverlay'));
+  setTimeout(backToMenu, 180);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2170,8 +2601,9 @@ const AT_FX = {
   crown:     { t:()=>ui.slotBar,     lbl:'5배칸 +2',   col:'255,225,150' },
   destiny:   { t:()=>ui.slotBar,     lbl:'양끝 ×2',    col:'255,190,160' },
   desire:    { t:()=>ui.slotBar,     lbl:'배수 ×2',    col:'255,140,160' },
+  overcome:  { t:()=>ui.slotBar,     lbl:'꽝을 자원으로', col:'255,100,100' },
   guard:     { t:()=>ui.slotBar,     lbl:'손실 절반',  col:'200,220,255' },
-  passion:   { t:()=>ui.slotBar,     lbl:'피버존',     col:'255,170,120' },
+  passion:   { t:()=>ui.slotBar,     lbl:'양 끝 피버칸', col:'255,140,210' },
   echo:      { t:()=>ui.beadVal,     lbl:'8% 2배',     col:'255,230,180' },
   starlight: { t:()=>ui.lanternPivot,lbl:'특수 ×2',    col:'230,240,255' },
   harvest:   { t:()=>ui.beadVal,     lbl:'자금 +150',  col:'255,220,150' },
@@ -2218,15 +2650,40 @@ function atBolt(fromEl, toEl, col, lbl, done){
     if(lbl){
       const g = pget('atGain');
       g.textContent = lbl;
-      g.style.left = (x2 - 14)+'px';
-      g.style.top  = (y2 - 26)+'px';
+
+      /* ★ 캔버스 경계 보정
+         이전에는 left=x2-14 로 고정해 HUD 우측 대상(목표 등)에서
+         긴 라벨이 화면 밖으로 삐져나갔다.
+         텍스트 폭을 실측해 좌우 여백 안으로 밀어 넣는다. */
+      g.style.visibility = 'hidden';
+      g.style.left = '0px';
+      g.style.top  = '0px';
+      const gw = g.offsetWidth || 60;      // 실측 폭
+      const gh = g.offsetHeight || 22;
+
+      const PAD = 8;
+      const half = gw/2;
+      /* 중심 x를 대상 위에 두되, 좌우 여백을 벗어나지 않게 clamp */
+      const cx = clamp(x2, PAD + half, BASE_W - PAD - half);
+
+      /* 세로: 위로 34px까지 떠오르므로 그만큼 여유를 확보한다.
+         공간이 없으면 대상 아래쪽에 표시한다. */
+      const RISE = 34;
+      let ty = y2 - 26;
+      if(ty - RISE < PAD) ty = y2 + gh + 6;   // 위가 좁으면 아래로
+      ty = clamp(ty, PAD + RISE, BASE_H - PAD - gh);
+
+      g.style.left = cx + 'px';
+      g.style.top  = ty + 'px';
+      g.style.visibility = '';
+
       g.animate([
-        /* 튀어오른 뒤 잠시 머물러 읽을 시간을 준다 */
-        { transform:'translateY(6px) scale(.86)',  opacity:0, offset:0 },
-        { transform:'translateY(-10px) scale(1.14)', opacity:1, offset:.18 },
-        { transform:'translateY(-16px) scale(1)',  opacity:1, offset:.34 },
-        { transform:'translateY(-20px) scale(1)',  opacity:1, offset:.72 },
-        { transform:'translateY(-34px) scale(.94)', opacity:0, offset:1 }
+        /* translateX(-50%)를 유지해야 중앙 정렬이 깨지지 않는다 */
+        { transform:'translateX(-50%) translateY(6px) scale(.86)',   opacity:0, offset:0 },
+        { transform:'translateX(-50%) translateY(-10px) scale(1.14)', opacity:1, offset:.18 },
+        { transform:'translateX(-50%) translateY(-16px) scale(1)',   opacity:1, offset:.34 },
+        { transform:'translateX(-50%) translateY(-20px) scale(1)',   opacity:1, offset:.72 },
+        { transform:'translateX(-50%) translateY(-34px) scale(.94)', opacity:0, offset:1 }
       ], { duration:1080, easing:'cubic-bezier(.2,.8,.3,1)' });
       /* 1980(도착) + 1080 = 3060ms → 다음 카드(3100ms) 직전에 정확히 끝난다 */
       pfreeAfter(g, 1120);
@@ -2332,16 +2789,24 @@ function setupStage(day){
   S.beads = 100 + (has('abundance')?50:0);
   S.gained = 0; S.active = 0; S.shots = 0;
   S.lastSlot=-1; S.chain=0; S.feverUntil=0;
-  S.upg = {}; S.buffs = {};
+  /* ★ 강화는 라운드마다 초기화가 정상이지만,
+     개발자 모드에서 지정한 값은 유지해야 테스트가 가능하다. */
+  S.upg = DEV_UPG_KEEP ? Object.assign({}, DEV_UPG_KEEP) : {};
+  S.buffs = {};
   if(!TUT.active && !S.attuning) S.paused = false;   // ★ 발동 연출 중이면 유지
   S.baseLayout = cfg.layout.slice();
 
   // 영구 드림캐쳐: 매 라운드 자동 적용
   let lay = S.baseLayout.slice();
-  const nLuck = (has('luck')?1:0) + (has('greatluck')?2:0);
+  const nLuck = (has('luck')?1:0);
   for(let i=0;i<nLuck;i++) lay = convertMiss(lay, ['m1','m2','m3'][rnd(3)]);
   if(has('prism')) lay = lay.map(v => v==='m2' ? 'm3' : v);
   S.layout = lay;
+
+  /* 캐시 무효화 — 배치와 수치가 모두 바뀐다 */
+  HUD_CACHE.day=-1; HUD_CACHE.bead=-1; HUD_CACHE.goal=-1;
+  HUD_CACHE.gauge=''; HUD_CACHE.rate=-1;
+  FEVER_HOT = null;
 
   if(S.running) stopFire();
   buildSlots();
@@ -2386,21 +2851,83 @@ function buildSlots(){
       }
     }
   });
-  // 열정 드림캐쳐: 중앙 피버존 표시
+  /* ★ 열정 드림캐쳐: 양 끝 피버칸
+     중앙(진입률 27.6%)은 너무 쉽게 닿아 특별함이 없었다.
+     양 끝은 6.2%로 4.4배 어려워, 닿으면 확정 발동시켜도 균형이 맞는다. */
   if(has('passion')){
-    ui.slotBar.children[5].classList.add('fever');
-    ui.slotBar.children[6].classList.add('fever');
+    ui.slotBar.children[0].classList.add('fever');
+    ui.slotBar.children[COLS-1].classList.add('fever');
   }
 }
 
+/* ═══ 피버칸 연출 ═══════════════════════════════════════════
+   발동 순간 양 끝 칸을 터뜨리고, 지속 중에는 계속 강하게 빛낸다. */
+function flashFeverSlots(){
+  [0, COLS-1].forEach(i=>{
+    const s = ui.slotBar.children[i];
+    if(!s) return;
+    s.classList.remove('feverPop');
+    s.getAnimations().forEach(a=>{ if(a.animationName==='feverBurst') a.cancel(); });
+    s.classList.add('feverPop');
+    setTimeout(()=>s.classList.remove('feverPop'), 640);
+  });
+}
+
+/* 피버 지속 상태를 칸에 반영한다 (updateHUD에서 매번 호출) */
+let FEVER_HOT = null;      // 마지막으로 적용한 상태
+
+function syncFeverSlots(){
+  if(!has('passion')){ FEVER_HOT = null; return; }
+  const hot = performance.now() < S.feverUntil;
+  /* ★ 상태가 그대로면 클래스를 건드리지 않는다.
+     classList.toggle은 값이 같아도 스타일 재계산을 유발할 수 있다. */
+  if(FEVER_HOT === hot) return;
+  FEVER_HOT = hot;
+  [0, COLS-1].forEach(i=>{
+    const s = ui.slotBar.children[i];
+    if(s) s.classList.toggle('hot', hot);
+  });
+}
+
+/* 마지막으로 써넣은 값 — 같은 값이면 DOM을 건드리지 않는다 */
+const HUD_CACHE = { day:-1, bead:-1, goal:-1, gauge:'', rate:-1 };
+
 function updateHUD(){
-  ui.dayNo.textContent = S.day;
-  /* ★ 구슬 개수는 한 곳에서만 표시 — 좌우 불일치 원인 제거 */
-  ui.beadVal.textContent = fmt(S.beads);
-  ui.goalVal.textContent = fmt(S.goal);
-  ui.gauge.style.width = clamp(S.beads/S.goal*100,0,100)+'%';
-  const ri = $('rateInfo');
-  if(ri) ri.textContent = '획득률 ' + Math.round(ST().rate*100) + '%';
+  /* ★ C) 착지마다 호출되는 함수다. 구슬 8개면 초당 3.7회.
+     textContent 대입은 값이 같아도 브라우저가 노드를 다시 확인하므로
+     변한 것만 쓰도록 캐시를 둔다. */
+  if(HUD_CACHE.day !== S.day){
+    HUD_CACHE.day = S.day;
+    ui.dayNo.textContent = S.day;
+  }
+
+  const bead = Math.floor(S.beads);
+  if(HUD_CACHE.bead !== bead){
+    HUD_CACHE.bead = bead;
+    ui.beadVal.textContent = fmt(bead);
+  }
+
+  if(HUD_CACHE.goal !== S.goal){
+    HUD_CACHE.goal = S.goal;
+    ui.goalVal.textContent = fmt(S.goal);
+  }
+
+  /* 게이지는 소수점을 버려 불필요한 갱신을 막는다 */
+  const pct = clamp(S.beads/S.goal*100, 0, 100).toFixed(1) + '%';
+  if(HUD_CACHE.gauge !== pct){
+    HUD_CACHE.gauge = pct;
+    ui.gauge.style.width = pct;
+  }
+
+  /* 획득률은 DAY가 바뀔 때만 변한다 */
+  const rate = Math.round(ST().rate*100);
+  if(HUD_CACHE.rate !== rate){
+    HUD_CACHE.rate = rate;
+    const ri = $('rateInfo');
+    if(ri) ri.textContent = '획득률 ' + rate + '%';
+  }
+
+  syncFeverSlots();        // ★ 피버 지속 표시 갱신
   if(ui.dev.classList.contains('active')) syncDev();
 }
 
@@ -2412,9 +2939,7 @@ function fireInterval(){
   let ms = 1000;
   // 드림캐쳐 (최고값 1개만)
   let mul = 1;
-  if(has('storm')) mul = Math.max(mul,4);
-  else if(has('thunder')) mul = Math.max(mul,3);
-  else if(has('wind')) mul = Math.max(mul,2);
+  if(has('wind')) mul = Math.max(mul,2);
   // 카드
   if(S.buffs.haste) mul *= 3;
   else if(S.buffs.fever) mul *= 2;
@@ -2781,7 +3306,8 @@ function hitPin(x, y, colW){
     const ring = pget('ring', ui.pinScale);
     ring.style.left=best.x+'px'; ring.style.top=best.y+'px';
     ring.style.borderColor=ringCol;
-    ring.style.boxShadow=`0 0 12px ${ringCol}`;
+    /* ★ box-shadow 대신 ::after 레이어 색상만 주입 (GPU 합성) */
+    ring.style.setProperty('--gc', ringCol);
     pfreeAfter(ring, 660);
   }
 }
@@ -2789,6 +3315,18 @@ function hitPin(x, y, colW){
 /* =========================================================
    착지 → 정산
 ========================================================= */
+/* ═══ 애니메이션 재시작 (레이아웃 강제 없이) ═══════════════════
+   void offsetWidth 대신 진행 중인 애니메이션을 취소하고 클래스를 다시 붙인다.
+   같은 클래스를 remove→add 해도 브라우저가 변화를 인식하지 못할 수 있어,
+   getAnimations()로 확실히 끊어준다. */
+function restartAnim(el, cls, siblings){
+  if(!el) return;
+  if(siblings) el.classList.remove(...siblings);
+  else         el.classList.remove(cls);
+  el.getAnimations().forEach(a=>a.cancel());
+  el.classList.add(cls);
+}
+
 function land(idx, kind){
   S.active--;
   if(S.ended) return;
@@ -2798,11 +3336,15 @@ function land(idx, kind){
   const rect=cRect(slot);          // ★ 캔버스 좌표계
   const px=rect.left+rect.width/2;
 
-  // 열정 드림캐쳐: 중앙 피버존 진입
-  if(has('passion') && (idx===5||idx===6) && Math.random()<0.03 && performance.now()>S.feverUntil){
+  /* ★ 열정: 양 끝 피버칸에 닿으면 확정 발동 (진입률 6.2%)
+     이미 피버 중이면 시간을 갱신하지 않고 넘긴다. */
+  if(has('passion') && (idx===0 || idx===COLS-1) && performance.now()>S.feverUntil){
     S.feverUntil = performance.now()+60000;
     sfxFever();
-    renderBuffs(); toast('피버 존 발동! 60초간 모든 획득 2배');
+    renderBuffs();
+    toast('피버 발동 — 60초간 모든 획득 2배');
+    /* 발동 순간 피버칸을 크게 터뜨려 눈에 확실히 남긴다 */
+    flashFeverSlots();
   }
 
   if(m>0){
@@ -2842,10 +3384,13 @@ function land(idx, kind){
     S.maxMult = Math.max(S.maxMult, m);
     sfxCoin(gain);
 
-    slot.classList.remove('flashWin'); void slot.offsetWidth; slot.classList.add('flashWin');
+    /* ★ D) void offsetWidth는 강제 동기 레이아웃을 일으킨다.
+       착지마다 4회씩 발생해 여러 구슬이 동시에 떨어질 때 부담이 컸다.
+       getAnimations()로 되감으면 레이아웃 계산 없이 재시작된다. */
+    restartAnim(slot, 'flashWin');
     fireworks(px, rect.top, m);
     popText(px, rect.top-10, '+'+gain, 'win');
-    ui.beadVal.classList.remove('up','down'); void ui.beadVal.offsetWidth; ui.beadVal.classList.add('up');
+    restartAnim(ui.beadVal, 'up', ['up','down']);
     const acc=slot.querySelector('.acc');
     acc.textContent = (parseInt(acc.textContent,10)||0)+gain;
   } else {
@@ -2861,10 +3406,29 @@ function land(idx, kind){
     S.beads = Math.max(0, S.beads - loss);
     sfxMiss();
 
-    slot.classList.remove('flashLose'); void slot.offsetWidth; slot.classList.add('flashLose');
+    restartAnim(slot, 'flashLose');
     extinguish(px, rect.top);
     popText(px, rect.top-10, loss?('-'+loss):'0', 'lose');
-    if(loss){ ui.beadVal.classList.remove('up','down'); void ui.beadVal.offsetWidth; ui.beadVal.classList.add('down'); }
+    if(loss) restartAnim(ui.beadVal, 'down', ['up','down']);
+
+    // ★ 극복 드림캐쳐: 꽝에 들어갈 때마다 스택 누적
+    if(has('overcome')){
+      S.overcomeStack = (S.overcomeStack || 0) + 1;
+      if(S.overcomeStack >= 50){
+        S.overcomeStack = 0;
+        if(S.hand.length < HAND_MAX){
+          S.hand.push(randomCard());
+          renderHand();
+          sfxCard();
+          toast('극복 — 소망 카드 1장 획득!');
+        } else {
+          toast('극복 — 손패가 가득 차 카드를 얻지 못했습니다');
+        }
+      } else {
+        // 몇 개 남았는지 팝업으로 표시 (예: 12/50)
+        popText(px, rect.top-28, `${S.overcomeStack}/50`, 'lose');
+      }
+    }
     const acc=slot.querySelector('.acc');
     acc.textContent = (parseInt(acc.textContent,10)||0)-loss;
   }
@@ -3077,16 +3641,19 @@ const RAR_NM = { common:'흔한', rare:'드문', epic:'귀한' };
 function catcherNote(c){
   switch(c.id){
     case 'abundance': return '이번 라운드 시작 구슬 150개';
-    case 'wind': case 'thunder': case 'storm':
+    case 'wind':
       return '현재 발사 간격 ' + Math.round(fireInterval()) + 'ms';
+    case 'overcome':  return `꽝 ${S.overcomeStack||0}/50 — 50번 채우면 카드 1장 지급`;
     case 'care':      return '목표가 ' + fmt(S.goal) + '개로 조정됨';
     case 'machine':   return '8초마다 구슬이 늘어납니다';
     case 'luck':      return '이번 배치에서 꽝칸 1개가 배수칸으로 바뀜';
-    case 'greatluck': return '이번 배치에서 꽝칸 2개가 배수칸으로 바뀜';
-    case 'prism':     return '배치의 2배칸이 모두 3배칸이 됨';
-    case 'passion':   return performance.now() < S.feverUntil
-                             ? '피버존 발동 중 — 모든 획득 2배'
-                             : '중앙 2칸에서 3% 확률로 발동';
+        case 'prism':     return '배치의 2배칸이 모두 3배칸이 됨';
+    case 'passion':   {
+      const left = Math.max(0, Math.ceil((S.feverUntil - performance.now())/1000));
+      return left > 0
+        ? `피버 발동 중 — 남은 시간 ${left}초`
+        : '양 끝 칸(◆)에 닿으면 즉시 발동 · 진입률 약 6%';
+    }
     case 'guard':     return '꽝에 들어가도 절반은 손실 없음';
     case 'desire':    return '배수는 2배, 꽝 손실은 2개';
     case 'harvest':   return '클리어 시 상점 자금이 150 더 늘어남';
@@ -3219,7 +3786,10 @@ function renderBuffs(){
   if(B.goldrush) out.push(['배수 +1','gold']);
   if(B.jackpot) out.push(['잭팟','gold']);
   if(B.shield) out.push(['무손실','']);
-  if(performance.now()<S.feverUntil) out.push(['피버존 2배','gold']);
+  if(performance.now()<S.feverUntil){
+    const left = Math.ceil((S.feverUntil-performance.now())/1000);
+    out.push(['피버 2배 '+left+'초','gold']);
+  }
   /* 버프 칩(자동 적용 효과)은 표시만, 드림캐쳐 칩은 탭하면 설명이 열린다 */
   let html = out.map(([t,cl])=>`<span class="buff ${cl}">${t}</span>`).join('');
   html += S.catchers.map((c,i)=>
@@ -3227,7 +3797,12 @@ function renderBuffs(){
   ).join('');
   ui.buffBar.innerHTML = html;
 }
-setInterval(()=>{ if(S.running||S.feverUntil>performance.now()) renderBuffs(); }, 2000);
+setInterval(()=>{
+  /* 피버 남은 시간 표시와 피버칸 발광 상태를 함께 갱신한다.
+     피버가 끝나도 이 타이머가 hot 클래스를 제거해 준다. */
+  if(S.running || S.feverUntil > performance.now()){ renderBuffs(); syncFeverSlots(); }
+  else if(has('passion')) syncFeverSlots();
+}, 1000);
 
 /* =========================================================
    랜턴 강화 시트
@@ -3542,7 +4117,7 @@ function dvFlashPin(cls){
     if(ringCol){
       const ring = pget('ring', ui.pinScale);
       ring.style.left=p.x+'px'; ring.style.top=p.y+'px';
-      ring.style.borderColor=ringCol; ring.style.boxShadow=`0 0 12px ${ringCol}`;
+      ring.style.borderColor=ringCol; ring.style.setProperty('--gc', ringCol);
       pfreeAfter(ring, 660);
     }
   }
@@ -3556,16 +4131,20 @@ function dvFlashAll(){
 
 /* 물리 값 적용 (개발자 모드) */
 function dvPhys(){
-  const g=parseFloat($('dvG').value);      if(g>=800&&g<=14000) PHYS.G=g;
-  const r=parseFloat($('dvRest').value);   if(r>=0&&r<=1)       PHYS.rest=r;
-  const c=parseFloat($('dvCap').value);    if(c>=60&&c<=900)    PHYS.cap=c;
-  const k=parseFloat($('dvKick').value);   if(k>=40&&k<=500)    PHYS.kick=k;
-  const bi=parseFloat($('dvBias').value);  if(bi>=0&&bi<=0.4)   PHYS.bias=bi;
-  const iv=parseFloat($('dvIner').value);  if(iv>=0&&iv<=2)     PHYS.inertia=iv;
-  const gs=parseFloat($('dvGS').value);    if(gs>=0.1&&gs<=1)   PHYS.gStart=gs;
-  const rp=parseInt($('dvRamp').value,10);    if(rp>=1&&rp<=13)    PHYS.rampRows=rp;
-  const hz=parseFloat($('dvHz').value);    if(hz>=60&&hz<=480)  PHYS.dt=1/hz;
-  const ch=parseInt($('dvCharge2').value,10); if(ch>=0&&ch<=900)   CHARGE_MS=ch;
+  /* ★ 없는 엘리먼트를 참조하면 저장 자체가 실패하므로 안전하게 읽는다.
+     (이전에 dvIner/dvGS/dvHz 를 찾다가 오류가 났다 → dvInertia/dvGStart 로 정정) */
+  const num = id => { const e=$(id); return e ? parseFloat(e.value) : NaN; };
+
+  const g  = num('dvG');        if(g>=800 && g<=14000) PHYS.G = g;
+  const r  = num('dvRest');     if(r>=0 && r<=1)       PHYS.rest = r;
+  const c  = num('dvCap');      if(c>=60 && c<=900)    PHYS.cap = c;
+  const k  = num('dvKick');     if(k>=40 && k<=500)    PHYS.kick = k;
+  const bi = num('dvBias');     if(bi>=0 && bi<=1)     PHYS.bias = bi;
+  const iv = num('dvInertia');  if(iv>=0 && iv<=2)     PHYS.inertia = iv;
+  const gs = num('dvGStart');   if(gs>=0.1 && gs<=1)   PHYS.gStart = gs;
+  const rp = num('dvRamp');     if(rp>=1 && rp<=13)    PHYS.rampRows = Math.round(rp);
+  const ch = num('dvCharge2');  if(ch>=0 && ch<=900)   CHARGE_MS = Math.round(ch);
+
   syncDev(); toast('물리 값 적용');
 }
 
@@ -3654,23 +4233,64 @@ function fireworks(x, baseY, m){
   }
   const anim = rk.animate(frames,{duration:dur, easing:'linear'});
 
-  let el=0;
-  const tm=setInterval(()=>{
-    el+=30;
-    const t=Math.min(1,el/dur);
-    const ease=1-Math.pow(1-t,1.7);
-    spawnTrail(
-      x + Math.sin(t*Math.PI*wob)*sway*(1-t*0.35),
-      baseY - rise*ease, pal
-    );
-    if(t>=1) clearInterval(tm);
-  },30);
+  /* ★ A) 트레일 생성을 공용 rAF 루프에 등록한다.
+     기존 setInterval(30ms)은 폭죽마다 독립 타이머를 만들어
+     rAF와 동기화되지 않은 시점에 끼어들어 프레임 지터를 일으켰다.
+     (구슬 8개 = 타이머 2~3개가 동시에 30ms마다 깨어남)
+     rAF에 합치면 프레임 경계에서만 실행되어 지터가 사라진다. */
+  const job = {
+    t0: performance.now(), dur, x, baseY, rise, sway, wob, pal,
+    next: 0,          // 다음 트레일을 뿌릴 경과시간(ms)
+    done: false,
+  };
+  TRAILS.push(job);
+  startTrailLoop();
 
   anim.onfinish=()=>{
-    clearInterval(tm); rk.remove();
+    job.done = true;              // 루프가 다음 프레임에 정리한다
+    pfree(rk);
     const fx = x + Math.sin(Math.PI*wob)*sway*0.6;
     burst(fx, baseY-rise, g, pal, type);
   };
+}
+
+/* ═══ 폭죽 트레일 공용 루프 ═══════════════════════════════════
+   여러 폭죽의 트레일을 하나의 rAF 루프에서 처리한다.
+   활성 폭죽이 없으면 루프를 멈춰 불필요한 프레임 콜백을 만들지 않는다. */
+const TRAILS = [];
+let trailRAF = 0;
+const TRAIL_GAP = 30;            // 트레일 생성 간격(ms) — 기존과 동일
+
+function startTrailLoop(){
+  if(trailRAF) return;           // 이미 돌고 있다
+  trailRAF = requestAnimationFrame(trailStep);
+}
+
+function trailStep(now){
+  for(let i = TRAILS.length - 1; i >= 0; i--){
+    const j = TRAILS[i];
+    const el = now - j.t0;
+
+    if(j.done || el >= j.dur){
+      TRAILS.splice(i, 1);
+      continue;
+    }
+    /* 프레임 간격(약 16.7ms)이 TRAIL_GAP보다 짧으므로
+       경과시간을 기준으로 뿌릴 시점을 판단한다.
+       프레임이 밀려도 개수가 어긋나지 않는다. */
+    if(el >= j.next){
+      j.next += TRAIL_GAP;
+      const t = Math.min(1, el / j.dur);
+      const ease = 1 - Math.pow(1 - t, 1.7);
+      spawnTrail(
+        j.x + Math.sin(t * Math.PI * j.wob) * j.sway * (1 - t * 0.35),
+        j.baseY - j.rise * ease, j.pal
+      );
+    }
+  }
+
+  if(TRAILS.length) trailRAF = requestAnimationFrame(trailStep);
+  else              trailRAF = 0;      // 할 일이 없으면 멈춘다
 }
 
 function spawnTrail(x,y,pal){
@@ -3679,7 +4299,9 @@ function spawnTrail(x,y,pal){
   const h=pick(pal), sz=2+Math.random()*2;
   t.style.width=t.style.height=sz+'px';
   t.style.background=`hsl(${h},100%,${64+Math.random()*16}%)`;
-  t.style.boxShadow=`0 0 ${5+sz}px hsl(${h},100%,56%), 0 0 ${9+sz*2}px hsl(${h},100%,44%)`;
+  /* ★ 그림자 2겹 → ::after 그라데이션 2정지점 */
+  t.style.setProperty('--gc',  `hsla(${h},100%,62%,.85)`);
+  t.style.setProperty('--gc2', `hsla(${h},100%,46%,.34)`);
   t.style.left=x+'px'; t.style.top=y+'px';
   trackParticle(t, 720);
   t.animate([
@@ -3742,7 +4364,7 @@ function shockRing(x,y,g,pal){
   const r = pget('fwRing');
   const h=pick(pal);
   r.style.borderColor=`hsla(${h},100%,76%,.9)`;
-  r.style.boxShadow=`0 0 12px hsla(${h},100%,58%,.7)`;
+  r.style.setProperty('--gc', `hsla(${h},100%,58%,.5)`);
   const s0=8;
   r.style.width=r.style.height=s0+'px';
   r.style.left=x+'px'; r.style.top=y+'px';
@@ -3797,7 +4419,8 @@ function fwWillow(x,y,g,pal){
     const h=pick(pal);
     s.style.width=s.style.height='3.4px';
     s.style.background=`radial-gradient(circle,#fff 0%,hsl(${h},100%,68%) 45%,hsl(${h},100%,50%) 100%)`;
-    s.style.boxShadow=`0 0 10px hsl(${h},100%,58%), 0 0 20px hsl(${h},100%,46%)`;
+    s.style.setProperty('--gc',  `hsla(${h},100%,62%,.85)`);
+    s.style.setProperty('--gc2', `hsla(${h},100%,48%,.34)`);
     s.style.left=x+'px'; s.style.top=y+'px';
     const ex=Math.cos(a)*34*g.size, ey=Math.sin(a)*20*g.size;
     s.animate([
@@ -3835,7 +4458,8 @@ function fwPalm(x,y,g,pal){
       const sz=3.6-k*0.4;
       s.style.width=s.style.height=sz+'px';
       s.style.background=`radial-gradient(circle,#fff 0%,hsl(${h},100%,70%) 42%,hsl(${h},100%,52%) 100%)`;
-      s.style.boxShadow=`0 0 ${8+sz*2}px hsl(${h},100%,60%), 0 0 ${14+sz*3}px hsl(${h},100%,46%)`;
+      s.style.setProperty('--gc',  `hsla(${h},100%,64%,.85)`);
+    s.style.setProperty('--gc2', `hsla(${h},100%,48%,.34)`);
       s.style.left=x+'px'; s.style.top=y+'px';
       const f=(k+1)/5;
       const ex=Math.cos(a)*len*f, ey=Math.sin(a)*len*f;
@@ -3875,7 +4499,8 @@ function fwRing(x,y,g,pal){
     const h=pick(pal);
     s.style.width=s.style.height='2.8px';
     s.style.background=`radial-gradient(circle,#fff 0%,hsl(${h},100%,72%) 40%,hsl(${h},100%,54%) 100%)`;
-    s.style.boxShadow=`0 0 9px hsl(${h},100%,62%), 0 0 18px hsl(${h},100%,48%)`;
+    s.style.setProperty('--gc',  `hsla(${h},100%,66%,.85)`);
+    s.style.setProperty('--gc2', `hsla(${h},100%,50%,.34)`);
     s.style.left=x+'px'; s.style.top=y+'px';
     s.animate([
       // ① 폭발 — 링 형태로 퍼짐
@@ -3909,7 +4534,8 @@ function fwCrossette(x,y,g,pal){
     const h=pick(pal);
     s.style.width=s.style.height='3.6px';
     s.style.background=`radial-gradient(circle,#fff 0%,hsl(${h},100%,72%) 40%,hsl(${h},100%,54%) 100%)`;
-    s.style.boxShadow=`0 0 11px hsl(${h},100%,62%), 0 0 20px hsl(${h},100%,48%)`;
+    s.style.setProperty('--gc',  `hsla(${h},100%,66%,.88)`);
+    s.style.setProperty('--gc2', `hsla(${h},100%,50%,.36)`);
     s.style.left=x+'px'; s.style.top=y+'px';
     const ex=Math.cos(a)*d, ey=Math.sin(a)*d;
     s.animate([
@@ -3959,7 +4585,8 @@ function spawnSpark(x,y,ang,dist,g,pal,o){
   const sz=o.sz*(0.8+Math.random()*0.4);
   s.style.width=s.style.height=sz.toFixed(1)+'px';
   s.style.background=`radial-gradient(circle,#fff 0%,hsl(${h},100%,74%) 38%,hsl(${h},100%,52%) 100%)`;
-  s.style.boxShadow=`0 0 ${5+sz*2}px hsl(${h},100%,62%), 0 0 ${11+sz*3}px hsl(${h},100%,48%)`;
+  s.style.setProperty('--gc',  `hsla(${h},100%,66%,.85)`);
+  s.style.setProperty('--gc2', `hsla(${h},100%,50%,.34)`);
   s.style.left=x+'px'; s.style.top=y+'px';
   trackParticle(s, o.dur*1.4);
 
@@ -3994,7 +4621,8 @@ function spawnGlitter(x,y,g,pal){
   const el = pget('fwGlitter');
   const h=pick(pal);
   el.style.background=`hsl(${h},100%,84%)`;
-  el.style.boxShadow=`0 0 7px hsl(${h},100%,68%), 0 0 13px hsl(${h},100%,52%)`;
+  el.style.setProperty('--gc',  `hsla(${h},100%,72%,.9)`);
+  el.style.setProperty('--gc2', `hsla(${h},100%,54%,.3)`);
   el.style.left=x+'px'; el.style.top=y+'px';
   trackParticle(el, 2400);
   const dx=(Math.random()-.5)*80*g.size, dy=52+Math.random()*110;
@@ -4045,36 +4673,157 @@ function extinguish(x,baseY){
 /* =========================================================
    개발자 모드
 ========================================================= */
-function openDev(){ ui.dev.classList.add('active'); syncDev(); }
+function openDev(){ ui.dev.classList.add('active'); devGo(''); syncDev(); }
 function closeDev(){ ui.dev.classList.remove('active'); }
 function syncDev(){
-  $('dvDay').value=S.day; $('dvBead').value=Math.floor(S.beads);
-  $('dvGain').value=Math.floor(S.beads); $('dvGoal').value=S.goal;
-  $('dvMoney').value=Math.floor(S.money);
-  $('dvFire').value = S.devFire || '';
-  const gp=$('dvG'); if(gp){
-    gp.value=PHYS.G; $('dvRest').value=PHYS.rest; $('dvCap').value=PHYS.cap;
-    $('dvKick').value=PHYS.kick; $('dvBias').value=PHYS.bias;
-    $('dvIner').value=PHYS.inertia;
-    $('dvGS').value=PHYS.gStart; $('dvRamp').value=PHYS.rampRows;
-    $('dvHz').value=Math.round(1/PHYS.dt);
-    $('dvCharge2').value=CHARGE_MS;
+  /* ── 1 · 현재 상태 ── */
+  const set=(id,v)=>{ const e=$(id); if(e) e.value=v; };
+  set('dvDay', S.day);
+  set('dvBead', Math.floor(S.beads));
+  set('dvGain', Math.floor(S.gained));
+  set('dvGoal', S.goal);
+  set('dvMoney', Math.floor(S.money));
+  set('dvFire', S.devFire || '');
+
+  /* ── 8 · 물리 (ID가 마크업과 일치해야 한다) ── */
+  set('dvG', PHYS.G);
+  set('dvRest', PHYS.rest);
+  set('dvCap', PHYS.cap);
+  set('dvKick', PHYS.kick);
+  set('dvBias', PHYS.bias);
+  set('dvInertia', PHYS.inertia);
+  set('dvGStart', PHYS.gStart);
+  set('dvRamp', PHYS.rampRows);
+  set('dvCharge2', CHARGE_MS);
+
+  /* ── 2 · 스테이지 버튼 (목표치를 함께 표시) ── */
+  const sg=$('dvStageGrid');
+  if(sg){
+    sg.innerHTML = STAGES.map((s,i)=>
+      `<button class="dev-btn${s.day===S.day?' action':''}" onclick="dvStage(${s.day})">`+
+      `DAY ${s.day} · ${fmt(s.goal)}</button>`).join('');
+    const si=$('dvStageInfo');
+    if(si) si.innerHTML =
+      `현재 <b>DAY ${S.day}</b> · 목표 <b>${fmt(S.goal)}</b>개 · 기준 획득률 <b>${(ST().rate*100).toFixed(0)}%</b><br>`+
+      `버튼의 숫자는 각 DAY의 목표 구슬 수입니다.`;
   }
-  $('dvInfo').innerHTML =
-    `발사간격 <b>${Math.round(fireInterval())}ms</b> · 물리 <b>${Math.round(1/PHYS.dt)}Hz</b> · 속도 <b>${PHYS.speed}×</b><br>` +
-    `G ${PHYS.G} · 반발 ${PHYS.rest} · 수평 ${PHYS.kick} · 편향 ${PHYS.bias}<br>` +
-    `관성 ${PHYS.inertia} · 램프 ${PHYS.gStart}→1.0 (${PHYS.rampRows}행) · <b>현재 랜턴속도 ${Math.round(MUZ.v)}px/s</b><br>` +
-    `낙하중 ${S.active}개 · 발사 ${S.shots}회<br>` +
-    `배치 ${S.layout.map(v=>v==='miss'?'꽝':MULT[v]+'x').join(' ')}<br>` +
-    `기준 획득률 ${(ST().rate*100).toFixed(0)}%`;
-  $('dvCatchers').innerHTML = CATCHERS.map(c=>
-    `<span class="dev-chip ${has(c.id)?'on':''}" onclick="dvToggleCatcher('${c.id}')">${c.ico}${c.nm}</span>`).join('');
-  $('dvCards').innerHTML = CARDS.map(c=>
-    `<span class="dev-chip" onclick="dvGiveCard('${c.id}')">${c.ico}${c.nm}</span>`).join('');
-  $('dvUpg').innerHTML = UPGRADES.map(u=>
-    `<span class="dev-chip ${(S.upg[u.id]||0)>0?'on':''}" onclick="dvUpg('${u.id}')">${u.ico}${u.nm} Lv${S.upg[u.id]||0}</span>`).join('');
+
+  /* ── 3 · 드림캐쳐 (효과 설명을 함께 보여준다) ── */
+  const dc=$('dvCatchers');
+  if(dc) dc.innerHTML = CATCHERS.map(c=>{
+    const on = has(c.id);
+    const rr = c.rar==='epic'?'귀한':c.rar==='rare'?'드문':'흔한';
+    return `<div class="devItem${on?' on':''}" onclick="dvToggleCatcher('${c.id}')">`+
+      `<div class="ico">${c.ico}</div>`+
+      `<div class="bd"><div class="nm">${c.nm}${on?' · 적용 중':''}</div>`+
+      `<div class="ds">${c.dsc.trim()}</div></div>`+
+      `<div class="rr ${c.rar}">${rr}</div></div>`;
+  }).join('');
+
+  /* ── 4 · 소망 카드 ── */
+  const cd=$('dvCards');
+  if(cd) cd.innerHTML = CARDS.map(c=>{
+    const rr = c.rar==='epic'?'귀한':c.rar==='rare'?'드문':'흔한';
+    const held = S.hand.filter(x=>x.id===c.id).length;
+    return `<div class="devItem${held?' on':''}" onclick="dvGiveCard('${c.id}')">`+
+      `<div class="ico">${c.ico}</div>`+
+      `<div class="bd"><div class="nm">${c.nm}${held?' × '+held:''}</div>`+
+      `<div class="ds">${c.dsc.trim()} <span style="color:#555">· ${c.cost}원</span></div></div>`+
+      `<div class="rr ${c.rar}">${rr}</div></div>`;
+  }).join('');
+
+  /* ── 5 · 랜턴 강화 ── */
+  const ug=$('dvUpg');
+  if(ug) ug.innerHTML = UPGRADES.map(u=>{
+    const lv=S.upg[u.id]||0;
+    return `<div class="devItem${lv>0?' on':''}" onclick="dvUpg('${u.id}')">`+
+      `<div class="ico">${u.ico}</div>`+
+      `<div class="bd"><div class="nm">${u.nm}</div>`+
+      `<div class="ds">${u.dsc} <span style="color:#555">· 최대 ${u.max}</span></div></div>`+
+      `<div class="lv">Lv ${lv}</div></div>`;
+  }).join('');
+
+  /* ── 9 · 사운드 목록 ── */
+  const sx=$('dvSfxGrid');
+  if(sx && !sx.dataset.built){
+    sx.dataset.built='1';
+    const list=[['sfxPin','핀 충돌'],['sfxCoin','획득'],['sfxMiss','꽝'],
+                ['sfxCard','카드 사용'],['sfxCatcher','드림캐쳐'],['sfxClear','클리어'],
+                ['sfxAttune','발동 충전'],['sfxAttuneHit','발동 착탄'],['sfxFever','피버존']];
+    sx.innerHTML = list.map(([f,n])=>
+      `<button class="dev-btn" onclick="try{${f}()}catch(e){toast('없는 함수')}">${n}</button>`
+    ).join('');
+  }
+
+  /* ── 11 · 보존 상태 표시 ── */
+  const ks=$('dvKeepState');
+  if(ks) ks.innerHTML = DEV_KEEP
+    ? `<b style="color:#FFD98A">개발자 설정이 적용 중입니다</b> — `+
+      `드림캐쳐 ${S.catchers.length}개, 카드 ${S.hand.length}장, `+
+      `강화 ${Object.values(S.upg||{}).filter(v=>v>0).length}종<br>`+
+      `게임을 새로 시작해도 이 설정이 유지됩니다.`
+    : `현재 순수한 플레이 상태입니다. 되돌릴 수 없으니 주의하세요.`;
+
+  /* ── 12 · 밸런스 참고 ── */
+  const inf=$('dvInfo');
+  if(inf) inf.innerHTML =
+    `<b style="color:#FFD98A">진행</b><br>`+
+    `DAY ${S.day} / 10 · 보유 <b>${fmt(Math.floor(S.beads))}</b> / 목표 <b>${fmt(S.goal)}</b><br>`+
+    `이번 라운드 획득 ${fmt(Math.floor(S.gained))} · 발사 ${S.shots}회 · 낙하중 ${S.active}개<br>`+
+    `상점 자금 ${fmt(Math.floor(S.money))}<br><br>`+
+    `<b style="color:#FFD98A">배치</b> (기준 획득률 ${(ST().rate*100).toFixed(0)}%)<br>`+
+    `${S.layout.map(v=>v==='miss'?'꽝':MULT[v]+'x').join(' · ')}<br><br>`+
+    `<b style="color:#FFD98A">물리</b><br>`+
+    `발사간격 ${Math.round(fireInterval())}ms · ${Math.round(1/PHYS.dt)}Hz · 속도 ${PHYS.speed}×<br>`+
+    `G ${PHYS.G} · 반발 ${PHYS.rest} (상한 ${PHYS.cap}) · 수평 ${PHYS.kick}<br>`+
+    `편향 ${PHYS.bias} · 관성 ${PHYS.inertia} · 가속 ${PHYS.gStart}→1.0 (${PHYS.rampRows}행)<br>`+
+    `랜턴 속도 ${Math.round(MUZ.v)}px/s · 장전 ${CHARGE_MS}ms<br><br>`+
+    `<b style="color:#FFD98A">보유</b><br>`+
+    `드림캐쳐 ${S.catchers.length}/5 — ${S.catchers.map(c=>c.nm).join(', ')||'없음'}<br>`+
+    `카드 ${S.hand.length}/5 — ${S.hand.map(c=>c.nm).join(', ')||'없음'}<br>`+
+    `강화 — ${UPGRADES.filter(u=>(S.upg[u.id]||0)>0).map(u=>u.nm+' Lv'+S.upg[u.id]).join(', ')||'없음'}`;
+}
+
+/* ═══ 카테고리 전환 ═══════════════════════════════════════
+   '' 이면 목록으로, 그 외에는 해당 페이지만 보여준다. */
+const DEV_NM = {
+  state:'현재 상태 · 재화', stage:'스테이지 이동', catcher:'드림캐쳐',
+  card:'소망 카드', upg:'랜턴 강화', force:'진행 강제 · 구슬 발사',
+  screen:'화면 직접 열기', phys:'구슬 물리', fx:'연출 · 사운드',
+  tut:'프롤로그 · 튜토리얼', reset:'초기화', info:'밸런스 참고',
+};
+
+function devGo(key){
+  const home=$('devHome'), back=$('devBack');
+  document.querySelectorAll('.devPage').forEach(p=>p.classList.remove('on'));
+  if(!key){
+    home.style.display='';
+    back.classList.remove('on');
+  }else{
+    home.style.display='none';
+    back.classList.add('on');
+    $('devBackNm').textContent = DEV_NM[key] || '돌아가기';
+    const pg=$('devP_'+key);
+    if(pg) pg.classList.add('on');
+    syncDev();
+  }
+  /* 페이지를 바꾸면 항상 위에서 시작한다 */
+  const body=document.querySelector('.dev-body');
+  if(body) body.scrollTop=0;
+}
+
+/* ═══ 각 페이지 저장 버튼 ═══ */
+
+function dvCardClear(){
+  S.hand.length=0; renderHand(); syncDev();
+  toast('손패를 비웠습니다');
+}
+function dvUpgSave(){
+  refireLoop(); startProduction(); renderBuffs(); syncDev();
+  toast('강화 적용');
 }
 function dvApply(){
+  DEV_KEEP = true;        // ★ 이후 startGame에서도 설정을 유지한다
   const d=parseInt($('dvDay').value,10)||1;
   if(d!==S.day){ S.day=clamp(d,1,10); S.baseLayout=ST().layout.slice(); S.layout=S.baseLayout.slice(); buildSlots(); }
   S.beads=Math.max(0,parseInt($('dvBead').value,10)||0);
@@ -4100,20 +4849,29 @@ function dvAttune(){
 }
 
 function dvToggleCatcher(id){
+  DEV_KEEP = true;        // ★ 이후 startGame에서도 설정을 유지한다
   const i=S.catchers.findIndex(c=>c.id===id);
   if(i>=0) S.catchers.splice(i,1);
   else {
     if(S.catchers.length>=CATCH_MAX){ toast('드림캐쳐는 최대 5개'); return; }
     S.catchers.push(CATCHERS.find(c=>c.id===id));
   }
-  buildSlots(); refireLoop(); startProduction(); renderBuffs(); syncDev();
+  /* ★ 드림캐쳐를 켜고 끄면 배치가 바뀌는 것(행운 등)도 즉시 반영되도록
+     setupStage를 호출해 라운드를 완전히 재구성한다.
+     단, S.beads 등 보유 재화는 유지해야 하므로 백업 후 복원한다. */
+  const b = S.beads, m = S.money, hnd = S.hand.slice(), st = S.overcomeStack;
+  setupStage(S.day);
+  S.beads = b; S.money = m; S.hand = hnd; S.overcomeStack = st;
+  syncDev();
 }
 function dvGiveCard(id){
+  DEV_KEEP = true;        // ★ 이후 startGame에서도 설정을 유지한다
   if(S.hand.length>=HAND_MAX){ toast('손패가 가득 찼습니다'); return; }
   S.hand.push(CARDS.find(c=>c.id===id)); renderHand(); syncDev();
   toast('카드 지급');
 }
 function dvUpg(id){
+  DEV_KEEP = true;        // ★ 이후 startGame에서도 설정을 유지한다
   const u=UPGRADES.find(x=>x.id===id);
   const lv=S.upg[id]||0;
   S.upg[id] = lv>=u.max ? 0 : lv+1;
@@ -4128,6 +4886,18 @@ function dvGoal(pct){
   S.beads = Math.round(S.goal*pct); updateHUD();
   if(pct>=1) checkState(); else syncDev();
 }
+/* 개발자 설정 보존을 명시적으로 끈다 */
+function dvDropKeep(){
+  DEV_KEEP = false; DEV_UPG_KEEP = null;
+  S.catchers.length = 0;
+  S.hand.length = 0;
+  S.upg = {};
+  S.overcomeStack = 0;
+  setupStage(S.day);
+  syncDev();
+  toast('개발자 설정을 비웠습니다');
+}
+
 function dvReset(){
   S.upg={}; S.buffs={}; S.hand=[]; S.catchers=[];
   S.layout=S.baseLayout.slice();
