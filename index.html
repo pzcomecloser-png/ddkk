@@ -288,6 +288,16 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 15. 절대무적 3초전대 (NEW) -->
+    <a class="game-card" href="games/15/3sec.html">
+      <div class="icon-frame"><canvas id="icon3Sec" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">절대무적 3초전대</div>
+        <div class="card-desc">열혈 파일럿 슈팅게임</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -831,6 +841,50 @@ function drawFireIcon(id) {
   ctx.fillRect(7, 14, 1, 1);
 }
 
+// 15. 절대무적 3초전대
+function draw3SecIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // Background
+  ctx.fillStyle = '#111827';
+  ctx.fillRect(0, 0, 24, 24);
+
+  // V-fin (Antenna)
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(11, 2, 2, 2);
+  ctx.fillRect(9, 3, 2, 2); ctx.fillRect(13, 3, 2, 2);
+  ctx.fillRect(7, 4, 2, 2); ctx.fillRect(15, 4, 2, 2);
+
+  // Head
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillRect(9, 5, 6, 6);
+  ctx.fillRect(8, 7, 8, 5);
+
+  // Glowing eyes
+  ctx.fillStyle = '#10b981';
+  ctx.fillRect(9, 8, 2, 1);
+  ctx.fillRect(13, 8, 2, 1);
+
+  // Chin
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(11, 10, 2, 2);
+
+  // Shoulders & Chest
+  ctx.fillStyle = '#3b82f6';
+  ctx.fillRect(7, 12, 10, 6);
+  ctx.fillRect(5, 13, 2, 5);
+  ctx.fillRect(17, 13, 2, 5);
+
+  // Chest Emblem
+  ctx.fillStyle = '#eab308';
+  ctx.fillRect(10, 13, 4, 2);
+  ctx.fillRect(11, 15, 2, 2);
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -847,6 +901,7 @@ drawSlidingIcon('iconSliding');
 drawNobodyIcon('iconNobody');
 drawAirFightIcon('iconAirFight');
 drawFireIcon('iconFire');
+draw3SecIcon('icon3Sec');
 </script>
 </body>
 </html>
