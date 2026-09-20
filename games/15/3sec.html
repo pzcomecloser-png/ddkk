@@ -132,7 +132,6 @@
       align-items: center;
       justify-content: center;
       background: rgba(5, 7, 13, 0.7);
-      backdrop-filter: blur(4px);
     }
     #pause-overlay .pause-text {
       font-family: "Press Start 2P", monospace;
@@ -152,14 +151,13 @@
     #retro-overlay {
       position: absolute;
       inset: 0;
-      background: rgba(5, 7, 13, 0.85);
+      background: rgba(5, 7, 13, 0.93);
       display: none;
       flex-direction: column;
       align-items: center;
       justify-content: center;   /* 위아래 사이즈에 맞춰 세로 중앙 정렬 */
       gap: 24px;
       z-index: 50;
-      backdrop-filter: blur(4px);
     }
 
     /* 패배한 파일럿 (코피 + 눈물) */
@@ -257,7 +255,6 @@
       align-items: center;
       justify-content: center;
       background: radial-gradient(circle at center, rgba(15, 23, 42, 0.78) 0%, rgba(5, 7, 13, 0.94) 100%);
-      backdrop-filter: blur(6px);
       padding: 20px;
       animation: victoryFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
@@ -442,30 +439,30 @@
       line-height: 0.88;
       text-align: center;
       white-space: nowrap;   /* 의도하지 않은 줄바꿈 차단 (<br> 만 허용) */
-      /* 금속 그라데이션 로고 */
-      background: linear-gradient(180deg,
-        #fff7cc 0%, #facc15 38%, #b45309 55%, #facc15 72%, #fde68a 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      filter:
-        drop-shadow(0 0 2px #7c2d12)
-        drop-shadow(14px 14px 0 #7f1d1d)
-        drop-shadow(0 0 85px rgba(250, 204, 21, 0.75));
-      transform: rotate(-2deg) scaleY(1.06);
+      /* 금색 로고.
+         [iOS] background-clip:text + filter:drop-shadow 조합은 Safari 가
+         거대 중간 텍스처를 만들어 렌더 프로세스를 죽인다(300px 글자에서 특히).
+         → 단색 + text-shadow 로 대체. 시각 결과는 거의 동일하고 훨씬 가볍다. */
+      color: #facc15;
+      text-shadow:
+        0 2px 0 #b45309,
+        10px 10px 0 #7f1d1d,
+        0 0 30px rgba(250, 204, 21, 0.55);
+      transform: rotate(-2deg);
       margin-bottom: 8px;
       animation: titlePulse 2.4s ease-in-out infinite;
     }
     /* '3초' 강조 (붉은 열혈색) */
     #title-screen .game-title .hot {
-      background: linear-gradient(180deg, #fecaca 0%, #ef4444 40%, #7f1d1d 58%, #ef4444 78%, #fca5a5 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: #ef4444;
+      text-shadow:
+        0 2px 0 #7f1d1d,
+        10px 10px 0 #450a0a,
+        0 0 30px rgba(239, 68, 68, 0.55);
     }
     @keyframes titlePulse {
-      0%, 100% { transform: rotate(-2deg) scaleY(1.06) scale(1); }
-      50%      { transform: rotate(-2deg) scaleY(1.06) scale(1.035); }
+      0%, 100% { transform: rotate(-2deg) scale(1); }
+      50%      { transform: rotate(-2deg) scale(1.03); }
     }
 
     /* 로고 아래 장식 라인 */
@@ -543,8 +540,7 @@
       bottom: 16px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(15, 23, 20, 0.82);
-      backdrop-filter: blur(8px);
+      background: rgba(15, 23, 20, 0.94);
       padding: 8px 18px;
       border-radius: 20px;
       border: 1px solid rgba(134, 239, 172, 0.2);
@@ -1056,6 +1052,167 @@
       ctx.restore();
     }
 
+    // -------------------------------------------------------------
+    // 시각 효과 시스템 (그래픽 퀄리티 향상)
+    // -------------------------------------------------------------
+    // 모든 풀은 고정 크기로 미리 만들고 인덱스만 돌려 쓴다 (GC 압박 0).
+
+    // [1] 화면 흔들림 (피격/폭발 시 타격감)
+    let shakeAmount = 0;
+    function addShake(v) { shakeAmount = Math.min(14, shakeAmount + v); }
+
+    // [2] 히트 플래시 (적 피격 순간 흰 섬광)
+    const HIT_POOL = 24;
+    const hitFlashes = [];
+    for (let i = 0; i < HIT_POOL; i++) hitFlashes.push({ x: 0, y: 0, r: 0, life: 0, max: 1 });
+    let hitIdx = 0;
+    function addHitFlash(x, y, r) {
+      const h = hitFlashes[hitIdx];
+      hitIdx = (hitIdx + 1) % HIT_POOL;
+      h.x = x; h.y = y; h.r = r; h.life = 8; h.max = 8;
+    }
+    function drawHitFlashes() {
+      for (let i = 0; i < HIT_POOL; i++) {
+        const h = hitFlashes[i];
+        if (h.life <= 0) continue;
+        h.life--;
+        const p = h.life / h.max;
+        ctx.globalAlpha = p * 0.85;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, h.r * (1.6 - p * 0.6), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // [3] 잔해 파편 (격추 시 회전하며 흩어지는 금속 조각)
+    const DEBRIS_POOL = 90;
+    const debris = [];
+    for (let i = 0; i < DEBRIS_POOL; i++) {
+      debris.push({ x: 0, y: 0, vx: 0, vy: 0, rot: 0, vr: 0, size: 0, life: 0, max: 1, color: '#94a3b8' });
+    }
+    let debrisIdx = 0;
+    function addDebris(x, y, count, color) {
+      for (let k = 0; k < count; k++) {
+        const d = debris[debrisIdx];
+        debrisIdx = (debrisIdx + 1) % DEBRIS_POOL;
+        const a = Math.random() * Math.PI * 2;
+        const sp = 1.5 + Math.random() * 4.5;
+        d.x = x; d.y = y;
+        d.vx = Math.cos(a) * sp;
+        d.vy = Math.sin(a) * sp - 1;
+        d.rot = Math.random() * Math.PI;
+        d.vr = (Math.random() - 0.5) * 0.4;
+        d.size = 3 + Math.random() * 5;
+        d.life = d.max = 34 + Math.random() * 22;
+        d.color = color;
+      }
+    }
+    function drawDebris() {
+      for (let i = 0; i < DEBRIS_POOL; i++) {
+        const d = debris[i];
+        if (d.life <= 0) continue;
+        d.life--;
+        d.x += d.vx;
+        d.y += d.vy;
+        d.vy += 0.16;          // 중력
+        d.vx *= 0.985;
+        d.rot += d.vr;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, d.life / d.max * 1.6);
+        ctx.translate(d.x, d.y);
+        ctx.rotate(d.rot);
+        ctx.fillStyle = d.color;
+        ctx.fillRect(-d.size / 2, -d.size / 2, d.size, d.size * 0.6);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // [4] 총알 궤적 (잔상으로 속도감)
+    function drawBulletTrail(x, y, len, w, color) {
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = color;
+      ctx.fillRect(x - w / 2, y, w, len);
+      ctx.globalAlpha = 1;
+    }
+
+    // [5] 플레이어 엔진 불꽃 파티클
+    const THRUST_POOL = 40;
+    const thrustParts = [];
+    for (let i = 0; i < THRUST_POOL; i++) thrustParts.push({ x: 0, y: 0, vy: 0, size: 0, life: 0, max: 1 });
+    let thrustIdx = 0;
+    function emitThrust(x, y) {
+      const t = thrustParts[thrustIdx];
+      thrustIdx = (thrustIdx + 1) % THRUST_POOL;
+      t.x = x + (Math.random() - 0.5) * 12;
+      t.y = y;
+      t.vy = 2.5 + Math.random() * 2.5;
+      t.size = 2 + Math.random() * 3.5;
+      t.life = t.max = 12 + Math.random() * 8;
+    }
+    function drawThrust() {
+      for (let i = 0; i < THRUST_POOL; i++) {
+        const t = thrustParts[i];
+        if (t.life <= 0) continue;
+        t.life--;
+        t.y += t.vy;
+        const p = t.life / t.max;
+        // 뜨거운 중심(흰->노랑) -> 식으면 주황->투명
+        ctx.globalAlpha = p * 0.8;
+        ctx.fillStyle = p > 0.6 ? '#fef9c3' : (p > 0.3 ? '#fbbf24' : '#f97316');
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, t.size * p, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // [6] 비네팅 (화면 가장자리 어둡게 - 집중도 향상)
+    // 그라데이션은 한 번만 만들어 재사용 (프레임당 생성 금지)
+    let vignetteCache = null;
+    let vignetteFailed = false;
+    function drawVignette() {
+      if (vignetteFailed) return;
+      if (!vignetteCache) {
+        try {
+        vignetteCache = ctx.createRadialGradient(
+          WIDTH / 2, HEIGHT / 2, HEIGHT * 0.32,
+          WIDTH / 2, HEIGHT / 2, HEIGHT * 0.72
+        );
+        vignetteCache.addColorStop(0, 'rgba(0,0,0,0)');
+        vignetteCache.addColorStop(1, 'rgba(0,0,0,0.55)');
+        } catch (e) { vignetteFailed = true; return; }
+      }
+      ctx.fillStyle = vignetteCache;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+
+    // [7] 스캔라인 (CRT 질감) — 오프스크린에 한 번 구워 재사용
+    let scanlineCache = null;
+    let scanlineFailed = false;   // 미지원 환경에서 매 프레임 재시도 방지
+    function drawScanlines() {
+      if (scanlineFailed) return;
+      if (!scanlineCache) {
+        try {
+          const off = document.createElement('canvas');
+          off.width = 4;
+          off.height = 4;
+          const c = off.getContext('2d');
+          c.fillStyle = 'rgba(0,0,0,0.16)';
+          c.fillRect(0, 2, 4, 2);
+          scanlineCache = ctx.createPattern(off, 'repeat');
+        } catch (e) {
+          scanlineFailed = true;
+          return;
+        }
+        if (!scanlineCache) { scanlineFailed = true; return; }
+      }
+      ctx.fillStyle = scanlineCache;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+
     // 플레이어 전투기 상태
     let playerX = WIDTH / 2;
     let playerY = HEIGHT * 0.8;
@@ -1552,6 +1709,139 @@
       }
     }
 
+    // -------------------------------------------------------------
+    // 열혈 로봇 애니풍 BGM (반복 루프, 스케줄러 방식)
+    // -------------------------------------------------------------
+    // 구성: 베이스(8비트 구동감) + 리드 멜로디(행진곡풍 단조) + 드럼(킥/스네어)
+    // 볼륨은 효과음 대비 30% 수준으로 억제한다.
+    const BGM_VOLUME = 0.30;      // 기준 볼륨의 30%
+    const BGM_BPM = 148;          // 열혈 행진곡 템포
+    const BGM_STEP = 60 / BGM_BPM / 2;   // 8분음표 1스텝 길이(초)
+
+    let bgmPlaying = false;
+    let bgmMaster = null;         // BGM 전용 마스터 게인
+    let bgmStep = 0;              // 현재 스텝 인덱스
+    let bgmNextTime = 0;          // 다음 스텝 예약 시각
+    let bgmTimer = null;
+
+    // 음이름 -> 주파수 (A4 = 440)
+    const NOTE = {
+      0: 0,  // 쉼표
+      A2: 110.00, C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.00,
+      A3: 220.00, B3: 246.94, C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23,
+      G4: 392.00, A4: 440.00, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25,
+      F5: 698.46, G5: 783.99, A5: 880.00
+    };
+
+    // 32스텝(4마디) 루프 — A단조 행진곡, 상승 마무리로 열혈감
+    const BGM_LEAD = [
+      'A4', 0, 'A4', 'C5',  'E5', 0, 'D5', 0,
+      'C5', 0, 'A4', 0,     'E4', 0, 'A4', 0,
+      'F4', 0, 'F4', 'A4',  'C5', 0, 'B4', 0,
+      'A4', 'B4', 'C5', 'D5', 'E5', 0, 0, 0
+    ];
+    // 베이스: 루트 음 8비트 구동
+    const BGM_BASS = [
+      'A2', 'A2', 'A2', 'A2',  'A2', 'A2', 'A2', 'A2',
+      'A2', 'A2', 'A2', 'A2',  'E3', 'E3', 'E3', 'E3',
+      'F3', 'F3', 'F3', 'F3',  'F3', 'F3', 'F3', 'F3',
+      'G3', 'G3', 'G3', 'G3',  'A2', 'A2', 'A2', 'A2'
+    ];
+
+    // 한 음 재생 (사각파 = 레트로 칩튠 느낌)
+    function bgmNote(freq, time, dur, type, vol) {
+      if (!freq) return;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, time);
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.exponentialRampToValueAtTime(vol, time + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+      osc.connect(g);
+      g.connect(bgmMaster);
+      osc.start(time);
+      osc.stop(time + dur + 0.02);
+    }
+
+    // 드럼: 킥(저음 스윕) / 스네어(노이즈 대신 고음 감쇠)
+    function bgmKick(time) {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(150, time);
+      osc.frequency.exponentialRampToValueAtTime(48, time + 0.11);
+      g.gain.setValueAtTime(0.9, time);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + 0.14);
+      osc.connect(g); g.connect(bgmMaster);
+      osc.start(time); osc.stop(time + 0.16);
+    }
+    function bgmSnare(time) {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      const f = audioCtx.createBiquadFilter();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(1800, time);
+      f.type = 'highpass';
+      f.frequency.setValueAtTime(900, time);
+      g.gain.setValueAtTime(0.35, time);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + 0.07);
+      osc.connect(f); f.connect(g); g.connect(bgmMaster);
+      osc.start(time); osc.stop(time + 0.09);
+    }
+
+    // 스케줄러: 0.1초마다 앞으로 0.25초 분량을 미리 예약 (타이밍 안정)
+    function bgmScheduler() {
+      if (!bgmPlaying || !audioCtx) return;
+      while (bgmNextTime < audioCtx.currentTime + 0.25) {
+        const i = bgmStep % 32;
+        const t = bgmNextTime;
+
+        // 리드 멜로디
+        bgmNote(NOTE[BGM_LEAD[i]], t, BGM_STEP * 0.85, 'square', 0.16);
+        // 베이스
+        bgmNote(NOTE[BGM_BASS[i]], t, BGM_STEP * 0.9, 'triangle', 0.26);
+        // 드럼: 킥 4비트, 스네어 백비트
+        if (i % 4 === 0) bgmKick(t);
+        if (i % 8 === 4) bgmSnare(t);
+
+        bgmNextTime += BGM_STEP;
+        bgmStep++;
+      }
+    }
+
+    function startBGM() {
+      if (!soundEnabled) return;
+      initAudio();
+      if (!audioCtx || bgmPlaying) return;
+
+      bgmMaster = audioCtx.createGain();
+      bgmMaster.gain.value = BGM_VOLUME;
+      bgmMaster.connect(audioCtx.destination);
+
+      bgmPlaying = true;
+      bgmStep = 0;
+      bgmNextTime = audioCtx.currentTime + 0.08;
+      bgmScheduler();
+      bgmTimer = setInterval(bgmScheduler, 100);
+    }
+
+    function stopBGM() {
+      bgmPlaying = false;
+      if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; }
+      if (bgmMaster && audioCtx) {
+        // 급정지 클릭음 방지: 0.15초 페이드아웃
+        const t = audioCtx.currentTime;
+        try {
+          bgmMaster.gain.setValueAtTime(bgmMaster.gain.value, t);
+          bgmMaster.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+        } catch (e) { /* 무시 */ }
+        const old = bgmMaster;
+        setTimeout(() => { try { old.disconnect(); } catch (e) {} }, 300);
+        bgmMaster = null;
+      }
+    }
+
     // 30만점 승리 팡파레 멜로디 (도 - 미 - 솔 - 높은도 4음 화음)
     function playVictoryAudio() {
       if (!soundEnabled) return;
@@ -1632,6 +1922,7 @@
 
     // 타이틀 화면으로 완전히 돌아가기 (RESET)
     function returnToTitleScreen() {
+      stopBGM();
       isContinueState = false;
       isGameOver = false;
       isVictoryState = false;
@@ -1845,11 +2136,14 @@
           soundOffIcon.style.display = 'none';
           soundToggleBtn.style.borderColor = '#38bdf8';
           soundToggleBtn.style.color = '#38bdf8';
+          // 게임 중이면 BGM 재개
+          if (gameStarted && !isGameOver) startBGM();
         } else {
           soundOnIcon.style.display = 'none';
           soundOffIcon.style.display = 'block';
           soundToggleBtn.style.borderColor = '#64748b';
           soundToggleBtn.style.color = '#94a3b8';
+          stopBGM();
         }
       });
     }
@@ -1897,6 +2191,7 @@
       if (enemies.length > 0) {
         playExplosionSound(true); // 폭탄 사용 시 묵직한 대폭발음 출력
       }
+      addShake(14);   // 폭탄 대폭발 충격
       // ★ 배열 재대입 금지: 순회 중인 for 루프가 옛 배열을 참조해 예외가 난다
       enemies.length = 0;
 
@@ -1965,6 +2260,8 @@
 
       // 1. 피격 즉시 2초 무적 선적용 (1프레임 다중 피격 원천 차단)
       playerInvulnerable = 120;
+      addShake(12);                                  // 피격 충격
+      addDebris(playerX, playerY, 10, '#38bdf8');    // 기체 파편
 
       // ★ 로봇 모드 버티기: 잔기와 무관하게 최초 1회는 파일럿의 근성으로 버틴다
       if (robotMode && !robotGuardUsed) {
@@ -2047,6 +2344,7 @@
     function triggerGameOver() {
       isContinueState = false;
       isGameOver = true;
+      stopBGM();
 
       // ★ 진행 중인 리와인드/합체 연출 강제 종료 (게임오버 화면이 가려지는 것 방지)
       isRewinding = false;
@@ -2733,6 +3031,18 @@
         fpsTimer = 0;
       }
 
+      // ★ 화면 흔들림 적용 시작 (타격감). 이 프레임의 모든 렌더가 함께 흔들린다.
+      ctx.save();
+      if (shakeAmount > 0.3) {
+        ctx.translate(
+          (Math.random() - 0.5) * shakeAmount,
+          (Math.random() - 0.5) * shakeAmount
+        );
+        shakeAmount *= 0.86;   // 감쇠
+      } else {
+        shakeAmount = 0;
+      }
+
       // 1~2. 배경 렌더 (심우주 고정 배경 + 별 스크롤)
       drawSpaceBackground();
 
@@ -2836,6 +3146,9 @@
           createExplosion(playerX, playerY, 130, '#facc15', 55);
         }
 
+        ctx.restore();      // 흔들림 해제
+        drawVignette();
+        drawScanlines();
         return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
       }
 
@@ -3059,6 +3372,9 @@
           playExplosionSound(true);
         }
 
+        ctx.restore();      // 흔들림 해제
+        drawVignette();
+        drawScanlines();
         return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
       }
 
@@ -3137,7 +3453,10 @@
           rewindMessage = '어~! 3초전의 나다! 같이 싸우자!';
           rewindMsgTimer = REWIND_MSG_DURATION;
 
-          return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
+          ctx.restore();      // 흔들림 해제
+        drawVignette();
+        drawScanlines();
+        return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
         }
 
         // ★ 방어: 인덱스를 항상 유효 범위로 클램프
@@ -3162,10 +3481,11 @@
           ctx.lineWidth = 2;
           ctx.stroke();
         }
-        snap.ebullets.forEach(eb => {
+        for (let bi = 0; bi < snap.ebullets.length; bi++) {
+          const eb = snap.ebullets[bi];
           ctx.fillStyle = eb.color;
           ctx.beginPath(); ctx.arc(eb.x, eb.y, eb.radius, 0, Math.PI * 2); ctx.fill();
-        });
+        }
         drawPlayer(snap.px, snap.py, 0);
 
         drawVHSEffect();
@@ -3182,6 +3502,9 @@
 
         drawHotBloodedText(rewindMessage, HEIGHT / 2, 40);
 
+        ctx.restore();      // 흔들림 해제
+        drawVignette();
+        drawScanlines();
         return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
       }
 
@@ -3242,6 +3565,12 @@
       //    간격: 8프레임(+0%) → 5프레임(+60%) / 초당 탄수 15발 → 24발 (정확히 +60%)
       //    탄속은 -15로 고정 (연사 아이템이므로 탄속에는 관여하지 않음)
       // -----------------------------------------------------------
+      // ★ 엔진 불꽃 방출 (프레임마다 1~2개)
+      if (gameStarted && !isGameOver && !isPilotCutin && !isCombining) {
+        emitThrust(playerX, playerY + 26);
+        if (frameCount % 2 === 0) emitThrust(playerX, playerY + 30);
+      }
+
       if (gameStarted && !isGameOver && !isContinueState && !isVictoryState) {
         // rapidBoost 0~60% 를 발사 속도 배율로 사용 (간격 8→5프레임)
         // 정수 프레임 반올림으로 증가가 계단식이 되지 않게 '누적 가산' 방식 사용
@@ -3273,6 +3602,8 @@
         pb.x += (pb.vx || 0);
         pb.y += pb.vy;
 
+        // 잔상 궤적 -> 속도감
+        drawBulletTrail(pb.x, pb.y + pb.height, 22, pb.width * 0.7, pb.color || '#38bdf8');
         ctx.fillStyle = pb.color || '#38bdf8';
         ctx.fillRect(pb.x - pb.width / 2, pb.y, pb.width, pb.height);
 
@@ -3280,8 +3611,12 @@
         let hit = false;
         for (let j = enemies.length - 1; j >= 0; j--) {
           const enemy = enemies[j];
-          if (Math.hypot(pb.x - enemy.x, pb.y - enemy.y) < enemy.radius + 6) {
+          // [성능] sqrt 회피: 제곱 비교
+          const _dx = pb.x - enemy.x, _dy = pb.y - enemy.y;
+          const _rr = enemy.radius + 6;
+          if (_dx * _dx + _dy * _dy < _rr * _rr) {
             hit = true;
+            addHitFlash(pb.x, pb.y, 7);   // 피격 섬광
             createExplosion(pb.x, pb.y, 16, '#facc15', 8);
             playHitSound(); // 적기 피격 타격음 출력
 
@@ -3337,6 +3672,11 @@
                   angle: 0
                 });
               }
+
+              // ★ 격추 시각 효과: 금속 잔해 + 화면 흔들림
+              addDebris(enemy.x, enemy.y, enemy.type === 7 ? 14 : (enemy.type === 6 ? 9 : 5),
+                        enemy.type === 3 ? '#8b5cf6' : '#94a3b8');
+              addShake(enemy.type === 7 ? 9 : (enemy.type === 6 ? 5 : 2.5));
 
               // ★ 데스블로우: 적이 죽을 때 플레이어를 향해 반격탄 발사 (페널티)
               if (deathBlowCount > 0) {
@@ -3436,7 +3776,9 @@
 
         // 적과 플레이어의 직접 충돌 검사 (피격점을 기체 끝이 아닌 안쪽 중심부로 축소: 18 -> 8)
         if (!isGameOver && !isContinueState && playerInvulnerable <= 0) {
-          if (Math.hypot(playerX - enemy.x, playerY - enemy.y) < enemy.radius + 8) {
+          const _pdx = playerX - enemy.x, _pdy = playerY - enemy.y;
+          const _prr = enemy.radius + 8;
+          if (_pdx * _pdx + _pdy * _pdy < _prr * _prr) {
             enemy.dead = true;
             createExplosion(enemy.x, enemy.y, 45, '#f59e0b', 24);
             enemies.splice(i, 1);
@@ -3467,7 +3809,9 @@
 
         // 플레이어 피격 판정 (비행기 외곽 끝이 아닌 중심 콕핏 안쪽 5px 코어 판정)
         if (!isGameOver && !isContinueState && playerInvulnerable <= 0) {
-          if (Math.hypot(playerX - eb.x, playerY - eb.y) < eb.radius + 5) {
+          const _bdx = playerX - eb.x, _bdy = playerY - eb.y;
+          const _brr = eb.radius + 5;
+          if (_bdx * _bdx + _bdy * _bdy < _brr * _brr) {
             enemyBullets.splice(i, 1);
             hitPlayer();
             continue;
@@ -3521,21 +3865,23 @@
         }
 
         // 개별 파티클
+        // [성능] forEach -> for (클로저 생성 제거), globalAlpha 는 루프 후 1회만 복원
         let aliveParticles = 0;
-        exp.particles.forEach(p => {
-          if (p.alpha > 0) {
-            p.x += p.vx;
-            p.y += p.vy;
-            p.alpha -= p.decay;
-            ctx.fillStyle = p.color;
-            ctx.globalAlpha = Math.max(0, p.alpha);
-            ctx.beginPath();
-            ctx.arc(exp.x + p.x, exp.y + p.y, p.size, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1.0;
-            aliveParticles++;
-          }
-        });
+        const parts = exp.particles;
+        for (let k = 0; k < parts.length; k++) {
+          const p = parts[k];
+          if (p.alpha <= 0) continue;
+          p.x += p.vx;
+          p.y += p.vy;
+          p.alpha -= p.decay;
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.alpha > 0 ? p.alpha : 0;
+          ctx.beginPath();
+          ctx.arc(exp.x + p.x, exp.y + p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+          aliveParticles++;
+        }
+        ctx.globalAlpha = 1.0;
 
         if (aliveParticles === 0 && exp.ringAlpha <= 0) {
           explosions.splice(i, 1);
@@ -3618,7 +3964,8 @@
 
       // 7.8 꽃가루(Confetti) 렌더링 & 3D 펄럭임 물리 시뮬레이션
       if (confettis.length > 0) {
-        confettis.forEach(c => {
+        for (let ci = 0; ci < confettis.length; ci++) {
+          const c = confettis[ci];
           c.wobble += c.wobbleSpeed;
           c.x += c.vx + Math.sin(c.wobble) * 2.2;
           c.y += c.vy;
@@ -3635,7 +3982,7 @@
             c.y = -20;
             c.x = Math.random() * WIDTH;
           }
-        });
+        }
       }
 
       // -----------------------------------------------------------
@@ -3718,10 +4065,15 @@
 
           // 근처 적 총알을 회피 (무적이지만 잘 피하는 연출)
           let dodgeX = 0;
-          enemyBullets.forEach(eb => {
-            const d = Math.hypot(c.x - eb.x, c.y - eb.y);
-            if (d < 110) dodgeX += (c.x - eb.x) / (d + 1) * 26;
-          });
+          for (let bi = 0; bi < enemyBullets.length; bi++) {
+            const eb = enemyBullets[bi];
+            const dx = c.x - eb.x, dy = c.y - eb.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < 12100) {                      // 110^2, sqrt 회피
+              const d = Math.sqrt(d2);
+              dodgeX += dx / (d + 1) * 26;
+            }
+          }
 
           c.x += (targetAX + dodgeX - c.x) * 0.07;
           c.y += (targetAY - c.y) * 0.07;
@@ -3786,6 +4138,18 @@
         ctx.restore();
       }
 
+      // ★ 시각 효과 렌더 (플레이어/적 위에 얹음)
+      drawThrust();
+      drawDebris();
+      drawHitFlashes();
+
+      // ★ 화면 흔들림 해제 (후처리는 흔들리지 않아야 한다)
+      ctx.restore();
+
+      // ★ 후처리: 비네팅 + CRT 스캔라인
+      drawVignette();
+      drawScanlines();
+
       return; // 정상 종료 (예약은 gameLoop 래퍼가 담당)
     }
 
@@ -3800,10 +4164,11 @@
     // 타이틀 배경 로봇 (80~90년대 일본 슈퍼로봇 애니풍)
     // 공중에서 정지한 결정 포즈: 오른팔 하늘로 치켜들고 왼팔 앞으로 내민 자세
     // -------------------------------------------------------------
-    (function drawTitleRobot() {
+    function drawTitleRobot() {
       const rc = document.getElementById('titleRobot');
       if (!rc) return;
       const g = rc.getContext('2d');
+      if (!g) return;
 
       // 로봇 중심 좌표 및 크기
       const CX = 585;          // 화면 가로 중앙
@@ -4007,7 +4372,13 @@
       shape(() => { g.moveTo(34, -138); g.lineTo(50, -132); g.lineTo(48, -124); g.lineTo(33, -128); }, '#94a3b8', 1.6);
 
       g.restore();
-    })();
+    }
+
+    // [iOS] 스크립트 파싱과 대형 캔버스 렌더가 겹치면 Safari 가 죽는다.
+    //   다음 프레임으로 미뤄 초기 부하를 분산한다.
+    requestAnimationFrame(() => {
+      try { drawTitleRobot(); } catch (e) { console.warn('타이틀 로봇 렌더 실패:', e); }
+    });
 
     function startGame() {
       if (gameStarted) return;
@@ -4020,6 +4391,7 @@
       targetX = playerX;
       targetY = playerY;
       playerInvulnerable = 90;
+      startBGM();   // 열혈 BGM 루프 시작
     }
 
     // 타이틀 화면 시작 이벤트
