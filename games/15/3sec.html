@@ -1057,10 +1057,6 @@
     // -------------------------------------------------------------
     // 모든 풀은 고정 크기로 미리 만들고 인덱스만 돌려 쓴다 (GC 압박 0).
 
-    // [1] 화면 흔들림 (피격/폭발 시 타격감)
-    let shakeAmount = 0;
-    function addShake(v) { shakeAmount = Math.min(14, shakeAmount + v); }
-
     // [2] 히트 플래시 (적 피격 순간 흰 섬광)
     const HIT_POOL = 24;
     const hitFlashes = [];
@@ -1138,20 +1134,6 @@
       ctx.globalAlpha = 1;
     }
 
-    // [5] 플레이어 엔진 불꽃 파티클
-    const THRUST_POOL = 40;
-    const thrustParts = [];
-    for (let i = 0; i < THRUST_POOL; i++) thrustParts.push({ x: 0, y: 0, vy: 0, size: 0, life: 0, max: 1 });
-    let thrustIdx = 0;
-    function emitThrust(x, y) {
-      const t = thrustParts[thrustIdx];
-      thrustIdx = (thrustIdx + 1) % THRUST_POOL;
-      t.x = x + (Math.random() - 0.5) * 12;
-      t.y = y;
-      t.vy = 2.5 + Math.random() * 2.5;
-      t.size = 2 + Math.random() * 3.5;
-      t.life = t.max = 12 + Math.random() * 8;
-    }
     function drawThrust() {
       for (let i = 0; i < THRUST_POOL; i++) {
         const t = thrustParts[i];
@@ -2191,7 +2173,6 @@
       if (enemies.length > 0) {
         playExplosionSound(true); // 폭탄 사용 시 묵직한 대폭발음 출력
       }
-      addShake(14);   // 폭탄 대폭발 충격
       // ★ 배열 재대입 금지: 순회 중인 for 루프가 옛 배열을 참조해 예외가 난다
       enemies.length = 0;
 
@@ -2260,7 +2241,6 @@
 
       // 1. 피격 즉시 2초 무적 선적용 (1프레임 다중 피격 원천 차단)
       playerInvulnerable = 120;
-      addShake(12);                                  // 피격 충격
       addDebris(playerX, playerY, 10, '#38bdf8');    // 기체 파편
 
       // ★ 로봇 모드 버티기: 잔기와 무관하게 최초 1회는 파일럿의 근성으로 버틴다
@@ -3031,18 +3011,6 @@
         fpsTimer = 0;
       }
 
-      // ★ 화면 흔들림 적용 시작 (타격감). 이 프레임의 모든 렌더가 함께 흔들린다.
-      ctx.save();
-      if (shakeAmount > 0.3) {
-        ctx.translate(
-          (Math.random() - 0.5) * shakeAmount,
-          (Math.random() - 0.5) * shakeAmount
-        );
-        shakeAmount *= 0.86;   // 감쇠
-      } else {
-        shakeAmount = 0;
-      }
-
       // 1~2. 배경 렌더 (심우주 고정 배경 + 별 스크롤)
       drawSpaceBackground();
 
@@ -3061,7 +3029,7 @@
         ctx.fillStyle = 'rgba(60, 8, 8, 0.72)';
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-        // 피격 충격 화면 흔들림 (초반에 강하게)
+        // 컷인 진입 시 화면 진동 (컷인 내부 연출, 전역 흔들림과 무관)
         const shake = Math.max(0, 16 * (1 - T / 26));
         ctx.save();
         ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
@@ -3146,7 +3114,6 @@
           createExplosion(playerX, playerY, 130, '#facc15', 55);
         }
 
-        ctx.restore();      // 흔들림 해제
         drawVignette();
         drawScanlines();
         return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
@@ -3372,7 +3339,6 @@
           playExplosionSound(true);
         }
 
-        ctx.restore();      // 흔들림 해제
         drawVignette();
         drawScanlines();
         return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
@@ -3387,7 +3353,7 @@
           isRewinding = false;
           playerInvulnerable = Math.max(playerInvulnerable, 120);
           enemyBullets.length = 0;
-          return true;
+          return;
         }
 
         rewindProgress -= 1.5; // 슬롯당 2프레임분이므로 1.5슬롯/프레임 = 3배속 상당
@@ -3453,10 +3419,9 @@
           rewindMessage = '어~! 3초전의 나다! 같이 싸우자!';
           rewindMsgTimer = REWIND_MSG_DURATION;
 
-          ctx.restore();      // 흔들림 해제
-        drawVignette();
-        drawScanlines();
-        return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
+          drawVignette();
+          drawScanlines();
+          return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
         }
 
         // ★ 방어: 인덱스를 항상 유효 범위로 클램프
@@ -3502,7 +3467,6 @@
 
         drawHotBloodedText(rewindMessage, HEIGHT / 2, 40);
 
-        ctx.restore();      // 흔들림 해제
         drawVignette();
         drawScanlines();
         return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
@@ -3565,12 +3529,6 @@
       //    간격: 8프레임(+0%) → 5프레임(+60%) / 초당 탄수 15발 → 24발 (정확히 +60%)
       //    탄속은 -15로 고정 (연사 아이템이므로 탄속에는 관여하지 않음)
       // -----------------------------------------------------------
-      // ★ 엔진 불꽃 방출 (프레임마다 1~2개)
-      if (gameStarted && !isGameOver && !isPilotCutin && !isCombining) {
-        emitThrust(playerX, playerY + 26);
-        if (frameCount % 2 === 0) emitThrust(playerX, playerY + 30);
-      }
-
       if (gameStarted && !isGameOver && !isContinueState && !isVictoryState) {
         // rapidBoost 0~60% 를 발사 속도 배율로 사용 (간격 8→5프레임)
         // 정수 프레임 반올림으로 증가가 계단식이 되지 않게 '누적 가산' 방식 사용
@@ -3673,10 +3631,9 @@
                 });
               }
 
-              // ★ 격추 시각 효과: 금속 잔해 + 화면 흔들림
+              // ★ 격추 시각 효과: 금속 잔해
               addDebris(enemy.x, enemy.y, enemy.type === 7 ? 14 : (enemy.type === 6 ? 9 : 5),
                         enemy.type === 3 ? '#8b5cf6' : '#94a3b8');
-              addShake(enemy.type === 7 ? 9 : (enemy.type === 6 ? 5 : 2.5));
 
               // ★ 데스블로우: 적이 죽을 때 플레이어를 향해 반격탄 발사 (페널티)
               if (deathBlowCount > 0) {
@@ -4139,16 +4096,13 @@
       }
 
       // ★ 시각 효과 렌더 (플레이어/적 위에 얹음)
-      drawThrust();
       drawDebris();
       drawHitFlashes();
-
-      // ★ 화면 흔들림 해제 (후처리는 흔들리지 않아야 한다)
-      ctx.restore();
 
       // ★ 후처리: 비네팅 + CRT 스캔라인
       drawVignette();
       drawScanlines();
+
 
       return; // 정상 종료 (예약은 gameLoop 래퍼가 담당)
     }
