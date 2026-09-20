@@ -65,14 +65,14 @@
       align-items: flex-start;
       pointer-events: none;
       font-family: "Press Start 2P", monospace;
-      font-size: 23px;
+      font-size: 32px;
       letter-spacing: 1px;
       z-index: 10;
     }
     .hud-left {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 17px;
       align-items: flex-start;
     }
     .hud-lives {
@@ -81,8 +81,8 @@
       gap: 6px;
     }
     .hud-lives svg {
-      width: 42px;
-      height: 42px;
+      width: 59px;
+      height: 59px;
       filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
     }
     /* 박스 테두리 제거된 BOMB 컴팩트 인라인 표시 (잔기 바로 아래) */
@@ -95,24 +95,16 @@
     }
     .hud-bombs .bomb-label {
       font-family: "Press Start 2P", monospace;
-      font-size: 21px;
+      font-size: 29px;
       color: #ef4444;
       text-shadow: 1px 1px 0 #991b1b;
       margin-right: 2px;
     }
     .hud-bombs svg {
-      width: 42px;
-      height: 42px;
+      width: 59px;
+      height: 59px;
       filter: drop-shadow(0 2px 4px rgba(239, 68, 68, 0.6));
       transition: opacity 0.15s;
-    }
-    .hud-status-left {
-      font-size: 10px;
-      font-family: "SF Mono", Menlo, monospace;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      margin-top: 2px;
     }
     .hud-score {
       text-align: center;
@@ -123,38 +115,12 @@
       gap: 5px;
     }
     .hud-score .label {
-      font-size: 27px;
+      font-size: 38px;
       letter-spacing: 2px;
     }
     .hud-score .digits {
-      font-size: 34px;
+      font-size: 48px;
       color: #fef08a;
-    }
-    /* 우측 상단 컨트롤 버튼 그룹 (볼륨 + 일시정지) */
-    .hud-controls-right {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      pointer-events: auto;
-    }
-    .hud-btn {
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid #38bdf8;
-      border-radius: 8px;
-      width: 34px;
-      height: 34px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      color: #38bdf8;
-      padding: 0;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-      transition: transform 0.1s, background-color 0.1s;
-    }
-    .hud-btn:active {
-      transform: scale(0.92);
-      background: rgba(30, 41, 59, 0.95);
     }
     /* 일시정지 오버레이 */
     #pause-overlay {
@@ -191,15 +157,15 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;   /* 위아래 사이즈에 맞춰 세로 중앙 정렬 */
-      gap: 30px;
+      gap: 24px;
       z-index: 50;
       backdrop-filter: blur(4px);
     }
 
     /* 패배한 파일럿 (코피 + 눈물) */
     .defeat-pilot {
-      width: 560px;
-      margin-bottom: 20px;
+      width: 760px;
+      margin-bottom: 40px;
       filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.7));
       animation: pilotSob 2.4s ease-in-out infinite;
     }
@@ -231,10 +197,10 @@
     }
     .overlay-title {
       font-family: "Press Start 2P", monospace;
-      font-size: 96px;
+      font-size: 192px;
       letter-spacing: 6px;
       text-align: center;
-      margin-bottom: 50px;
+      margin-bottom: 100px;
       padding: 0 16px;
       animation: pulseTitle 0.8s infinite alternate;
     }
@@ -244,32 +210,32 @@
     }
     .final-score-box {
       font-family: "Press Start 2P", monospace;
-      margin: 25px 0 42px 0;
+      margin: 50px 0 84px 0;
       text-align: center;
       display: none;
       flex-direction: column;
       gap: 8px;
     }
     .final-score-label {
-      font-size: 40px;
+      font-size: 80px;
       color: #94a3b8;
       letter-spacing: 2px;
     }
     .final-score-val {
-      font-size: 72px;
+      font-size: 144px;
       color: #facc15;
       text-shadow: 2px 2px 0 #854d0e, 0 0 15px rgba(250, 204, 21, 0.7);
       letter-spacing: 2px;
     }
     .back-title-btn {
       font-family: "Press Start 2P", monospace;
-      font-size: 40px;
+      font-size: 80px;
       background: rgba(30, 41, 59, 0.95);
       color: #38bdf8;
       border: 2px solid #38bdf8;
       border-radius: 8px;
-      padding: 12px 20px;
-      margin-top: 30px;
+      padding: 36px 20px;
+      margin-top: 60px;
       cursor: pointer;
       box-shadow: 0 4px 0 #0369a1;
       display: none;
@@ -381,9 +347,9 @@
     }
     .continue-info {
       font-family: "Press Start 2P", monospace;
-      font-size: 21px;
+      font-size: 42px;
       color: #94a3b8;
-      margin-top: 38px;
+      margin-top: 76px;
     }
     @keyframes pulseTitle {
       0% { transform: scale(1); }
@@ -650,19 +616,19 @@
       </div>
 
       <!-- 우측 상단 상태 정보: FPS & Rapid 배율 표시 + 사운드 토글 버튼 -->
-      <div class="hud-status" style="display: flex; align-items: center; gap: 25px; pointer-events: auto;">
+      <div class="hud-status" style="display: flex; align-items: center; gap: 18px; pointer-events: auto;">
         <div>
           <div id="fps-counter" style="color: #86efac;">FPS: 60</div>
           <div id="rapid-display" style="color: #38bdf8; margin-top: 8px; font-weight: bold;">Rapid: +0%</div>
         </div>
-        <button id="soundToggleBtn" title="사운드 On/Off" style="background: rgba(15, 23, 42, 0.85); border: 1px solid #38bdf8; border-radius: 17px; width: 71px; height: 71px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #38bdf8; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.5);">
+        <button id="soundToggleBtn" title="사운드 On/Off" style="background: rgba(15, 23, 42, 0.85); border: 1px solid #38bdf8; border-radius: 24px; width: 99px; height: 99px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #38bdf8; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.5);">
           <!-- 스피커 On 아이콘 SVG -->
-          <svg id="soundOnIcon" viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg id="soundOnIcon" viewBox="0 0 24 24" width="59" height="59" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
           </svg>
           <!-- 스피커 Off 아이콘 SVG (초기 숨김) -->
-          <svg id="soundOffIcon" viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+          <svg id="soundOffIcon" viewBox="0 0 24 24" width="59" height="59" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
             <line x1="23" y1="9" x2="17" y2="15"></line>
             <line x1="17" y1="9" x2="23" y2="15"></line>
@@ -872,132 +838,12 @@
     });
 
     // -------------------------------------------------------------
-    // 지형 & 건물 절차적 텍스처 생성 (3대 멀티 바이옴: 800x1200 x 3 = 3600px 거대 순환 전장)
-    // -------------------------------------------------------------
-    // 유틸: 시드 기반 난수
+    // 유틸: 시드 기반 난수 (배경 텍스처/별 배치에 사용)
     const seedRandom = (seed) => {
       let x = Math.sin(seed) * 10000;
       return x - Math.floor(x);
     };
 
-    // 지면 풀숲/덤불 군락 렌더링 공통 함수
-    function drawFoliageClusterOn(tCtx, cx, cy, count, radius, startSeed = 10) {
-      let s = startSeed;
-      for (let j = 0; j < count; j++) {
-        const fx = cx + (seedRandom(s++) - 0.5) * radius * 1.6;
-        const fy = cy + (seedRandom(s++) - 0.5) * radius * 1.6;
-        const fr = 12 + seedRandom(s++) * 18;
-
-        // 수풀 바닥 그림자 (지면 밀착)
-        tCtx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        tCtx.beginPath();
-        tCtx.arc(fx + 4, fy + 8, fr * 0.95, 0, Math.PI * 2);
-        tCtx.fill();
-
-        // 수풀 본체 (원형 나무 캐노피)
-        const treeGrad = tCtx.createRadialGradient(fx - 4, fy - 6, 2, fx, fy, fr);
-        treeGrad.addColorStop(0, '#4d7c3d');
-        treeGrad.addColorStop(0.7, '#2f4f24');
-        treeGrad.addColorStop(1, '#1b3215');
-        tCtx.fillStyle = treeGrad;
-        tCtx.beginPath();
-        tCtx.arc(fx, fy, fr, 0, Math.PI * 2);
-        tCtx.fill();
-
-        // 잎사귀 하이라이트 텍스처
-        tCtx.fillStyle = 'rgba(134, 239, 172, 0.2)';
-        tCtx.beginPath();
-        tCtx.arc(fx - 3, fy - 4, fr * 0.45, 0, Math.PI * 2);
-        tCtx.fill();
-      }
-    }
-
-    // 포격 크레이터(폭격 구덩이) 공통 함수
-    function drawCraterOn(tCtx, cx, cy, r) {
-      // 그을음 및 그림자
-      tCtx.fillStyle = 'rgba(15, 12, 10, 0.7)';
-      tCtx.beginPath();
-      tCtx.arc(cx, cy, r, 0, Math.PI * 2);
-      tCtx.fill();
-
-      // 타버린 내부 그라데이션
-      const cGrad = tCtx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 2, cx, cy, r);
-      cGrad.addColorStop(0, '#1c1917');
-      cGrad.addColorStop(0.6, '#292524');
-      cGrad.addColorStop(1, '#44403c');
-      tCtx.fillStyle = cGrad;
-      tCtx.beginPath();
-      tCtx.arc(cx, cy, r * 0.82, 0, Math.PI * 2);
-      tCtx.fill();
-
-      // 가장자리 흙 융기 림 (Rim)
-      tCtx.strokeStyle = 'rgba(120, 113, 108, 0.6)';
-      tCtx.lineWidth = 3;
-      tCtx.stroke();
-    }
-
-    // 군용 주차 트럭/차량 공통 함수
-    function drawMilitaryTruckOn(tCtx, x, y, angle = 0, color = '#3f4f38') {
-      tCtx.save();
-      tCtx.translate(x, y);
-      tCtx.rotate(angle);
-
-      // 그림자
-      tCtx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-      tCtx.fillRect(-10 + 6, -18 + 8, 20, 36);
-
-      // 차체 본체
-      tCtx.fillStyle = color;
-      tCtx.fillRect(-10, -18, 20, 36);
-
-      // 운전석 캐빈
-      tCtx.fillStyle = '#1e293b';
-      tCtx.fillRect(-9, -17, 18, 12);
-      // 앞유리창
-      tCtx.fillStyle = '#93c5fd';
-      tCtx.fillRect(-7, -15, 14, 5);
-
-      // 짐칸 (화물 천막 커버)
-      tCtx.fillStyle = '#4a5942';
-      tCtx.fillRect(-9, -3, 18, 19);
-      tCtx.strokeStyle = '#273422';
-      tCtx.lineWidth = 1.5;
-      tCtx.strokeRect(-9, -3, 18, 19);
-
-      // 바퀴 4개
-      tCtx.fillStyle = '#0f172a';
-      tCtx.fillRect(-13, -14, 3, 7);
-      tCtx.fillRect(10, -14, 3, 7);
-      tCtx.fillRect(-13, 7, 3, 7);
-      tCtx.fillRect(10, 7, 3, 7);
-
-      tCtx.restore();
-    }
-
-    // 대공포 진지 공통 함수
-    function drawDefenseBunkerOn(tCtx, bx, by) {
-      tCtx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      tCtx.beginPath();
-      tCtx.arc(bx + 8, by + 10, 24, 0, Math.PI * 2);
-      tCtx.fill();
-
-      tCtx.fillStyle = '#5c4d38';
-      tCtx.beginPath();
-      tCtx.arc(bx, by, 22, 0, Math.PI * 2);
-      tCtx.fill();
-
-      tCtx.fillStyle = '#1e293b';
-      tCtx.beginPath();
-      tCtx.arc(bx, by, 14, 0, Math.PI * 2);
-      tCtx.fill();
-
-      tCtx.strokeStyle = '#94a3b8';
-      tCtx.lineWidth = 3;
-      tCtx.beginPath();
-      tCtx.moveTo(bx - 3, by); tCtx.lineTo(bx - 3, by - 24);
-      tCtx.moveTo(bx + 3, by); tCtx.lineTo(bx + 3, by - 24);
-      tCtx.stroke();
-    }
 
     // -------------------------------------------------------------
     // 배경: 심우주 (Deep Space) — 타이틀 화풍에 맞춘 정적 배경
@@ -1818,6 +1664,7 @@
       // ★ 리와인드 & 합체 시스템 초기화
       historyData.length = 0;
       snapshotSkip = 0;
+      fortressSpawnCount = 0;   // 보스 체력 배율 초기화
       clones = [];
       isRewinding = false;
       rewindProgress = 0;
@@ -2232,11 +2079,11 @@
     //   - 이동: 날렵한 붉은 델타익, 좌우 지그재그 사인파(Sine wave)
     //   - 사격: "빠르게 끊어서" 2연사(Burst)로 플레이어를 조준 사격
     //
-    // Type 2: 기갑 전폭기 (Panzer Bomber)
+    // Type 2: 드릴 탱크 드론 (Drill Tank)
     //   - 이동: 묵직한 녹색 헥사곤 장갑, 상공에서 선회(U턴/Swoop)
     //   - 사격: "천천히 많은 총알" - 5방향 부채꼴 탄막(Slow Spread Ring) 방출
     //
-    // Type 3: 스텔스 중전투기 (Shadow Fighter)
+    // Type 3: 악마 기계수 (Devil Beast)
     //   - 이동: 짙은 보라색 3단 전진익, 상공 진입 후 제자리 호버링
     //   - 사격: "넓게 적은 양의 총알" - 좌우 양날개에서 넓은 각도의 트윈 와이드 샷 발사
     //
@@ -2253,6 +2100,7 @@
     let squadSpawnTimer = 0; // 그룹 편대 전용 스폰 타이머
     let scoutSpawnTimer = 0; // 소형 자코 전용 스폰 타이머 (자주 등장)
     let fortressTimer = 0;   // 대형 요새형 자코 전용 타이머 (1분 30초 = 90초 주기)
+    let fortressSpawnCount = 0; // 보스 등장 횟수 (재등장마다 체력 10% 증가)
 
     // -------------------------------------------------------------
     // 난이도 스케일링 시스템 (시작 난이도 50% = 0.5x, 10,000점당 +10%, 500,000점에서 최대 6.0배 고정)
@@ -2303,7 +2151,7 @@
           this.shootTimer = 40;
           this.hp = this.maxHp = 3; // 드릴 탱크
         } else if (this.type === 3) {
-          // [Type 3] 스텔스 중전투기
+          // [Type 3] 악마 기계수
           this.x = 130 + Math.random() * (WIDTH - 260);
           this.y = -90;
           this.targetY = 220 + Math.random() * 160;
@@ -2386,7 +2234,13 @@
             { dx: 40, dy: 20, hp: 4, maxHp: 4, alive: true },
             { dx: 80, dy: -10, hp: 4, maxHp: 4, alive: true }
           ];
-          this.hp = this.maxHp = 26; // 달마시안 요새 코어
+          // 달마시안 요새 코어. 재등장마다 체력 10% 증가 (1회차 26, 2회차 28.6 -> 29 ...)
+          const bossScale = Math.pow(1.10, fortressSpawnCount);
+          this.hp = this.maxHp = Math.round(26 * bossScale);
+          // 포탑 체력도 같은 비율로 상향
+          this.turrets.forEach(t => {
+            t.hp = t.maxHp = Math.round(4 * bossScale);
+          });
         }
       }
 
@@ -2448,7 +2302,7 @@
             }
           }
         } else if (this.type === 3) {
-          // [Type 3] 스텔스 중전투기: 호버링 + 넓은 트윈 와이드 샷
+          // [Type 3] 악마 기계수: 호버링 + 넓은 트윈 와이드 샷
           if (this.y < this.targetY) {
             this.y += (this.targetY - this.y) * 0.04 + 1;
           } else if (this.hoverTime < this.maxHover) {
@@ -2650,148 +2504,155 @@
           ctx.translate(35, 50);
           ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
           if (this.type === 1) {
-            ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(-18, -14); ctx.lineTo(18, -14); ctx.fill();
+            ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
           } else if (this.type === 2) {
-            ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(-26, -18); ctx.lineTo(26, -18); ctx.fill();
+            ctx.fillRect(-22, -22, 44, 30);
           } else if (this.type === 3) {
-            ctx.beginPath(); ctx.moveTo(0, 30); ctx.lineTo(-32, -20); ctx.lineTo(32, -20); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(36, -10); ctx.lineTo(12, -28); ctx.lineTo(0, -15);
+            ctx.lineTo(-12, -28); ctx.lineTo(-36, -10); ctx.closePath(); ctx.fill();
           } else if (this.type === 4) {
-            ctx.beginPath(); ctx.arc(0, 0, 16, 0, Math.PI * 2); ctx.fill();
+            ctx.fillRect(-12, -15, 24, 20);
           } else if (this.type === 5) {
-            ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(-12, -10); ctx.lineTo(12, -10); ctx.fill();
+            ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill();
           } else if (this.type === 6) {
-            ctx.beginPath(); ctx.rect(-32, -28, 64, 56); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-20, -25); ctx.lineTo(20, -25); ctx.lineTo(30, 0); ctx.lineTo(25, 25);
+            ctx.lineTo(15, 30); ctx.lineTo(-15, 30); ctx.lineTo(-25, 25); ctx.lineTo(-30, 0); ctx.closePath(); ctx.fill();
           } else {
-            ctx.beginPath(); ctx.rect(-100, -60, 200, 120); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(0, -10, 90, 60, 0, 0, Math.PI * 2); ctx.fill();
           }
           ctx.restore();
         }
 
-        // [적 Type 1] 고속 요격기
+        // -------------------------------------------------------------
+        // ★ 적군 디자인 (기계수 / 레트로 악당 로봇)
+        // -------------------------------------------------------------
+        // [Type 1] 톱니바퀴 외눈박이 드론
         if (this.type === 1) {
-          ctx.fillStyle = '#f97316';
-          ctx.beginPath(); ctx.moveTo(-6, -16); ctx.lineTo(0, -28 - Math.random() * 6); ctx.lineTo(6, -16); ctx.fill();
-          ctx.fillStyle = '#dc2626';
-          ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(-18, -14); ctx.lineTo(-6, -10); ctx.lineTo(0, -6); ctx.lineTo(6, -10); ctx.lineTo(18, -14); ctx.closePath(); ctx.fill();
-          ctx.strokeStyle = '#f87171'; ctx.lineWidth = 1.5; ctx.stroke();
-          ctx.fillStyle = '#fef08a';
-          ctx.beginPath(); ctx.ellipse(0, 2, 3.5, 6, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#64748b';
+          for (let i = 0; i < 8; i++) {
+            ctx.rotate(Math.PI / 4);
+            ctx.fillRect(-4, -24, 8, 8);
+          }
+          ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2; ctx.stroke();
+          ctx.strokeStyle = '#f87171'; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(-10, -6); ctx.lineTo(0, 2); ctx.lineTo(10, -6); ctx.stroke();
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath(); ctx.arc(0, 4, 6, 0, Math.PI * 2); ctx.fill();
 
-        // [적 Type 2] 기갑 전폭기
+        // [Type 2] 드릴 탱크 드론
         } else if (this.type === 2) {
-          ctx.fillStyle = '#eab308';
-          [-12, 12].forEach(fx => {
-            ctx.beginPath(); ctx.moveTo(fx - 4, -22); ctx.lineTo(fx, -36 - Math.random() * 8); ctx.lineTo(fx + 4, -22); ctx.fill();
-          });
-          ctx.fillStyle = '#15803d';
-          ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(-24, 6); ctx.lineTo(-27, -18); ctx.lineTo(-10, -22); ctx.lineTo(10, -22); ctx.lineTo(27, -18); ctx.lineTo(24, 6); ctx.closePath(); ctx.fill();
-          ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2; ctx.stroke();
-          ctx.fillStyle = '#0f172a'; ctx.fillRect(-8, -4, 16, 14);
-          ctx.strokeStyle = '#86efac'; ctx.strokeRect(-8, -4, 16, 14);
-          ctx.fillStyle = '#0284c7'; ctx.beginPath(); ctx.arc(0, 2, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#3f6212';
+          ctx.fillRect(-22, -22, 44, 30);
+          ctx.strokeStyle = '#84cc16'; ctx.lineWidth = 2; ctx.strokeRect(-22, -22, 44, 30);
+          ctx.fillStyle = '#94a3b8';
+          ctx.beginPath(); ctx.moveTo(-12, 8); ctx.lineTo(0, 30); ctx.lineTo(12, 8); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = '#475569'; ctx.lineWidth = 1;
+          for (let dy = 10; dy < 28; dy += 4) {
+            ctx.beginPath(); ctx.moveTo(-12 * (30 - dy) / 22, dy); ctx.lineTo(12 * (30 - dy) / 22, dy); ctx.stroke();
+          }
+          ctx.fillStyle = '#1c1917';
+          ctx.fillRect(-28, -26, 8, 40); ctx.fillRect(20, -26, 8, 40);
+          ctx.fillStyle = '#ef4444'; ctx.fillRect(-10, -12, 6, 6); ctx.fillRect(4, -12, 6, 6);
 
-        // [적 Type 3] 스텔스 중전투기
+        // [Type 3] 악마 기계수 (박쥐 날개 + 해골)
         } else if (this.type === 3) {
-          ctx.fillStyle = '#c084fc';
-          [-18, 0, 18].forEach(fx => {
-            ctx.beginPath(); ctx.moveTo(fx - 3, -24); ctx.lineTo(fx, -38 - Math.random() * 7); ctx.lineTo(fx + 3, -24); ctx.fill();
-          });
-          ctx.fillStyle = '#3b0764';
-          ctx.beginPath(); ctx.moveTo(0, 32); ctx.lineTo(16, 12); ctx.lineTo(34, 4); ctx.lineTo(26, -20); ctx.lineTo(10, -14); ctx.lineTo(0, -24); ctx.lineTo(-10, -14); ctx.lineTo(-26, -20); ctx.lineTo(-34, 4); ctx.lineTo(-16, 12); ctx.closePath(); ctx.fill();
-          ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 2.5; ctx.stroke();
+          ctx.fillStyle = '#4c1d95';
+          ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(36, -10); ctx.lineTo(12, -28); ctx.lineTo(0, -15);
+          ctx.lineTo(-12, -28); ctx.lineTo(-36, -10); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 2; ctx.stroke();
+          ctx.fillStyle = '#2e1065';
+          ctx.fillRect(-10, -15, 20, 40);
           ctx.fillStyle = '#e879f9';
-          ctx.beginPath(); ctx.moveTo(0, 18); ctx.lineTo(6, -6); ctx.lineTo(-6, -6); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.arc(-4, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(4, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillRect(-5, 8, 10, 2);
 
-        // [적 Type 4] 그룹 편대 자코 (Squad Zako) - 오렌지/옐로우 날렵한 전투기
+        // [Type 4] 로켓 펀치 (강철 주먹)
         } else if (this.type === 4) {
-          ctx.fillStyle = '#fb923c';
-          ctx.beginPath();
-          ctx.moveTo(0, 16);
-          ctx.lineTo(-16, -12);
-          ctx.lineTo(0, -6);
-          ctx.lineTo(16, -12);
-          ctx.closePath();
-          ctx.fill();
-          ctx.strokeStyle = '#fde047'; ctx.lineWidth = 2; ctx.stroke();
-          // 방향 표시 화살촉 콕핏
-          ctx.fillStyle = '#ef4444';
-          ctx.beginPath(); ctx.arc(0, 2, 4, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#f97316';
+          ctx.beginPath(); ctx.moveTo(-8, -12); ctx.lineTo(0, -30 - Math.random() * 8); ctx.lineTo(8, -12); ctx.fill();
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillRect(-12, -15, 24, 20);
+          ctx.fillStyle = '#94a3b8';
+          ctx.fillRect(-14, 5, 6, 12); ctx.fillRect(-6, 5, 6, 14);
+          ctx.fillRect(2, 5, 6, 14);   ctx.fillRect(10, 5, 6, 12);
+          ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+          ctx.strokeRect(-14, 5, 6, 12); ctx.strokeRect(-6, 5, 6, 14);
+          ctx.strokeRect(2, 5, 6, 14);   ctx.strokeRect(10, 5, 6, 12);
 
-        // [적 Type 5] 소형 자코 (Scout Zako) - 초소형 침투정, 붉은색 점멸
+        // [Type 5] 미니 자폭 캡슐
         } else if (this.type === 5) {
-          ctx.fillStyle = '#e11d48';
-          ctx.beginPath();
-          ctx.moveTo(0, 14);
-          ctx.lineTo(-11, -11);
-          ctx.lineTo(11, -11);
-          ctx.closePath();
-          ctx.fill();
-          ctx.strokeStyle = '#fda4af'; ctx.lineWidth = 1.5; ctx.stroke();
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
-
-        // [적 Type 6] 중형 자코 (Heavy Zako) - 묵직한 네이비 블루 건쉽
-        } else if (this.type === 6) {
-          ctx.fillStyle = '#1e3a5f';
-          ctx.fillRect(-30, -24, 60, 48);
-          ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.5;
-          ctx.strokeRect(-30, -24, 60, 48);
-          // 좌우 주익 포대
-          ctx.fillStyle = '#0f172a';
-          ctx.fillRect(-38, -10, 8, 20);
-          ctx.fillRect(30, -10, 8, 20);
-          // 중앙 코어
-          ctx.fillStyle = '#38bdf8';
+          ctx.fillStyle = '#1c1917';
           ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill();
-          // 체력 바 (HP Bar)
-          const hpRatio = Math.max(0, this.hp / this.maxHp);
-          ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(-28, -34, 56, 5);
-          ctx.fillStyle = '#22c55e'; ctx.fillRect(-28, -34, 56 * hpRatio, 5);
+          ctx.fillStyle = (frameCount % 10 < 5) ? '#ef4444' : '#fca5a5';
+          ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#fbbf24';
+          ctx.fillRect(-14, -4, 4, 8); ctx.fillRect(10, -4, 4, 8);
 
-        // [적 Type 7] 대형 요새형 자코 (Fortress Zako) - 초대형 기동 요새
-        } else {
-          // 거대 동체 베이스
-          ctx.fillStyle = '#18181b';
-          ctx.fillRect(-95, -50, 190, 100);
-          ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 3;
-          ctx.strokeRect(-95, -50, 190, 100);
-
-          // 장갑 패널
-          ctx.fillStyle = '#27272a';
-          ctx.fillRect(-85, -40, 170, 80);
-
-          // 중앙 메인 반응로 코어 (펄스)
-          const pulse = 16 + Math.sin(this.age * 0.1) * 3;
+        // [Type 6] 기계 고릴라 머리
+        } else if (this.type === 6) {
+          ctx.fillStyle = '#334155';
+          ctx.beginPath(); ctx.moveTo(-20, -25); ctx.lineTo(20, -25); ctx.lineTo(30, 0); ctx.lineTo(25, 25);
+          ctx.lineTo(15, 30); ctx.lineTo(-15, 30); ctx.lineTo(-25, 25); ctx.lineTo(-30, 0); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2; ctx.stroke();
+          ctx.fillStyle = '#1e293b'; ctx.fillRect(-15, -25, 30, 15);
           ctx.fillStyle = '#ef4444';
-          ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 15;
-          ctx.beginPath(); ctx.arc(0, 0, pulse, 0, Math.PI * 2); ctx.fill();
-          ctx.shadowBlur = 0;
+          ctx.beginPath(); ctx.moveTo(-20, -10); ctx.lineTo(-5, 0); ctx.lineTo(-15, 5); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(20, -10); ctx.lineTo(5, 0); ctx.lineTo(15, 5); ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath(); ctx.arc(-8, 15, 4, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(8, 15, 4, 0, Math.PI * 2); ctx.fill();
 
-          // 4개의 독립 포탑 렌더링
+        // [Type 7] 누더기 기계 달마시안 요새 (보스)
+        } else if (this.type === 7) {
+          ctx.fillStyle = '#e2e8f0';
+          ctx.beginPath(); ctx.ellipse(0, -10, 90, 60, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 4; ctx.stroke();
+
+          ctx.fillStyle = '#334155';
+          [ [-40,-20,15], [30,-30,12], [-50,20,10], [50,10,18], [0,-40,14] ].forEach(pt => {
+            ctx.beginPath(); ctx.arc(pt[0], pt[1], pt[2], 0, Math.PI * 2); ctx.fill();
+          });
+
+          const coreGlow = 4 + Math.sin(performance.now() * 0.005) * 2;
+          ctx.fillStyle = '#ef4444'; ctx.shadowColor = '#dc2626'; ctx.shadowBlur = 15;
+          ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#fca5a5';
+          ctx.beginPath(); ctx.arc(0, 0, coreGlow, 0, Math.PI * 2); ctx.fill();
+
+          // 덕지덕지 붙인 철판 (반창고 느낌)
+          ctx.fillStyle = '#ca8a04';
+          ctx.save(); ctx.translate(-60, 0); ctx.rotate(0.5); ctx.fillRect(-5, -20, 10, 40);
+          ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.arc(0,-15,2,0,Math.PI*2); ctx.arc(0,15,2,0,Math.PI*2); ctx.fill(); ctx.restore();
+          ctx.fillStyle = '#ca8a04';
+          ctx.save(); ctx.translate(65, -15); ctx.rotate(-0.3); ctx.fillRect(-5, -20, 10, 40);
+          ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.arc(0,-15,2,0,Math.PI*2); ctx.arc(0,15,2,0,Math.PI*2); ctx.fill(); ctx.restore();
+
           this.turrets.forEach((t, idx) => {
             if (t.alive) {
-              ctx.fillStyle = '#52525b';
-              ctx.beginPath(); ctx.arc(t.dx, t.dy, 12, 0, Math.PI * 2); ctx.fill();
-              ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.stroke();
-              // 포열
+              ctx.fillStyle = '#0f172a';
+              ctx.beginPath(); ctx.arc(t.dx, t.dy, 14, 0, Math.PI * 2); ctx.fill();
+              ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.stroke();
               const ang = Math.atan2(playerY - (this.y + t.dy), playerX - (this.x + t.dx));
-              ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3;
+              ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 4;
               ctx.beginPath();
               ctx.moveTo(t.dx, t.dy);
-              ctx.lineTo(t.dx + Math.cos(ang) * 18, t.dy + Math.sin(ang) * 18);
+              ctx.lineTo(t.dx + Math.cos(ang) * 20, t.dy + Math.sin(ang) * 20);
               ctx.stroke();
             } else {
-              // 파괴된 포탑 잔해
-              ctx.fillStyle = '#27272a';
-              ctx.beginPath(); ctx.arc(t.dx, t.dy, 8, 0, Math.PI * 2); ctx.fill();
+              ctx.fillStyle = '#475569';
+              ctx.beginPath(); ctx.arc(t.dx, t.dy, 10, 0, Math.PI * 2); ctx.fill();
+              ctx.fillStyle = 'rgba(0,0,0,0.5)';
+              ctx.beginPath(); ctx.arc(t.dx + Math.random()*4-2, t.dy - 10 - Math.random()*5, 5, 0, Math.PI*2); ctx.fill();
             }
           });
 
-          // 요새 전체 체력 바
           const fHpRatio = Math.max(0, this.hp / this.maxHp);
-          ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(-90, -62, 180, 7);
-          ctx.fillStyle = '#f43f5e'; ctx.fillRect(-90, -62, 180 * fHpRatio, 7);
-          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(-90, -62, 180, 7);
+          ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(-90, -82, 180, 7);
+          ctx.fillStyle = '#f43f5e'; ctx.fillRect(-90, -82, 180 * fHpRatio, 7);
+          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(-90, -82, 180, 7);
         }
 
         ctx.restore();
@@ -3537,6 +3398,7 @@
           const fortressExists = enemies.some(e => e.type === 7);
           if (!fortressExists) {
             enemies.push(new Enemy(7));
+            fortressSpawnCount++;   // 다음 등장 시 체력 10% 상향
           }
         }
 
@@ -3913,13 +3775,13 @@
       if (gameStarted && (robotMode || deathBlowCount > 0)) {
         ctx.save();
         ctx.textAlign = 'center';
-        ctx.font = 'bold 15px "Press Start 2P", monospace';
+        ctx.font = 'bold 20px "Press Start 2P", monospace';
         ctx.fillStyle = robotMode ? '#facc15' : '#e879f9';
         ctx.fillText(
           robotMode
             ? `ROBOT MODE / DEATH BLOW x${deathBlowCount}${robotGuardUsed ? '' : ' / GUARD 1'}`
             : `ALLY x${aiCloneCount()} / DEATH BLOW x${deathBlowCount}`,
-          WIDTH / 2, HEIGHT - 24
+          WIDTH / 2, HEIGHT - 32
         );
         ctx.restore();
       }
