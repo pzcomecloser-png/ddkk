@@ -78,7 +78,7 @@
       justify-content: space-between;
       align-items: flex-start;
       pointer-events: none;
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 32px;
       letter-spacing: 1px;
       z-index: 10;
@@ -108,7 +108,7 @@
       cursor: pointer;
     }
     .hud-bombs .bomb-label {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 29px;
       color: #ef4444;
       text-shadow: 1px 1px 0 #991b1b;
@@ -150,7 +150,7 @@
       background: rgba(5, 7, 13, 0.7);
     }
     #pause-overlay .pause-text {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 104px;
       color: #facc15;
       text-shadow: 4px 4px 0 #854d0e, 0 0 25px rgba(250, 204, 21, 0.8);
@@ -159,7 +159,7 @@
       margin-bottom: 20px;
     }
     #pause-overlay .pause-hint {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 40px;
       color: #94a3b8;
     }
@@ -217,7 +217,7 @@
       100%    { opacity: 0; transform: translateY(22px) scale(0.85); }
     }
     .overlay-title {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 192px;
       letter-spacing: 6px;
       text-align: center;
@@ -230,7 +230,7 @@
       text-shadow: 4px 4px 0 #991b1b, 0 0 25px rgba(239, 68, 68, 0.8);
     }
     .final-score-box {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       margin: 50px 0 84px 0;
       text-align: center;
       display: none;
@@ -249,7 +249,7 @@
       letter-spacing: 2px;
     }
     .back-title-btn {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 80px;
       background: rgba(30, 41, 59, 0.95);
       color: #38bdf8;
@@ -286,7 +286,7 @@
       to { opacity: 1; transform: scale(1); }
     }
     .congrat-title {
-      font-family: "Bangers", "Press Start 2P", monospace;
+      font-family: "Bangers", "Press Start 2P", "Courier New", monospace;
       font-size: 112px;
       color: #facc15;
       text-align: center;
@@ -307,7 +307,7 @@
       100% { transform: scale(1.04) rotate(1.5deg); filter: brightness(1.2); }
     }
     .congrat-msg {
-      font-family: "Press Start 2P", -apple-system, sans-serif;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 46px;
       color: #f8fafc;
       text-align: center;
@@ -336,21 +336,21 @@
       50% { transform: translateY(-5px); }
     }
     .score-badge .label {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 36px;
       color: #94a3b8;
       margin-bottom: 6px;
       letter-spacing: 2px;
     }
     .score-badge .score-number {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 78px;
       color: #facc15;
       text-shadow: 3px 3px 0 #854d0e;
       letter-spacing: 2px;
     }
     .victory-btn {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 40px;
       background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
       color: #031427;
@@ -366,7 +366,7 @@
       box-shadow: 0 2px 0 #0369a1;
     }
     .continue-info {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 42px;
       color: #94a3b8;
       margin-top: 76px;
@@ -411,6 +411,10 @@
     #title-screen .arcade-footer {
       position: relative;
       z-index: 3;
+      /* ★ font-size 미지정 시 상속값에 의존해 기준이 흔들린다. 명시 고정. */
+      font-size: 30px;
+      line-height: 1.5;
+      white-space: nowrap;
     }
 
     /* CRT 주사선 (스캔라인) 오버레이 */
@@ -433,7 +437,7 @@
     #title-screen .arcade-header {
       position: absolute;
       top: 8%;
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 46px;
       letter-spacing: 6px;
       color: #94a3b8;
@@ -443,7 +447,7 @@
 
     /* 부제 (한자/한글 혼용 열혈체) */
     #title-screen .title-sub {
-      font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+      font-family: "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
       font-weight: 800;
       font-size: 78px;
       letter-spacing: 18px;
@@ -455,7 +459,7 @@
 
     /* 메인 로고: 절대무적 / 3초전대 */
     #title-screen .game-title {
-      font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+      font-family: "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
       font-weight: 900;
       font-size: 300px;
       letter-spacing: -14px;
@@ -501,7 +505,7 @@
 
     /* 캐치프레이즈 */
     #title-screen .title-catch {
-      font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+      font-family: "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
       font-weight: 700;
       font-size: 92px;
       letter-spacing: 1px;
@@ -513,7 +517,7 @@
     }
 
     #title-screen .push-start {
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 92px;
       letter-spacing: 6px;
       color: #f8fafc;
@@ -530,7 +534,7 @@
       flex-direction: column;
       align-items: center;
       gap: 12px;
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
     }
     #title-screen .insert-coin {
       font-size: 48px;
@@ -548,7 +552,7 @@
       position: absolute;
       right: 26px;
       bottom: 22px;
-      font-family: "Press Start 2P", monospace;
+      font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 46px;
       letter-spacing: 2px;
       color: #94a3b8;
@@ -1657,7 +1661,7 @@
       ctx.save();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = `bold ${size}px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
+      ctx.font = `bold ${size}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
       const lines = text.split('\n');
       lines.forEach((line, i) => {
         const ly = y + i * (size * 1.35);
@@ -3165,7 +3169,7 @@
         ctx.globalAlpha = Math.min(1, Math.max(0, (T - 12) / 10));
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.font = 'bold 46px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+        ctx.font = 'bold 46px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
         const lineX = WIDTH * 0.30 + 128;
         ctx.lineWidth = 9;
         ctx.strokeStyle = '#000';
@@ -3173,7 +3177,7 @@
         ctx.fillStyle = '#facc15';
         ctx.fillText('큭!', lineX, HEIGHT * 0.38);
 
-        ctx.font = 'bold 33px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+        ctx.font = 'bold 33px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
         ctx.lineWidth = 8;
         ctx.strokeStyle = '#000';
         ctx.strokeText('이정도로', lineX, HEIGHT * 0.455);
@@ -3316,7 +3320,7 @@
           ctx.save();
           ctx.translate(stageX + 150, stageY - 150);
           ctx.rotate(-0.25);
-          ctx.font = 'bold 44px "Bangers", "Malgun Gothic", sans-serif';
+          ctx.font = 'bold 44px "Bangers", "Apple SD Gothic Neo", sans-serif';
           ctx.textAlign = 'center';
           ctx.lineWidth = 7; ctx.strokeStyle = '#000';
           ctx.strokeText('철컹!', 0, 0);
@@ -3554,7 +3558,7 @@
         // ◀◀ REWIND 표시
         ctx.save();
         ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 30px "Press Start 2P", monospace';
+        ctx.font = 'bold 30px "Press Start 2P", "Courier New", monospace';
         ctx.textAlign = 'left';
         if (Math.floor(performance.now() / 250) % 2 === 0) {
           ctx.fillText('◀◀ REWIND', 40, 120);
@@ -3993,7 +3997,7 @@
 
         // 'R' 레트로 굵은 폰트 렌더링
         ctx.fillStyle = '#f43f5e';
-        ctx.font = 'bold 20px "Press Start 2P", sans-serif';
+        ctx.font = 'bold 20px "Press Start 2P", "Courier New", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('R', 0, 2);
@@ -4187,7 +4191,7 @@
       if (gameStarted && (robotMode || deathBlowCount > 0)) {
         ctx.save();
         ctx.textAlign = 'center';
-        ctx.font = 'bold 20px "Press Start 2P", monospace';
+        ctx.font = 'bold 20px "Press Start 2P", "Courier New", monospace';
         ctx.fillStyle = robotMode ? '#facc15' : '#e879f9';
         ctx.fillText(
           robotMode
