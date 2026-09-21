@@ -179,14 +179,15 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;   /* 위아래 사이즈에 맞춰 세로 중앙 정렬 */
-      gap: 24px;
+      gap: 8px;                  /* ★ 요소별 margin 과 중복 누적되므로 최소화 */
+      text-align: center;
       z-index: 50;
     }
 
     /* 패배한 파일럿 (코피 + 눈물) */
     .defeat-pilot {
       width: 760px;
-      margin-bottom: 40px;
+      margin-bottom: 12px;
       filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.7));
       animation: pilotSob 2.4s ease-in-out infinite;
     }
@@ -221,7 +222,7 @@
       font-size: 192px;
       letter-spacing: 6px;
       text-align: center;
-      margin-bottom: 100px;
+      margin-bottom: 16px;
       padding: 0 16px;
       animation: pulseTitle 0.8s infinite alternate;
     }
@@ -231,19 +232,22 @@
     }
     .final-score-box {
       font-family: "Press Start 2P", "Courier New", monospace;
-      margin: 50px 0 84px 0;
+      margin: 12px 0 20px 0;
       text-align: center;
+      align-items: center;
       display: none;
       flex-direction: column;
       gap: 8px;
     }
     .final-score-label {
-      font-size: 80px;
+      font-size: 64px;
       color: #94a3b8;
       letter-spacing: 2px;
     }
     .final-score-val {
-      font-size: 144px;
+      /* ★ 144px 은 9자리 기준 1296px 로 컨테이너(1170px)를 넘쳐 좌우가 잘렸다.
+         110px -> 990px 로 여유 확보. */
+      font-size: 110px;
       color: #facc15;
       text-shadow: 2px 2px 0 #854d0e, 0 0 15px rgba(250, 204, 21, 0.7);
       letter-spacing: 2px;
@@ -255,8 +259,8 @@
       color: #38bdf8;
       border: 2px solid #38bdf8;
       border-radius: 8px;
-      padding: 36px 20px;
-      margin-top: 60px;
+      padding: 28px 20px;
+      margin-top: 12px;
       cursor: pointer;
       box-shadow: 0 4px 0 #0369a1;
       display: none;
@@ -287,7 +291,9 @@
     }
     .congrat-title {
       font-family: "Bangers", "Press Start 2P", "Courier New", monospace;
-      font-size: 112px;
+      /* ★ 'Congraturation!' 은 공백이 없어 줄바꿈 지점이 없다.
+         112px 이면 15자 x 112 = 1680px 로 컨테이너(1170px)를 넘친다. */
+      font-size: 74px;
       color: #facc15;
       text-align: center;
       letter-spacing: 4px;
@@ -369,7 +375,8 @@
       font-family: "Press Start 2P", "Courier New", monospace;
       font-size: 42px;
       color: #94a3b8;
-      margin-top: 76px;
+      margin-top: 8px;
+      text-align: center;
     }
     @keyframes pulseTitle {
       0% { transform: scale(1); }
@@ -411,10 +418,11 @@
     #title-screen .arcade-footer {
       position: relative;
       z-index: 3;
-      /* ★ font-size 미지정 시 상속값에 의존해 기준이 흔들린다. 명시 고정. */
+      /* font-size 는 자식(.insert-coin / .copyright)에서 각각 명시 고정한다.
+         white-space: nowrap 은 저작권 2행 분리를 막으므로 두지 않는다. */
       font-size: 30px;
       line-height: 1.5;
-      white-space: nowrap;
+      text-align: center;
     }
 
     /* CRT 주사선 (스캔라인) 오버레이 */
@@ -543,9 +551,13 @@
       text-shadow: 2px 2px 0 #78350f;
     }
     #title-screen .copyright {
-      font-size: 50px;
+      /* ★ 50px 은 38자 기준 1900px 로 컨테이너(1170px)를 넘쳐 잘렸다.
+         <br> 로 2행 분리 + 36px -> 긴 행 19자 x 36 = 684px 로 여유 확보. */
+      font-size: 36px;
+      line-height: 1.45;
       letter-spacing: 2px;
       color: #64748b;
+      text-align: center;
     }
     /* 우측 하단 버전 표기 (x.x) */
     #title-screen .title-version {
@@ -553,7 +565,7 @@
       right: 26px;
       bottom: 22px;
       font-family: "Press Start 2P", "Courier New", monospace;
-      font-size: 46px;
+      font-size: 32px;   /* 46px 에서 30% 축소 */
       letter-spacing: 2px;
       color: #94a3b8;
       z-index: 6;
@@ -770,10 +782,10 @@
       <!-- 오락실 기판 하단 표기 -->
       <div class="arcade-footer">
         <div class="insert-coin">INSERT COIN — CREDIT 1</div>
-        <div class="copyright">&copy; 2026 DDKK GAMES. ALL RIGHTS RESERVED</div>
+        <div class="copyright">&copy; 2026 DDKK GAMES.<br>ALL RIGHTS RESERVED</div>
       </div>
 
-      <div class="title-version">1.0</div>
+      <div class="title-version">V 1.8</div>
     </div>
 
     <div class="controls" id="controlsPanel" style="display:none;">
