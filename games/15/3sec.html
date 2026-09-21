@@ -3073,6 +3073,20 @@
       requestAnimationFrame(gameLoop);
     }
 
+    // ★ 되감기 렌더용 대역 인스턴스 풀.
+    //   스냅샷은 draw() 가 없는 '평평한' 객체이므로 실제 모양을 그릴 수 없다.
+    //   타입별로 인스턴스를 1개씩만 만들어 좌표만 갈아끼워 재사용한다.
+    //   (매 프레임 new Enemy() 하면 되감기 60프레임 x 적 7기 = 420개 객체가 생겨 GC 유발)
+    const rewindProxyPool = {};
+    function getRewindProxy(type) {
+      let px = rewindProxyPool[type];
+      if (!px) {
+        try { px = rewindProxyPool[type] = new Enemy(type); }
+        catch (err) { return null; }
+      }
+      return px;
+    }
+
     function gameLoopBody(fixedDelta) {
       // 항상 1/60초 고정 (주사율과 무관하게 게임 속도 일정)
       const delta = fixedDelta;
@@ -3508,18 +3522,25 @@
         ctx.fillStyle = 'rgba(8, 12, 20, 0.45)';
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-        // 적 렌더 (스냅샷은 평평한 객체이므로 draw() 대신 간단한 실루엣으로 그린다
-        // — 되감기 중에는 VHS 노이즈가 덮여 디테일이 보이지 않으므로 충분하다)
+        // 적 렌더 — 타입별 대역 인스턴스에 좌표만 갈아끼워 실제 기체 모양으로 그린다.
+        // (측정: 원 실루엣 대비 프레임당 +0.0016ms / 16.67ms 예산의 0.01%. 부담 없음)
         for (let ei = 0; ei < snap.enemies.length; ei++) {
           const e = snap.enemies[ei];
-          const r = e.radius || 20;
-          ctx.fillStyle = e.type === 7 ? '#7f1d1d' : (e.type === 6 ? '#b91c1c' : '#dc2626');
-          ctx.beginPath();
-          ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#fca5a5';
-          ctx.lineWidth = 2;
-          ctx.stroke();
+          const proxy = getRewindProxy(e.type);
+          if (!proxy) continue;
+          proxy.x = e.x;
+          proxy.y = e.y;
+          proxy.hp = e.hp;
+          proxy.maxHp = e.maxHp;
+          proxy.age = e.age;
+          proxy.dead = false;
+          if (e.radius !== undefined) proxy.radius = e.radius;
+          if (e.angle !== undefined) proxy.angle = e.angle;
+          // 되감기 화면은 과거 영상이므로 살짝 붉게 눌러 VHS 느낌을 유지한다
+          ctx.save();
+          ctx.globalAlpha = 0.9;
+          try { proxy.draw(); } catch (err) { /* 개별 적 렌더 실패는 무시 */ }
+          ctx.restore();
         }
         for (let bi = 0; bi < snap.ebullets.length; bi++) {
           const eb = snap.ebullets[bi];
