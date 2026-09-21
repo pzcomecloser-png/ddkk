@@ -21,6 +21,14 @@
       height: 100%;
       overflow: hidden;
       touch-action: none;
+      /* ★ iOS Safari 자동 텍스트 확대 차단.
+         미선언 시 auto 로 동작해, transform: scale() 이전 단계에서
+         Safari 가 "너무 작다"고 판단한 폰트를 임의로 키운다.
+         컨테이너는 1170px 고정이므로 폰트만 커져 점수/타이틀이 좌우로 넘친다.
+         macOS Safari 에는 이 동작이 없어 기기 간 차이가 발생했다. */
+      -webkit-text-size-adjust: 100%;
+      -moz-text-size-adjust: 100%;
+      text-size-adjust: 100%;
     }
     body {
       /* 레터박스 영역 (게임 비율과 맞지 않는 남는 공간) */
@@ -35,6 +43,12 @@
       height: 100vh;
       height: 100dvh;
       overflow: hidden;
+    }
+    /* ★ 자동 확대 차단을 전체 요소에 강제. Safari 는 html/body 선언만으로는
+       일부 블록 요소에서 여전히 폰트를 부풀린다. */
+    #game-container, #game-container * {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
     }
     #game-container {
       position: relative;
@@ -121,6 +135,8 @@
     .hud-score .digits {
       font-size: 48px;
       color: #fef08a;
+      /* ★ 폰트 대체(웹폰트 미도착) 시에도 줄바꿈/넘침 방지 */
+      white-space: nowrap;
     }
     /* 일시정지 오버레이 */
     #pause-overlay {
@@ -148,6 +164,13 @@
       color: #94a3b8;
     }
     /* Continue & Game Over Modal */
+    /* ★ 오버레이 내부 텍스트 넘침 방지 (폰트 대체 시 폭이 벌어져도 유지) */
+    #retro-overlay .score-digits,
+    #retro-overlay #finalScoreVal,
+    #victory-overlay #victoryScoreVal {
+      white-space: nowrap;
+      max-width: 100%;
+    }
     #retro-overlay {
       position: absolute;
       inset: 0;
@@ -263,7 +286,7 @@
       to { opacity: 1; transform: scale(1); }
     }
     .congrat-title {
-      font-family: "Bangers", "Press Start 2P", cursive;
+      font-family: "Bangers", "Press Start 2P", monospace;
       font-size: 112px;
       color: #facc15;
       text-align: center;
@@ -2372,7 +2395,7 @@
 
     let enemies = [];
     let enemySpawnTimer = 0;
-    let targetEnemyCount = 6; // 화면에 유지할 목표 적 기체 수 (5~8 랜덤, 난이도에 따라 상한 확장)
+    let targetEnemyCount = 9; // 화면에 유지할 목표 적 기체 수 (5~8 랜덤, 난이도에 따라 상한 확장)
     let targetRecalcTimer = 0;
     let spawnCycleIndex = 0; // 순환 스폰 인덱스 (7타입)
     let squadSpawnTimer = 0; // 그룹 편대 전용 스폰 타이머
@@ -2435,9 +2458,9 @@
           this.targetY = 220 + Math.random() * 160;
           this.hoverTime = 0;
           this.maxHover = 180; // 3초간 호버링
-          this.width = 64;
-          this.height = 58;
-          this.radius = 32;
+          this.width = 128;
+          this.height = 116;
+          this.radius = 64; // 크기 2배
           this.wideShotTimer = 45;
           this.hp = this.maxHp = 4; // 악마 기계수
         } else if (this.type === 4) {
@@ -2490,10 +2513,18 @@
           this.subPattern = Math.random() > 0.5 ? 'spread' : 'rapid';
           this.shootTimer = 999; // 나타나자마자 즉시 1차 사격 개시하도록 타이머 선충전
           this.enterShotDone = false; // 진입 중 즉시 사격 여부 플래그
-          this.width = 70;
-          this.height = 64;
-          this.radius = 36;
+          this.width = 140;
+          this.height = 128;
+          this.radius = 72; // 크기 2배
           this.hp = this.maxHp = 6; // 기계 고릴라
+        } else if (this.type === 8) {
+          // [Type 8] 악당 기사 로봇 (Villain Robot)
+          this.x = 100 + Math.random() * (WIDTH - 200);
+          this.y = -80;
+          this.speedY = 2.5 + Math.random() * 1.5;
+          this.hp = this.maxHp = 5;
+          this.radius = 45;
+          this.shootTimer = 60;
         } else {
           // [Type 7] 대형 자코 (Fortress Zako) - 가장 큰 적 체력 2배 상향 (코어 8 -> 16, 포탑 각 2 -> 4)
           this.x = WIDTH / 2;
@@ -2701,6 +2732,25 @@
           } else {
             this.y += 5.5; // 화면 하단으로 돌파 이탈
           }
+        } else if (this.type === 8) {
+          // [Type 8] 악당 기사 로봇: 하강 + 좌우 스웨이 + 주기 조준탄
+          this.y += this.speedY;
+          this.x += Math.sin(this.age * 0.05) * 1.5;
+          // 화면 좌우로 빠져나가지 않도록 제한
+          if (this.x < 60) this.x = 60;
+          if (this.x > WIDTH - 60) this.x = WIDTH - 60;
+
+          this.shootTimer--;
+          if (this.shootTimer <= 0) {
+            this.shootTimer = 80;
+            const ang = Math.atan2(playerY - this.y, playerX - this.x);
+            enemyBullets.push({
+              x: this.x, y: this.y + 20,
+              vx: Math.cos(ang) * 5.5, vy: Math.sin(ang) * 5.5,
+              radius: 8, color: '#9333ea'
+            });
+          }
+
         } else if (this.type === 7) {
           // [Type 7] 대형 요새형 자코 (준보스): 중앙 진입 + 4개 포탑 독립 탄막 + 코어 전방위 탄막
           if (this.state === 'enter') {
@@ -2753,7 +2803,8 @@
         }
 
         // 화면 이탈 시 제거
-        if (this.y > HEIGHT + 160 || this.y < -220 || this.x < -180 || this.x > WIDTH + 180) {
+        // 위로 이탈한 적은 즉시 정리한다(-220 은 너무 넓어 스폰 상한을 낭비했음).
+        if (this.y > HEIGHT + 160 || this.y < -140 || this.x < -180 || this.x > WIDTH + 180) {
           this.dead = true;
         }
       }
@@ -2833,8 +2884,9 @@
           ctx.fillRect(-28, -26, 8, 40); ctx.fillRect(20, -26, 8, 40);
           ctx.fillStyle = '#ef4444'; ctx.fillRect(-10, -12, 6, 6); ctx.fillRect(4, -12, 6, 6);
 
-        // [Type 3] 악마 기계수 (박쥐 날개 + 해골)
+        // [Type 3] 악마 기계수 (박쥐 날개 + 해골) - 크기 2배
         } else if (this.type === 3) {
+          ctx.scale(2.0, 2.0);
           ctx.fillStyle = '#4c1d95';
           ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(36, -10); ctx.lineTo(12, -28); ctx.lineTo(0, -15);
           ctx.lineTo(-12, -28); ctx.lineTo(-36, -10); ctx.closePath(); ctx.fill();
@@ -2868,8 +2920,9 @@
           ctx.fillStyle = '#fbbf24';
           ctx.fillRect(-14, -4, 4, 8); ctx.fillRect(10, -4, 4, 8);
 
-        // [Type 6] 기계 고릴라 머리
+        // [Type 6] 기계 고릴라 머리 - 크기 2배
         } else if (this.type === 6) {
+          ctx.scale(2.0, 2.0);
           ctx.fillStyle = '#334155';
           ctx.beginPath(); ctx.moveTo(-20, -25); ctx.lineTo(20, -25); ctx.lineTo(30, 0); ctx.lineTo(25, 25);
           ctx.lineTo(15, 30); ctx.lineTo(-15, 30); ctx.lineTo(-25, 25); ctx.lineTo(-30, 0); ctx.closePath(); ctx.fill();
@@ -2882,7 +2935,29 @@
           ctx.beginPath(); ctx.arc(-8, 15, 4, 0, Math.PI * 2); ctx.fill();
           ctx.beginPath(); ctx.arc(8, 15, 4, 0, Math.PI * 2); ctx.fill();
 
+        // [Type 8] 악당 기사 로봇
+        } else if (this.type === 8) {
+          ctx.scale(1.4, 1.4);
+          // 뿔 장식
+          ctx.fillStyle = '#facc15';
+          ctx.beginPath(); ctx.moveTo(0, -35); ctx.lineTo(-25, -55); ctx.lineTo(-15, -25); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(0, -35); ctx.lineTo(25, -55); ctx.lineTo(15, -25); ctx.fill();
+          // 어깨 스파이크
+          ctx.fillStyle = '#7e22ce';
+          ctx.beginPath(); ctx.moveTo(-35, -5); ctx.lineTo(-55, -20); ctx.lineTo(-30, 10); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(35, -5); ctx.lineTo(55, -20); ctx.lineTo(30, 10); ctx.fill();
+          // 갑옷 몸통
+          ctx.fillStyle = '#334155';
+          ctx.beginPath(); ctx.moveTo(-35, -15); ctx.lineTo(35, -15); ctx.lineTo(25, 25); ctx.lineTo(0, 35); ctx.lineTo(-25, 25); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2; ctx.stroke();
+          // 붉은 T자 바이저
+          ctx.fillStyle = '#ef4444';
+          ctx.shadowColor = '#dc2626'; ctx.shadowBlur = 10;
+          ctx.fillRect(-20, -10, 40, 6);
+          ctx.fillRect(-4, -10, 8, 18);
+          ctx.shadowBlur = 0;
         // [Type 7] 누더기 기계 달마시안 요새 (보스)
+
         } else if (this.type === 7) {
           ctx.fillStyle = '#e2e8f0';
           ctx.beginPath(); ctx.ellipse(0, -10, 90, 60, 0, 0, Math.PI * 2); ctx.fill();
@@ -3569,6 +3644,11 @@
         let hit = false;
         for (let j = enemies.length - 1; j >= 0; j--) {
           const enemy = enemies[j];
+          // ★ 화면에 충분히 진입하지 않은 적은 피격 대상에서 제외한다.
+          //   적 반경이 커지면 y가 0을 갓 넘어도 판정원이 화면 위로 크게 삐져나온다.
+          //   그 구간을 허용하면 (1) 화면 최상단에 '유령 피격' 이펙트가 뜨고
+          //   (2) 큰 적이 등장 전에 격추돼 적이 잘 안 나오는 것처럼 보인다.
+          if (enemy.y < enemy.radius * 0.8) continue;
           // [성능] sqrt 회피: 제곱 비교
           const _dx = pb.x - enemy.x, _dy = pb.y - enemy.y;
           const _rr = enemy.radius + 6;
@@ -3700,18 +3780,20 @@
         }
 
         // [D] 일반 순환 스폰 (Type 1~3 기본 적 + Type 6 중형)
-        const spawnInterval = 0.65 / difficultyMultiplier;
+        const spawnInterval = 0.42 / difficultyMultiplier;   // 스폰 속도 상향
         enemySpawnTimer += delta;
         if (enemySpawnTimer > spawnInterval && enemies.length < targetEnemyCount) {
           enemySpawnTimer = 0;
           // 가중치 확률: 기본 1~3(75%), 중형 6(25%) - 대형 7은 여기서 안 나옴
           const roll = Math.random();
           let nextType = 1;
-          if (roll < 0.75) {
+          if (roll < 0.65) {
             spawnCycleIndex = (spawnCycleIndex + 1) % 3;
             nextType = spawnCycleIndex + 1; // Type 1, 2, 3
+          } else if (roll < 0.85) {
+            nextType = 6; // 중형 자코 (고릴라)
           } else {
-            nextType = 6; // 중형 자코
+            nextType = 8; // 악당 로봇
           }
           enemies.push(new Enemy(nextType));
         }
@@ -3721,7 +3803,7 @@
         if (targetRecalcTimer > 4) {
           targetRecalcTimer = 0;
           const extraCap = Math.floor((difficultyMultiplier - 1) * 3);
-          targetEnemyCount = 5 + Math.floor(Math.random() * 4) + extraCap;
+          targetEnemyCount = 8 + Math.floor(Math.random() * 4) + extraCap;
         }
       }
 
