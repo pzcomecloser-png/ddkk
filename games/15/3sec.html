@@ -805,7 +805,7 @@
         <div class="copyright">&copy; 2026 DDKK GAMES.<br>ALL RIGHTS RESERVED</div>
       </div>
 
-      <div class="title-version">V 2.8</div>
+      <div class="title-version">V 2.9</div>
     </div>
 
     <div class="controls" id="controlsPanel" style="display:none;">
@@ -3168,31 +3168,45 @@
     let fortressSpawnCount = 0; // 보스 등장 횟수 (재등장마다 체력 10% 증가)
 
     // -------------------------------------------------------------
-    // 난이도 스케일링 시스템
-    //   기본 곡선: 0.5 + (10,000점당 +0.1)
-    //   구간 보정 (V2.0):
-    //     0 ~ 3만     : 기본값 x 0.5  (절반)
-    //     3만 ~ 5만   : x 0.5 -> x 0.8 선형 보간 (구간 경계에서 난이도가 튀지 않게)
-    //     5만 ~ 20만  : 기본값 x 0.8  (20% 감소)
-    //   20만점 = 엔딩 조건. 난이도는 20만점 값에서 고정한다.
-    // 적용 대상: 적 스폰 속도 / 동시 등장 수 / 탄속 / 탄막(발사 빈도, 탄 수)
+    // 난이도 스케일링 시스템 (V 2.9)
+    //   배율을 두 개로 나눈다.
+    //     spawnMultiplier      : 적이 얼마나 자주·많이 나오는가 (스폰 간격, 동시 등장 수)
+    //     difficultyMultiplier : 적이 얼마나 세게 쏘는가 (발사 간격, 탄속, 탄 수)
+    //   0 ~ 2,000점은 기존 초반값(0.25)을 유지하고, 2,000점부터 적 수를 먼저 늘린다.
+    //   5만점 이후는 이전(V 2.8)보다 완만하게 올라가도록 낮췄다.
+    //   점과 점 사이는 선형 보간 -> 구간 경계에서 난이도가 튀지 않는다.
+    //   20만점 = 엔딩 조건. 그 이후는 마지막 값으로 고정.
     // 미적용 대상: 체력(hp), 플레이어 스탯 — 항상 고정
     // -------------------------------------------------------------
     const DIFFICULTY_CAP_SCORE = 200000;   // 엔딩 조건 점수
-    let difficultyMultiplier = 0.25;
+    //                   점수      스폰   탄
+    const DIFFICULTY_CURVE = [
+      [     0, 0.25, 0.25],
+      [  2000, 0.25, 0.25],
+      [  5000, 0.50, 0.32],
+      [ 10000, 0.55, 0.38],
+      [ 20000, 0.62, 0.45],
+      [ 30000, 0.68, 0.50],
+      [ 50000, 0.74, 0.56],
+      [ 80000, 0.84, 0.66],
+      [120000, 0.96, 0.78],
+      [160000, 1.08, 0.88],
+      [200000, 1.18, 0.96],
+    ];
+    const DEATH_BLOW_SCORE = 180000;       // 데스블로우 x1 발동 점수
+    let difficultyMultiplier = 0.25;       // 탄 배율
+    let spawnMultiplier = 0.25;            // 스폰 배율
     function updateDifficulty() {
-      const cappedScore = Math.min(score, DIFFICULTY_CAP_SCORE);
-      const level = Math.floor(cappedScore / 10000); // 0 ~ 20
-      const base = 0.5 + level * 0.10;               // 0.5 ~ 2.5
-      let factor;
-      if (cappedScore < 30000) {
-        factor = 0.5;
-      } else if (cappedScore < 50000) {
-        factor = 0.5 + (cappedScore - 30000) / 20000 * 0.3;
-      } else {
-        factor = 0.8;
-      }
-      difficultyMultiplier = base * factor;          // 0.25 ~ 2.0
+      const sc = Math.max(0, Math.min(score, DIFFICULTY_CAP_SCORE));
+      let i = 0;
+      while (i < DIFFICULTY_CURVE.length - 2 && sc >= DIFFICULTY_CURVE[i + 1][0]) i++;
+      const [s0, sp0, bu0] = DIFFICULTY_CURVE[i];
+      const [s1, sp1, bu1] = DIFFICULTY_CURVE[i + 1];
+      const k = s1 > s0 ? Math.min(1, (sc - s0) / (s1 - s0)) : 0;
+      spawnMultiplier = sp0 + (sp1 - sp0) * k;
+      difficultyMultiplier = bu0 + (bu1 - bu0) * k;
+      // 데스블로우: 아군/합체와 무관하게 18만점부터 x1 (리와인드로 점수가 돌아가면 함께 돌아간다)
+      deathBlowCount = score >= DEATH_BLOW_SCORE ? 1 : 0;
     }
 
     // -------------------------------------------------------------
@@ -4574,8 +4588,7 @@
           isCombining = false;
           clones = [];
           robotMode = true;
-          // 최종 페널티: 데스블로우 2발 (난이도 상승 없음)
-          deathBlowCount = 2;
+          // (V 2.9) 합체 페널티 데스블로우 제거 — 데스블로우는 18만점부터 x1 (updateDifficulty)
           // 플레이어를 무대 위치에서 원래 자리로
           playerX = targetX = stageX;
           playerY = targetY = HEIGHT * 0.8;
@@ -4965,7 +4978,7 @@
         // [A] 그룹 편대(Type 4) — 현재 구간에 4가 있을 때만
         if (phaseTypes.includes(4)) {
           squadSpawnTimer += delta;
-          if (squadSpawnTimer > Math.max(5, 11 / difficultyMultiplier)) {
+          if (squadSpawnTimer > Math.max(5, 11 / spawnMultiplier)) {
             squadSpawnTimer = 0;
             const sDir = Math.random() > 0.5 ? 1 : -1;
             const sRowY = 140 + Math.random() * 450;
@@ -4979,7 +4992,7 @@
         // [B] 소형 자코(Type 5) — 현재 구간에 5가 있을 때만
         if (phaseTypes.includes(5)) {
           scoutSpawnTimer += delta;
-          if (scoutSpawnTimer > Math.max(1.8, 4.0 / difficultyMultiplier)) {
+          if (scoutSpawnTimer > Math.max(1.8, 4.0 / spawnMultiplier)) {
             scoutSpawnTimer = 0;
             enemies.push(new Enemy(5));
           }
@@ -4999,7 +5012,7 @@
         }
 
         // [D] 일반 스폰 — 현재 구간의 나머지 종류에서 가중치로 선택
-        const spawnInterval = 0.42 / difficultyMultiplier;
+        const spawnInterval = 0.42 / spawnMultiplier;
         enemySpawnTimer += delta;
         if (enemySpawnTimer > spawnInterval && enemies.length < targetEnemyCount) {
           enemySpawnTimer = 0;
@@ -5030,7 +5043,7 @@
         targetRecalcTimer += delta;
         if (targetRecalcTimer > 4) {
           targetRecalcTimer = 0;
-          const extraCap = Math.floor((difficultyMultiplier - 1) * 3);
+          const extraCap = Math.floor((spawnMultiplier - 1) * 3);
           targetEnemyCount = 8 + Math.floor(Math.random() * 4) + extraCap;
         }
       }
@@ -5435,8 +5448,7 @@
             createExplosion(c.x, c.y, 60, '#facc15', 35);
             playVictoryAudio();
 
-            // 페널티: 데스블로우 1발 (난이도 상승 없음)
-            deathBlowCount = Math.max(deathBlowCount, 1);
+            // (V 2.9) 아군 각성 페널티 데스블로우 제거 — 데스블로우는 18만점부터 x1 (updateDifficulty)
 
             rewindMessage = '아까의 나, 생존 성공!';
             rewindMsgTimer = REWIND_MSG_DURATION;
@@ -5517,17 +5529,17 @@
         ctx.restore();
       }
 
-      if (gameStarted && (robotMode || deathBlowCount > 0)) {
+      if (gameStarted && (robotMode || aiCloneCount() > 0 || deathBlowCount > 0)) {
+        const parts = [];
+        if (robotMode) parts.push('ROBOT MODE');
+        else if (aiCloneCount() > 0) parts.push(`ALLY x${aiCloneCount()}`);
+        if (deathBlowCount > 0) parts.push(`DEATH BLOW x${deathBlowCount}`);
+        if (robotMode && !robotGuardUsed) parts.push('GUARD 1');
         ctx.save();
         ctx.textAlign = 'center';
         ctx.font = 'bold 20px "Press Start 2P", "Courier New", monospace';
-        ctx.fillStyle = robotMode ? '#facc15' : '#e879f9';
-        ctx.fillText(
-          robotMode
-            ? `ROBOT MODE / DEATH BLOW x${deathBlowCount}${robotGuardUsed ? '' : ' / GUARD 1'}`
-            : `ALLY x${aiCloneCount()} / DEATH BLOW x${deathBlowCount}`,
-          WIDTH / 2, HEIGHT - 32
-        );
+        ctx.fillStyle = deathBlowCount > 0 ? '#e879f9' : '#facc15';
+        ctx.fillText(parts.join(' / '), WIDTH / 2, HEIGHT - 32);
         ctx.restore();
       }
 
@@ -5808,7 +5820,6 @@
       if (e.code === 'KeyP') {
         // P: 로봇 모드 + 파일럿 컷인 강제 발동
         robotMode = true;
-        deathBlowCount = 2;
         clones = [];
         robotGuardUsed = false;
         playerInvulnerable = 0;
