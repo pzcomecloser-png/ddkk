@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>세균전 - 2인용</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}
+body{font-family:Arial,"Malgun Gothic",sans-serif;color:#fff}
+#app{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;padding-top:env(safe-area-inset-top)}
+canvas{width:100%;height:auto;max-height:100%;display:block;touch-action:none}
+</style>
+</head>
+<body>
+<div id="app"><canvas id="game" width="390" height="844"></canvas></div>
+
+<script>
+'use strict';
+
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+
+const W=390,H=844;
+const N=7;
+const BX=25,BY=190,BS=340,CELL=BS/N;
+
+let board,turn,selected,mode='title',gameOver=false;
+
+const initial=[
+ [0,0,1,0,0,2,0],
+ [0,0,1,0,0,2,0],
+ [0,0,0,0,0,0,0],
+ [0,0,0,0,0,0,0],
+ [0,0,0,0,0,0,0],
+ [0,2,0,0,0,1,0],
+ [0,2,0,0,0,1,0]
+];
+
+function reset(){
+ board=initial.map(r=>r.slice());
+ turn=1;
+ selected=null;
+ gameOver=false;
+ mode='game';
+ draw();
+}
+
+function count(color){
+ let n=0;
+ for(let r=0;r<N;r++)for(let c=0;c<N;c++)
+  if(board[r][c]===color)n++;
+ return n;
+}
+
+function inside(r,c){return r>=0&&r<N&&c>=0&&c<N}
+
+function movesFrom(r,c){
+ const out=[];
+ for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++){
+   if(!dr&&!dc)continue;
+   const nr=r+dr,nc=c+dc;
+   if(inside(nr,nc)&&board[nr][nc]===0){
+     const d=Math.max(Math.abs(dr),Math.abs(dc));
+     if(d<=2)out.push({r:nr,c:nc,d});
+   }
+ }
+ return out;
+}
+
+function allMoves(color){
+ const out=[];
+ for(let r=0;r<N;r++)for(let c=0;c<N;c++)
+  if(board[r][c]===color)
+   for(const m of movesFrom(r,c))
+    out.push({sr:r,sc:c,tr:m.r,tc:m.c,d:m.d});
+ return out;
+}
+
+function makeMove(m,color){
+ const d=Math.max(Math.abs(m.sr-m.tr),Math.abs(m.sc-m.tc));
+ if(d<1||d>2||board[m.tr][m.tc]!==0)return false;
+
+ if(d===2)board[m.sr][m.sc]=0;
+ board[m.tr][m.tc]=color;
+
+ for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+   if(!dr&&!dc)continue;
+   const r=m.tr+dr,c=m.tc+dc;
+   if(inside(r,c)&&board[r][c]===3-color)board[r][c]=color;
+ }
+ return true;
+}
+
+function checkEnd(){
+ const b=count(1),r=count(2),empty=count(0);
+ if(empty===0 || (!allMoves(1).length&&!allMoves(2).length)){
+   gameOver=true;
+   mode='over';
+   draw();
+   return true;
+ }
+ return false;
+}
+
+function nextTurn(){
+ turn=turn===1?2:1;
+ if(!allMoves(turn).length){
+   // 움직일 수 없는 경우 자동으로 상대에게 턴을 넘김
+   if(allMoves(turn===1?2:1).length){
+     turn=turn===1?2:1;
+     draw();
+     return;
+   }
+   checkEnd();
+ }
+ draw();
+}
+
+function cellAt(x,y){
+ const c=Math.floor((x-BX)/CELL);
+ const r=Math.floor((y-BY)/CELL);
+ return {r,c};
+}
+
+canvas.addEventListener('pointerdown',e=>{
+ const rect=canvas.getBoundingClientRect();
+ const x=(e.clientX-rect.left)*W/rect.width;
+ const y=(e.clientY-rect.top)*H/rect.height;
+
+ if(mode==='title'){
+   reset();
+   return;
+ }
+ if(mode==='over'){
+   reset();
+   return;
+ }
+
+ if(y>690 && y<760){
+   // 현재 턴 확인/완료 버튼
+   selected=null;
+   nextTurn();
+   return;
+ }
+
+ const {r,c}=cellAt(x,y);
+ if(!inside(r,c))return;
+
+ if(board[r][c]===turn){
+   selected={r,c};
+   draw();
+   return;
+ }
+
+ if(selected && board[r][c]===0){
+   const d=Math.max(Math.abs(selected.r-r),Math.abs(selected.c-c));
+   if(d>=1&&d<=2){
+     const ok=makeMove({sr:selected.r,sc:selected.c,tr:r,tc:c},turn);
+     if(ok){
+       selected=null;
+       if(!checkEnd())nextTurn();
+     }
+   }
+ }
+});
+
+function bacterium(x,y,color,selectedCell=false,scale=1){
+ ctx.save();
+ ctx.translate(x,y);
+ ctx.scale(scale,scale);
+
+ const g=ctx.createRadialGradient(-7,-9,2,0,0,23);
+ if(color===1){
+   g.addColorStop(0,'#638aff');
+   g.addColorStop(.42,'#263cff');
+   g.addColorStop(1,'#07118a');
+ }else{
+   g.addColorStop(0,'#ff7070');
+   g.addColorStop(.42,'#ff2020');
+   g.addColorStop(1,'#900000');
+ }
+ ctx.fillStyle=g;
+ ctx.beginPath();
+ ctx.arc(0,0,21,0,Math.PI*2);
+ ctx.fill();
+
+ ctx.strokeStyle=color===1?'#91a7ff':'#ff9c9c';
+ ctx.lineWidth=2;
+ ctx.stroke();
+
+ // 눈
+ ctx.fillStyle='#050505';
+ ctx.beginPath();
+ ctx.arc(-7,-4,3,0,Math.PI*2);
+ ctx.arc(7,-4,3,0,Math.PI*2);
+ ctx.fill();
+
+ ctx.fillStyle='#fff';
+ ctx.beginPath();
+ ctx.arc(-6,-5,1,0,Math.PI*2);
+ ctx.arc(8,-5,1,0,Math.PI*2);
+ ctx.fill();
+
+ // 웃음
+ ctx.strokeStyle='#050505';
+ ctx.lineWidth=2;
+ ctx.beginPath();
+ ctx.arc(0,2,9,.15*Math.PI,.85*Math.PI);
+ ctx.stroke();
+
+ if(selectedCell){
+   ctx.strokeStyle='#fff';
+   ctx.lineWidth=3;
+   ctx.beginPath();
+   ctx.arc(0,0,27,0,Math.PI*2);
+   ctx.stroke();
+ }
+ ctx.restore();
+}
+
+function text(t,x,y,size,color='white',weight='bold'){
+ ctx.textAlign='center';
+ ctx.font=`${weight} ${size}px Arial`;
+ ctx.fillStyle=color;
+ ctx.fillText(t,x,y);
+}
+
+function button(x,y,w,h,label,fill='#222'){
+ ctx.fillStyle=fill;
+ ctx.beginPath();
+ ctx.roundRect(x,y,w,h,12);
+ ctx.fill();
+ text(label,x+w/2,y+h/2+8,18,'#fff');
+}
+
+function drawTitle(){
+ ctx.fillStyle='#000';
+ ctx.fillRect(0,0,W,H);
+
+ text('세 균 전',W/2,190,52,'#fff');
+ text('2 PLAYER',W/2,225,18,'#777');
+
+ bacterium(125,350,1,false,1.25);
+ bacterium(265,350,2,false,1.25);
+
+ text('BLUE',125,405,15,'#526cff');
+ text('RED',265,405,15,'#ff4141');
+
+ button(55,485,280,70,'START 2 PLAYER','#1d35ff');
+
+ text('한 대의 iPhone에서 번갈아 플레이',W/2,605,14,'#666','normal');
+ text('파랑부터 시작합니다',W/2,630,14,'#555','normal');
+}
+
+function drawGame(){
+ ctx.fillStyle='#000';
+ ctx.fillRect(0,0,W,H);
+
+ // 상단 플레이어 영역
+ ctx.fillStyle=turn===1?'#101b5c':'#351010';
+ ctx.fillRect(0,0,W,92);
+
+ text('BLUE',75,35,14,'#7184ff');
+ text(String(count(1)).padStart(2,'0'),75,73,38,'#526cff');
+
+ text('RED',315,35,14,'#ff6b6b');
+ text(String(count(2)).padStart(2,'0'),315,73,38,'#ff3030');
+
+ text('세 균 전',W/2,31,16,'#888');
+
+ // 보드
+ const bg=ctx.createLinearGradient(BX,BY,BX,BY+BS);
+ bg.addColorStop(0,'#14a94d');
+ bg.addColorStop(1,'#087532');
+ ctx.fillStyle=bg;
+ ctx.fillRect(BX,BY,BS,BS);
+
+ // 잔잔한 텍스처
+ for(let i=0;i<900;i++){
+   const x=BX+Math.random()*BS;
+   const y=BY+Math.random()*BS;
+   ctx.fillStyle=Math.random()<.5?'rgba(255,255,255,.035)':'rgba(0,0,0,.035)';
+   ctx.fillRect(x,y,1,1);
+ }
+
+ // 격자
+ ctx.strokeStyle='rgba(0,35,10,.32)';
+ ctx.lineWidth=1;
+ for(let i=0;i<=N;i++){
+   ctx.beginPath();
+   ctx.moveTo(BX+i*CELL,BY);
+   ctx.lineTo(BX+i*CELL,BY+BS);
+   ctx.stroke();
+
+   ctx.beginPath();
+   ctx.moveTo(BX,BY+i*CELL);
+   ctx.lineTo(BX+BS,BY+i*CELL);
+   ctx.stroke();
+ }
+
+ // 이동 가능 칸
+ if(selected){
+   for(const m of movesFrom(selected.r,selected.c)){
+     ctx.fillStyle=m.d===1?'rgba(255,255,255,.14)':'rgba(255,230,0,.13)';
+     ctx.fillRect(BX+m.c*CELL,BY+m.r*CELL,CELL,CELL);
+   }
+ }
+
+ for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+   if(board[r][c]){
+     bacterium(
+       BX+c*CELL+CELL/2,
+       BY+r*CELL+CELL/2,
+       board[r][c],
+       !!(selected&&selected.r===r&&selected.c===c),
+       .80
+     );
+   }
+ }
+
+ // 턴 표시
+ const turnColor=turn===1?'#526cff':'#ff3030';
+ text(turn===1?'BLUE TURN':'RED TURN',W/2,575,23,turnColor);
+ text('세균을 선택한 뒤 이동할 칸을 터치하세요',W/2,603,13,'#777','normal');
+
+ // 턴 넘기기 버튼
+ button(55,640,280,58,'턴 넘기기','#202020');
+
+ text('1칸 복제  ·  2칸 점프  ·  주변 감염',W/2,735,12,'#555','normal');
+}
+
+function drawOver(){
+ drawGame();
+
+ ctx.fillStyle='rgba(0,0,0,.78)';
+ ctx.fillRect(0,0,W,H);
+
+ const b=count(1),r=count(2);
+ let result=b>r?'BLUE WINS':r>b?'RED WINS':'DRAW';
+ let color=b>r?'#526cff':r>b?'#ff3030':'#fff';
+
+ text(result,W/2,320,42,color);
+ text(`${b}  :  ${r}`,W/2,365,26,'#fff');
+ button(55,430,280,65,'PLAY AGAIN','#222');
+}
+
+function draw(){
+ if(mode==='title')drawTitle();
+ else if(mode==='game')drawGame();
+ else drawOver();
+}
+
+reset();
+mode='title';
+draw();
+</script>
+</body>
+</html>
