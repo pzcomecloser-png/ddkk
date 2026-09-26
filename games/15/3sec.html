@@ -805,7 +805,7 @@
         <div class="copyright">&copy; 2026 DDKK GAMES.<br>ALL RIGHTS RESERVED</div>
       </div>
 
-      <div class="title-version">V 2.9</div>
+      <div class="title-version">V 3.0</div>
     </div>
 
     <div class="controls" id="controlsPanel" style="display:none;">
@@ -1518,7 +1518,7 @@
     //   firePower = 시작 발사 속도 대비 '추가' 비율 (%). HUD 우측 상단에 표시.
     //   0% 시작 -> Power 1개당 +20% -> 10개 = +200% (최대)
     //   실제 발사 속도 = BASE_FIRE_RATE x (1 + firePower/100)
-    const BASE_FIRE_RATE = 0.4;       // 시작 발사 속도 (구 기본 속도의 40% = 20프레임 간격)
+    const BASE_FIRE_RATE = 0.8;       // (V 3.0) 시작 발사 속도 2배 (10프레임 간격)
     const FIRE_POWER_MIN = 0;
     const FIRE_POWER_MAX = 200;
     const FIRE_POWER_STEP = 20;
@@ -1591,8 +1591,12 @@
     let introPhase = null;            // null | 'howto' | 'prologue'
     let introTimer = 0;
     const HOWTO_DURATION = 420;       // 7초
-    const PROLOGUE_DURATION = 300;    // 5초
-    const PROLOGUE_CUT = 100;         // 컷 1개 길이
+    const PROLOGUE_SLOW = 2.4;        // (V 3.0) 프롤로그 재생 속도 1/2.4 (5초 -> 12초)
+    const PROLOGUE_CUT = 100;         // 컷 1개 길이 (연출 기준 프레임)
+    const PROLOGUE_DURATION = Math.round(PROLOGUE_CUT * 3 * PROLOGUE_SLOW);   // 720프레임 = 12초
+    let prologuePrevT = -1;           // 효과음이 느린 재생에서 한 번만 나도록 이전 시각 기억
+    let prologueT = 0;
+    const prologueCross = (f) => prologuePrevT < f && prologueT >= f;
     const introSkipBtn = document.getElementById('introSkipBtn');
     const hudEl = document.querySelector('.hud');
 
@@ -1609,6 +1613,7 @@
       if (introPhase === 'howto') {
         introPhase = 'prologue';
         introTimer = 0;
+        prologuePrevT = -1;
       } else if (introPhase === 'prologue') {
         introPhase = null;
         introTimer = 0;
@@ -1831,7 +1836,7 @@
 
       if (cut === 0) {
         // ── 컷 1: 평화로운 아침, 빵을 먹으며 뉴스 -> 외계인 침공 ──
-        if (T === 40) playHitSound();
+        if (prologueCross(40)) playHitSound();
         const alarm = t >= 40;
         const wall = ctx.createLinearGradient(0, 140, 0, 1180);
         wall.addColorStop(0, alarm ? '#fca5a5' : '#fde68a');
@@ -1876,7 +1881,7 @@
 
       } else if (cut === 1) {
         // ── 컷 2: 격납고, 직접 만든 비행기에 탑승 ──
-        if (t === 0) playLaserSound();
+        if (prologueCross(PROLOGUE_CUT)) playLaserSound();
         ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 140, WIDTH, 1040);
         // 문이 열리며 하늘이 보인다
         const gap = Math.min(330, t * 6);
@@ -1917,8 +1922,8 @@
 
       } else {
         // ── 컷 3: 하늘로 출격, "좋았어! 이때가 오기를 기다렸다! 3초전대 출발!" ──
-        if (t === 0) playExplosionSound(false);
-        if (t === 45) playVictoryAudio();
+        if (prologueCross(PROLOGUE_CUT * 2)) playExplosionSound(false);
+        if (prologueCross(PROLOGUE_CUT * 2 + 45)) playVictoryAudio();
         const sky = ctx.createLinearGradient(0, 140, 0, 1180);
         sky.addColorStop(0, '#1d4ed8'); sky.addColorStop(1, '#7dd3fc');
         ctx.fillStyle = sky; ctx.fillRect(0, 140, WIDTH, 1040);
@@ -1985,7 +1990,11 @@
       ctx.save();
       try {
         if (introPhase === 'howto') drawHowto(introTimer);
-        else drawPrologue(introTimer - 1);
+        else {
+          prologueT = (introTimer - 1) / PROLOGUE_SLOW;
+          drawPrologue(prologueT);
+          prologuePrevT = prologueT;
+        }
       } finally {
         ctx.restore();
       }
@@ -3188,11 +3197,29 @@
       [ 20000, 0.62, 0.45],
       [ 30000, 0.68, 0.50],
       [ 50000, 0.74, 0.56],
-      [ 80000, 0.84, 0.66],
-      [120000, 0.96, 0.78],
-      [160000, 1.08, 0.88],
-      [200000, 1.18, 0.96],
+      [ 70000, 0.81, 0.62],
+      [100000, 0.90, 0.82],   // (V 3.0) 7만점 이후 발사 속도를 올린다
+      [140000, 1.02, 1.00],
+      [180000, 1.13, 1.15],
+      [200000, 1.18, 1.22],
     ];
+    // (V 3.0) 7만점 이후 적 체력 배율 (보스 제외). 적이 한 발도 못 쏘고 죽는 문제 대응.
+    //   생성 시점의 점수로 정해지며, 그 사이는 선형 보간한다.
+    const ENEMY_HP_CURVE = [
+      [ 70000, 1.0],
+      [100000, 1.8],
+      [140000, 2.6],
+      [200000, 3.4],
+    ];
+    function enemyHpMultiplier() {
+      const sc = Math.min(score, DIFFICULTY_CAP_SCORE);
+      if (sc <= ENEMY_HP_CURVE[0][0]) return 1;
+      for (let i = 0; i < ENEMY_HP_CURVE.length - 1; i++) {
+        const [s0, m0] = ENEMY_HP_CURVE[i], [s1, m1] = ENEMY_HP_CURVE[i + 1];
+        if (sc <= s1) return m0 + (m1 - m0) * (sc - s0) / (s1 - s0);
+      }
+      return ENEMY_HP_CURVE[ENEMY_HP_CURVE.length - 1][1];
+    }
     const DEATH_BLOW_SCORE = 180000;       // 데스블로우 x1 발동 점수
     let difficultyMultiplier = 0.25;       // 탄 배율
     let spawnMultiplier = 0.25;            // 스폰 배율
@@ -3377,11 +3404,34 @@
           ];
           // 달마시안 요새 코어. 재등장마다 체력 10% 증가 (1회차 26, 2회차 28.6 -> 29 ...)
           const bossScale = Math.pow(1.10, fortressSpawnCount);
-          this.hp = this.maxHp = Math.round(26 * bossScale);
+          this.hp = this.maxHp = Math.round(78 * bossScale);   // (V 3.0) 26 -> 78 (3배)
           // 포탑 체력도 같은 비율로 상향
           this.turrets.forEach(t => {
-            t.hp = t.maxHp = Math.round(4 * bossScale);
+            t.hp = t.maxHp = Math.round(12 * bossScale);  // (V 3.0) 4 -> 12 (3배)
           });
+        }
+
+        // (V 3.0) 7만점 이후 일반 적 체력 상승 (보스 Type 7 은 별도 3배 적용)
+        if (this.type !== 7) {
+          const hm = enemyHpMultiplier();
+          if (hm > 1) this.hp = this.maxHp = Math.max(1, Math.round(this.maxHp * hm));
+        }
+
+        // (V 3.0) 7만점 이후 첫 발을 빨리 쏜다.
+        //   발사 타이머가 0부터 차오르는 적은 첫 발까지 1초 이상 걸려, 쏘기 전에 격추되는 일이 많았다.
+        //   타이머를 미리 채워 화면에 들어온 뒤 약 0.3~0.5초 안에 첫 발이 나가게 한다.
+        if (score >= 70000) {
+          const t = this.type;
+          if (t === 1) this.burstTimer = 45;                 // 조준탄 (간격 약 70~90f)
+          else if (t === 2) this.shootTimer = 70;            // 부채꼴 (간격 약 100f)
+          else if (t === 3) this.wideShotTimer = 50;         // 와이드샷
+          else if (t === 4) this.shootTimer = 40 + Math.floor(Math.random() * 20);
+          else if (t === 8) this.shootTimer = 18;            // 카운트다운 방식
+          else if (t === 9) this.t = 45;                     // 반사탄
+          else if (t === 11) this.t = 90;                    // 유도탄
+          else if (t === 13) this.t = 55;                    // 분열 알
+          else if (t === 17) this.t = 20;                    // 파도탄
+          else if (t === 19) this.t = 35;                    // 분열 새끼
         }
       }
 
@@ -4780,7 +4830,7 @@
           }
           for (let si = 0; si < playerBullets.length; si++) {
             const b = playerBullets[si];
-            snap.pbullets.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, width: b.width, height: b.height, color: b.color });
+            snap.pbullets.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, width: b.width, height: b.height, color: b.color, trail: b.trail });
           }
 
           historyData.push(snap);
@@ -4794,7 +4844,7 @@
 
       // -----------------------------------------------------------
       // 3. 플레이어 자동 총알 발사
-      //    발사 속도 = BASE_FIRE_RATE(0.4) x (1 + firePower/100)
+      //    발사 속도 = BASE_FIRE_RATE(0.8) x (1 + firePower/100)
       //    POWER 0% -> 20프레임 간격 / +20%씩 / POWER 200% -> 약 6.7프레임 간격 (시작의 3배)
       //    탄속은 -15로 고정 (연사 아이템이므로 탄속에는 관여하지 않음)
       // -----------------------------------------------------------
@@ -4804,16 +4854,23 @@
         if (autoShootTimer >= 8) {
           autoShootTimer -= 8;
           const bulletSpeed = -15;
+          const powerMax = firePower >= FIRE_POWER_MAX;
 
           if (robotMode) {
             // ★ 합체 로봇: 좌 / 앞(2발) / 우
             //   [밸런스] 전방을 1발로 두면 전방 화력이 혼자일 때(2발)의 절반으로
             //   떨어져 합체가 약화처럼 느껴진다. 전방 2발을 유지하고 좌우를 '얹는다'.
             //   전방 초당 15발 유지 + 좌우 커버 추가 = 총 화력 200%.
-            playerBullets.push({ x: playerX, y: playerY - 26, vx: -5, vy: bulletSpeed, width: 7, height: 20, color: '#facc15' });
-            playerBullets.push({ x: playerX - 12, y: playerY - 30, vx: 0, vy: bulletSpeed, width: 8, height: 22, color: '#ef4444' });
-            playerBullets.push({ x: playerX + 12, y: playerY - 30, vx: 0, vy: bulletSpeed, width: 8, height: 22, color: '#ef4444' });
-            playerBullets.push({ x: playerX, y: playerY - 26, vx: 5, vy: bulletSpeed, width: 7, height: 20, color: '#facc15' });
+            // (V 3.0) POWER 200% 달성 시 탄 색 변경: 흰 심 + 주황 불꽃 꼬리 (열혈 MAX)
+            const cSide = powerMax ? '#fb923c' : '#facc15', cFront = powerMax ? '#fef9c3' : '#ef4444';
+            const tr = powerMax ? '#f97316' : undefined;
+            playerBullets.push({ x: playerX, y: playerY - 26, vx: -5, vy: bulletSpeed, width: 7, height: 20, color: cSide, trail: tr });
+            playerBullets.push({ x: playerX - 12, y: playerY - 30, vx: 0, vy: bulletSpeed, width: 8, height: 22, color: cFront, trail: tr });
+            playerBullets.push({ x: playerX + 12, y: playerY - 30, vx: 0, vy: bulletSpeed, width: 8, height: 22, color: cFront, trail: tr });
+            playerBullets.push({ x: playerX, y: playerY - 26, vx: 5, vy: bulletSpeed, width: 7, height: 20, color: cSide, trail: tr });
+          } else if (powerMax) {
+            playerBullets.push({ x: playerX - 12, y: playerY - 24, vx: 0, vy: bulletSpeed, width: 6, height: 18, color: '#fef9c3', trail: '#f97316' });
+            playerBullets.push({ x: playerX + 12, y: playerY - 24, vx: 0, vy: bulletSpeed, width: 6, height: 18, color: '#fef9c3', trail: '#f97316' });
           } else {
             playerBullets.push({ x: playerX - 12, y: playerY - 24, vx: 0, vy: bulletSpeed, width: 4, height: 16 });
             playerBullets.push({ x: playerX + 12, y: playerY - 24, vx: 0, vy: bulletSpeed, width: 4, height: 16 });
@@ -4833,7 +4890,7 @@
         pb.y += pb.vy;
 
         // 잔상 궤적 -> 속도감
-        drawBulletTrail(pb.x, pb.y + pb.height, 22, pb.width * 0.7, pb.color || '#38bdf8');
+        drawBulletTrail(pb.x, pb.y + pb.height, pb.trail ? 34 : 22, pb.width * (pb.trail ? 1.1 : 0.7), pb.trail || pb.color || '#38bdf8');
         ctx.fillStyle = pb.color || '#38bdf8';
         ctx.fillRect(pb.x - pb.width / 2, pb.y, pb.width, pb.height);
 
@@ -5072,147 +5129,7 @@
         }
       }
 
-      // -----------------------------------------------------------
-      // 5. 적 총알 이동, 렌더링 & 플레이어 피격 검사 (피격점 안쪽 축소: 12 -> 5)
-      // -----------------------------------------------------------
-      for (let i = enemyBullets.length - 1; i >= 0; i--) {
-        const eb = enemyBullets[i];
-        if (!eb) continue; // 콜백에서 배열이 비워진 경우 방어
-        // ★ 특수 탄 동작 (신규 적)
-        if (eb.f !== undefined) eb.f++;
-        if (eb.home && eb.f < eb.home) {            // 유도탄: 방향을 조금씩 플레이어 쪽으로
-          const sp = Math.hypot(eb.vx, eb.vy);
-          const cur = Math.atan2(eb.vy, eb.vx);
-          let dA = Math.atan2(playerY - eb.y, playerX - eb.x) - cur;
-          while (dA > Math.PI) dA -= Math.PI * 2;
-          while (dA < -Math.PI) dA += Math.PI * 2;
-          const na = cur + Math.max(-0.045, Math.min(0.045, dA));
-          const ns = Math.min(eb.maxSp || 5.2, sp + 0.03);
-          eb.vx = Math.cos(na) * ns; eb.vy = Math.sin(na) * ns;
-        }
-        if (eb.wave !== undefined) eb.x += Math.sin(eb.f * 0.09 + eb.wave) * 3.2;   // 사인파 탄
-        eb.x += eb.vx;
-        eb.y += eb.vy;
-        if (eb.bounce > 0 && (eb.x < eb.radius || eb.x > WIDTH - eb.radius)) {    // 벽 반사탄
-          eb.vx = -eb.vx;
-          eb.x = Math.max(eb.radius, Math.min(WIDTH - eb.radius, eb.x));
-          eb.bounce--;
-        }
-        if (eb.mine) {                              // 지뢰: 감속 후 6방향 폭발
-          eb.vy *= 0.97;
-          if (eb.f >= eb.mine) {
-            for (let k = 0; k < 6; k++) {
-              const a = k / 6 * Math.PI * 2 + Math.PI / 6;
-              const v = 3.6 * Math.min(1.8, Math.max(0.6, difficultyMultiplier));
-              enemyBullets.push({ x: eb.x, y: eb.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, radius: 9, color: '#fb923c' });
-            }
-            createExplosion(eb.x, eb.y, 22, '#fb923c', 10);
-            enemyBullets.splice(i, 1);
-            continue;
-          }
-        }
-
-        // 총알 드로잉 (글로우 이펙트)
-        if (eb.mine) {
-          const warn = eb.f > eb.mine - 30 && eb.f % 6 < 3;
-          ctx.fillStyle = '#1c1917';
-          ctx.beginPath(); ctx.arc(eb.x, eb.y, eb.radius, 0, Math.PI * 2); ctx.fill();
-          ctx.strokeStyle = warn ? '#ffffff' : '#fb923c'; ctx.lineWidth = 3; ctx.stroke();
-          ctx.fillStyle = '#fb923c';
-          for (let k = 0; k < 6; k++) {
-            const a = k / 6 * Math.PI * 2;
-            ctx.fillRect(eb.x + Math.cos(a) * 15 - 2, eb.y + Math.sin(a) * 15 - 2, 4, 4);
-          }
-          ctx.fillStyle = warn ? '#ffffff' : '#ef4444';
-          ctx.beginPath(); ctx.arc(eb.x, eb.y, 4, 0, Math.PI * 2); ctx.fill();
-        } else {
-          ctx.fillStyle = eb.color;
-          ctx.beginPath();
-          ctx.arc(eb.x, eb.y, eb.radius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // 플레이어 피격 판정 (비행기 외곽 끝이 아닌 중심 콕핏 안쪽 5px 코어 판정)
-        if (!isGameOver && !isContinueState && playerInvulnerable <= 0) {
-          const _bdx = playerX - eb.x, _bdy = playerY - eb.y;
-          const _brr = eb.radius + 5;
-          if (_bdx * _bdx + _bdy * _bdy < _brr * _brr) {
-            enemyBullets.splice(i, 1);
-            hitPlayer();
-            continue;
-          }
-        }
-
-        // 화면 밖으로 벗어나면 소멸
-        if (eb.x < -30 || eb.x > WIDTH + 30 || eb.y < -30 || eb.y > HEIGHT + 30) {
-          enemyBullets.splice(i, 1);
-        }
-      }
-
-      // -----------------------------------------------------------
-      // 6. 폭탄 충격파 & 전체 화면 폭발 렌더링
-      // -----------------------------------------------------------
-      for (let i = bombShockwaves.length - 1; i >= 0; i--) {
-        const sw = bombShockwaves[i];
-        sw.radius += 28;
-        sw.alpha -= 0.022;
-
-        // 전체 화면 플래시
-        ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, sw.alpha * 0.45)})`;
-        ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-        // 원형 충격파 링
-        ctx.strokeStyle = `rgba(239, 68, 68, ${Math.max(0, sw.alpha)})`;
-        ctx.lineWidth = 12;
-        ctx.beginPath();
-        ctx.arc(playerX, playerY, sw.radius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        if (sw.alpha <= 0 || sw.radius >= sw.maxRadius) {
-          bombShockwaves.splice(i, 1);
-        }
-      }
-
-      // -----------------------------------------------------------
-      // 7. 파티클 폭발 이펙트 렌더링
-      // -----------------------------------------------------------
-      for (let i = explosions.length - 1; i >= 0; i--) {
-        const exp = explosions[i];
-        // 충격파 링
-        if (exp.ringAlpha > 0) {
-          ctx.strokeStyle = `rgba(250, 204, 21, ${exp.ringAlpha})`;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(exp.x, exp.y, exp.ringRadius, 0, Math.PI * 2);
-          ctx.stroke();
-          exp.ringRadius += 2.5;
-          exp.ringAlpha -= 0.05;
-        }
-
-        // 개별 파티클
-        // [성능] forEach -> for (클로저 생성 제거), globalAlpha 는 루프 후 1회만 복원
-        let aliveParticles = 0;
-        const parts = exp.particles;
-        for (let k = 0; k < parts.length; k++) {
-          const p = parts[k];
-          if (p.alpha <= 0) continue;
-          p.x += p.vx;
-          p.y += p.vy;
-          p.alpha -= p.decay;
-          ctx.fillStyle = p.color;
-          ctx.globalAlpha = p.alpha > 0 ? p.alpha : 0;
-          ctx.beginPath();
-          ctx.arc(exp.x + p.x, exp.y + p.y, p.size, 0, Math.PI * 2);
-          ctx.fill();
-          aliveParticles++;
-        }
-        ctx.globalAlpha = 1.0;
-
-        if (aliveParticles === 0 && exp.ringAlpha <= 0) {
-          explosions.splice(i, 1);
-        }
-      }
-
+      // ★ (V 3.0) 아이템은 적탄보다 먼저 그려 적탄 아래 레이어에 깔리게 한다
       // -----------------------------------------------------------
       // 7.5 아이템(Power / Bomb) 이동, 렌더링 & 플레이어 획득 검사
       // -----------------------------------------------------------
@@ -5365,6 +5282,147 @@
         // 화면 아래로 벗어나면 소멸
         if (it.y > HEIGHT + 40) {
           items.splice(i, 1);
+        }
+      }
+
+      // -----------------------------------------------------------
+      // 5. 적 총알 이동, 렌더링 & 플레이어 피격 검사 (피격점 안쪽 축소: 12 -> 5)
+      // -----------------------------------------------------------
+      for (let i = enemyBullets.length - 1; i >= 0; i--) {
+        const eb = enemyBullets[i];
+        if (!eb) continue; // 콜백에서 배열이 비워진 경우 방어
+        // ★ 특수 탄 동작 (신규 적)
+        if (eb.f !== undefined) eb.f++;
+        if (eb.home && eb.f < eb.home) {            // 유도탄: 방향을 조금씩 플레이어 쪽으로
+          const sp = Math.hypot(eb.vx, eb.vy);
+          const cur = Math.atan2(eb.vy, eb.vx);
+          let dA = Math.atan2(playerY - eb.y, playerX - eb.x) - cur;
+          while (dA > Math.PI) dA -= Math.PI * 2;
+          while (dA < -Math.PI) dA += Math.PI * 2;
+          const na = cur + Math.max(-0.045, Math.min(0.045, dA));
+          const ns = Math.min(eb.maxSp || 5.2, sp + 0.03);
+          eb.vx = Math.cos(na) * ns; eb.vy = Math.sin(na) * ns;
+        }
+        if (eb.wave !== undefined) eb.x += Math.sin(eb.f * 0.09 + eb.wave) * 3.2;   // 사인파 탄
+        eb.x += eb.vx;
+        eb.y += eb.vy;
+        if (eb.bounce > 0 && (eb.x < eb.radius || eb.x > WIDTH - eb.radius)) {    // 벽 반사탄
+          eb.vx = -eb.vx;
+          eb.x = Math.max(eb.radius, Math.min(WIDTH - eb.radius, eb.x));
+          eb.bounce--;
+        }
+        if (eb.mine) {                              // 지뢰: 감속 후 6방향 폭발
+          eb.vy *= 0.97;
+          if (eb.f >= eb.mine) {
+            for (let k = 0; k < 6; k++) {
+              const a = k / 6 * Math.PI * 2 + Math.PI / 6;
+              const v = 3.6 * Math.min(1.8, Math.max(0.6, difficultyMultiplier));
+              enemyBullets.push({ x: eb.x, y: eb.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, radius: 9, color: '#fb923c' });
+            }
+            createExplosion(eb.x, eb.y, 22, '#fb923c', 10);
+            enemyBullets.splice(i, 1);
+            continue;
+          }
+        }
+
+        // 총알 드로잉 (글로우 이펙트)
+        if (eb.mine) {
+          const warn = eb.f > eb.mine - 30 && eb.f % 6 < 3;
+          ctx.fillStyle = '#1c1917';
+          ctx.beginPath(); ctx.arc(eb.x, eb.y, eb.radius, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = warn ? '#ffffff' : '#fb923c'; ctx.lineWidth = 3; ctx.stroke();
+          ctx.fillStyle = '#fb923c';
+          for (let k = 0; k < 6; k++) {
+            const a = k / 6 * Math.PI * 2;
+            ctx.fillRect(eb.x + Math.cos(a) * 15 - 2, eb.y + Math.sin(a) * 15 - 2, 4, 4);
+          }
+          ctx.fillStyle = warn ? '#ffffff' : '#ef4444';
+          ctx.beginPath(); ctx.arc(eb.x, eb.y, 4, 0, Math.PI * 2); ctx.fill();
+        } else {
+          ctx.fillStyle = eb.color;
+          ctx.beginPath();
+          ctx.arc(eb.x, eb.y, eb.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // 플레이어 피격 판정 (비행기 외곽 끝이 아닌 중심 콕핏 안쪽 5px 코어 판정)
+        if (!isGameOver && !isContinueState && playerInvulnerable <= 0) {
+          const _bdx = playerX - eb.x, _bdy = playerY - eb.y;
+          const _brr = eb.radius + 5;
+          if (_bdx * _bdx + _bdy * _bdy < _brr * _brr) {
+            enemyBullets.splice(i, 1);
+            hitPlayer();
+            continue;
+          }
+        }
+
+        // 화면 밖으로 벗어나면 소멸
+        if (eb.x < -30 || eb.x > WIDTH + 30 || eb.y < -30 || eb.y > HEIGHT + 30) {
+          enemyBullets.splice(i, 1);
+        }
+      }
+
+      // -----------------------------------------------------------
+      // 6. 폭탄 충격파 & 전체 화면 폭발 렌더링
+      // -----------------------------------------------------------
+      for (let i = bombShockwaves.length - 1; i >= 0; i--) {
+        const sw = bombShockwaves[i];
+        sw.radius += 28;
+        sw.alpha -= 0.022;
+
+        // 전체 화면 플래시
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, sw.alpha * 0.45)})`;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // 원형 충격파 링
+        ctx.strokeStyle = `rgba(239, 68, 68, ${Math.max(0, sw.alpha)})`;
+        ctx.lineWidth = 12;
+        ctx.beginPath();
+        ctx.arc(playerX, playerY, sw.radius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (sw.alpha <= 0 || sw.radius >= sw.maxRadius) {
+          bombShockwaves.splice(i, 1);
+        }
+      }
+
+      // -----------------------------------------------------------
+      // 7. 파티클 폭발 이펙트 렌더링
+      // -----------------------------------------------------------
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        const exp = explosions[i];
+        // 충격파 링
+        if (exp.ringAlpha > 0) {
+          ctx.strokeStyle = `rgba(250, 204, 21, ${exp.ringAlpha})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(exp.x, exp.y, exp.ringRadius, 0, Math.PI * 2);
+          ctx.stroke();
+          exp.ringRadius += 2.5;
+          exp.ringAlpha -= 0.05;
+        }
+
+        // 개별 파티클
+        // [성능] forEach -> for (클로저 생성 제거), globalAlpha 는 루프 후 1회만 복원
+        let aliveParticles = 0;
+        const parts = exp.particles;
+        for (let k = 0; k < parts.length; k++) {
+          const p = parts[k];
+          if (p.alpha <= 0) continue;
+          p.x += p.vx;
+          p.y += p.vy;
+          p.alpha -= p.decay;
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.alpha > 0 ? p.alpha : 0;
+          ctx.beginPath();
+          ctx.arc(exp.x + p.x, exp.y + p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+          aliveParticles++;
+        }
+        ctx.globalAlpha = 1.0;
+
+        if (aliveParticles === 0 && exp.ringAlpha <= 0) {
+          explosions.splice(i, 1);
         }
       }
 
