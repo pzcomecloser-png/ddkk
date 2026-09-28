@@ -805,7 +805,7 @@
         <div class="copyright">&copy; 2026 DDKK GAMES.<br>ALL RIGHTS RESERVED</div>
       </div>
 
-      <div class="title-version">V 3.5</div>
+      <div class="title-version">V 3.9</div>
     </div>
 
     <div class="controls" id="controlsPanel" style="display:none;">
@@ -1612,6 +1612,13 @@
 
     // ★ 로봇 모드 버티기(1회 생존) 시스템
     let robotGuardUsed = false;   // 합체 로봇의 1회 버티기 소모 여부
+    let pendingCombine = false;   // (V 3.9) 폭탄 연출 중 합체 조건 충족 -> 폭탄이 끝나면 합체
+    function startCombine() {
+      pendingCombine = false;
+      isCombining = true;
+      combineTimer = 0;
+      enemyBullets.length = 0; // 순회 중이므로 재대입 금지
+    }
     let isPilotCutin = false;     // 파일럿 컷인 연출 중 (게임 정지)
     let pilotCutinTimer = 0;
     const PILOT_CUTIN_DURATION = 200; // 약 3.3초 (충분히 눈에 들어오도록)
@@ -2783,6 +2790,15 @@
       introPhase = null;
       introTimer = 0;
       endingActive = false;
+      round = 1;
+      roundCutActive = false;
+      roundBannerTimer = 0;
+      mothershipBannerTimer = 0;
+      mothershipBannerShown = false;
+      finalBossPhase = 0;
+      finalBoss = null;
+      roundClearing = false;
+      pendingCombine = false;
       setIntroUI(false);
       isContinueState = false;
       isGameOver = false;
@@ -3106,6 +3122,13 @@
       for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
         if (e.y < -20 || e.hidden) continue;       // 아직 화면 밖 / 순간이동 중인 적은 나타나면 제거
+        if (e.type === 20) {                        // (V 3.8) 최종 보스: 폭탄 1회당 체력 30 (지워지지 않음)
+          if (bombFx && !bombFx.bossHit && e.state === 'fight') {
+            bombFx.bossHit = true; e.hp = Math.max(1, e.hp - 30); e.flash = 10;
+            createExplosion(e.x, e.y, 90, '#f59e0b', 40);
+          }
+          continue;
+        }
         createExplosion(e.x, e.y, e.type === 7 ? 80 : 45, '#f59e0b', e.type === 7 ? 40 : 20);
         score += 300;
         killed++;
@@ -3116,7 +3139,7 @@
         enemyBullets.length = 0;
       }
       if (killed) updateScoreDisplay();
-      if (score >= 200000 && !isVictoryState) triggerVictory();
+      // (V 3.8) 20만점 -> 최종 보스 (updateFinalBoss 가 감지). 엔딩은 보스 격파 후.
     }
 
     function drawBombFx() {
@@ -3315,6 +3338,11 @@
 
     // 매 프레임 호출: 진행 + 제거 + 그리기. 끝나면 null 로 돌아간다.
     function updateBombFx() {
+      // (V 3.9) 폭탄 연출이 끝나면 대기 중이던 합체 시작 (리와인드/컷인/컷신 중에는 끝날 때까지 기다림)
+      if (!bombFx && pendingCombine && !isRewinding && !isPilotCutin && !roundCutActive && !isGameOver && !isVictoryState) {
+        startCombine();
+        return;
+      }
       if (!bombFx) return;
       bombFx.t++;
       if (!isGameOver && !isVictoryState) bombSweep();
@@ -3325,8 +3353,8 @@
 
     function triggerBomb() {
       // 연출 중(리와인드/합체/컷인)이나 폭탄 지속 중에는 새로 발동하지 않는다 (폭탄 낭비 방지)
-      if (introPhase || bombFx || bombs <= 0 || isGameOver || isContinueState || isVictoryState ||
-          isRewinding || isCombining || isPilotCutin) return;
+      if (introPhase || bombFx || roundCutActive || finalBossPhase === 1 || finalBossPhase >= 3 || bombs <= 0 || isGameOver || isContinueState || isVictoryState ||
+          isRewinding || isCombining || isPilotCutin || pendingCombine) return;
       bombs--;
       updateBombsDisplay();
 
@@ -3408,7 +3436,7 @@
     // 플레이어 피격 처리
     function hitPlayer() {
       // ★ 리와인드/합체/컷인/승리 연출 중에는 피격 무효 (중복 발동으로 상태 깨지는 것 방지)
-      if (playerInvulnerable > 0 || isGameOver || isContinueState || isRewinding || isCombining || isPilotCutin || isVictoryState) return;
+      if (playerInvulnerable > 0 || isGameOver || isContinueState || isRewinding || isCombining || isPilotCutin || isVictoryState || roundCutActive || finalBossPhase === 1 || finalBossPhase >= 3) return;
 
       // 1. 피격 즉시 2초 무적 선적용 (1프레임 다중 피격 원천 차단)
       playerInvulnerable = 120;
@@ -3553,7 +3581,7 @@
     let fortressSpawnCount = 0; // 보스 등장 횟수 (재등장마다 체력 10% 증가)
 
     // -------------------------------------------------------------
-    // 난이도 스케일링 시스템 (V 2.9)
+    // 난이도 스케일링 시스템 (V 2.9 -> V 3.6 밸런스 패치: 초반 0~2천점 빠른 상승, 중후반 완만한 상승)
     //   배율을 두 개로 나눈다.
     //     spawnMultiplier      : 적이 얼마나 자주·많이 나오는가 (스폰 간격, 동시 등장 수)
     //     difficultyMultiplier : 적이 얼마나 세게 쏘는가 (발사 간격, 탄속, 탄 수)
@@ -3566,26 +3594,25 @@
     const DIFFICULTY_CAP_SCORE = 200000;   // 엔딩 조건 점수
     //                   점수      스폰   탄
     const DIFFICULTY_CURVE = [
-      [     0, 0.25, 0.25],
-      [  2000, 0.25, 0.25],
-      [  5000, 0.50, 0.32],
-      [ 10000, 0.55, 0.38],
-      [ 20000, 0.62, 0.45],
-      [ 30000, 0.68, 0.50],
-      [ 50000, 0.74, 0.56],
-      [ 70000, 0.81, 0.62],
-      [100000, 0.90, 0.82],   // (V 3.0) 7만점 이후 발사 속도를 올린다
-      [140000, 1.02, 1.00],
-      [180000, 1.13, 1.15],
-      [200000, 1.18, 1.22],
+      [     0, 0.34, 0.20],
+      [   600, 0.46, 0.24],
+      [  1500, 0.56, 0.28],
+      [  4000, 0.62, 0.32],
+      [  9000, 0.66, 0.37],
+      [ 20000, 0.70, 0.43],
+      [ 35000, 0.76, 0.51],
+      [ 55000, 0.82, 0.58],
+      [ 75000, 0.88, 0.66],
+      [100000, 0.94, 0.74],
+      [200000, 0.94, 0.74],
     ];
     // (V 3.0) 7만점 이후 적 체력 배율 (보스 제외). 적이 한 발도 못 쏘고 죽는 문제 대응.
     //   생성 시점의 점수로 정해지며, 그 사이는 선형 보간한다.
     const ENEMY_HP_CURVE = [
-      [ 70000, 1.0],
-      [100000, 1.8],
-      [140000, 2.6],
-      [200000, 3.4],
+      [ 70000, 1.00],
+      [100000, 1.60],
+      [140000, 2.10],
+      [200000, 2.60],
     ];
     function enemyHpMultiplier() {
       const sc = Math.min(score, DIFFICULTY_CAP_SCORE);
@@ -3596,15 +3623,25 @@
       }
       return ENEMY_HP_CURVE[ENEMY_HP_CURVE.length - 1][1];
     }
+    // (V 3.7) 라운드 2 (10만점 이후): 난이도 3 정도로 내려갔다가 다시 가파르게 올라간다
+    const DIFFICULTY_CURVE_R2 = [
+      [100000, 0.62, 0.40],
+      [105000, 0.74, 0.52],
+      [115000, 0.84, 0.64],
+      [135000, 0.92, 0.74],
+      [165000, 1.00, 0.84],
+      [200000, 1.08, 0.94],
+    ];
     const DEATH_BLOW_SCORE = 180000;       // 데스블로우 x1 발동 점수
     let difficultyMultiplier = 0.25;       // 탄 배율
     let spawnMultiplier = 0.25;            // 스폰 배율
     function updateDifficulty() {
       const sc = Math.max(0, Math.min(score, DIFFICULTY_CAP_SCORE));
+      const CURVE = round === 2 ? DIFFICULTY_CURVE_R2 : DIFFICULTY_CURVE;
       let i = 0;
-      while (i < DIFFICULTY_CURVE.length - 2 && sc >= DIFFICULTY_CURVE[i + 1][0]) i++;
-      const [s0, sp0, bu0] = DIFFICULTY_CURVE[i];
-      const [s1, sp1, bu1] = DIFFICULTY_CURVE[i + 1];
+      while (i < CURVE.length - 2 && sc >= CURVE[i + 1][0]) i++;
+      const [s0, sp0, bu0] = CURVE[i];
+      const [s1, sp1, bu1] = CURVE[i + 1];
       const k = s1 > s0 ? Math.min(1, (sc - s0) / (s1 - s0)) : 0;
       spawnMultiplier = sp0 + (sp1 - sp0) * k;
       difficultyMultiplier = bu0 + (bu1 - bu0) * k;
@@ -3614,36 +3651,50 @@
     }
 
     // -------------------------------------------------------------
-    // ★ 적 등장 로테이션 (V 2.5)
+    // ★ 적 등장 로테이션 (V 3.6 밸런스 패치)
     //   점수 구간마다 등장하는 적을 최대 5종으로 제한하고, 신규 적을 점점 섞는다.
     //   번호: 1~8 기존 적 (7 = 대형 요새), 9~18 신규 적 (도감 N1~N10)
-    //   120,000점 구간까지 17종이 모두 한 번 이상 등장한다.
+    //   탄을 많이 쏘는 적(6 고릴라, 7 요새, 10 토네이도, 17 해파리)을 앞쪽에 몰지 않고
+    //   구간마다 고르게 나눠, 시간에 따라 난이도가 꾸준히 오르게 배치했다.
+    //   (V 3.7) 라운드 1 (0 ~ 10만점) 전용. 8.8만점부터 라운드 1 클라이맥스.
+    //   라운드 2 는 아래 ENEMY_PHASES_R2. 두 라운드를 합쳐 18종이 모두 등장한다.
     // -------------------------------------------------------------
     const ENEMY_PHASES = [
-      { from:      0, types: [1, 2, 3, 4, 5] },
-      { from:  15000, types: [2, 3, 4, 5, 6] },
-      { from:  30000, types: [1, 4, 5, 6, 7] },
-      { from:  45000, types: [5, 6, 7, 8, 9] },
-      { from:  60000, types: [1, 8, 9, 10, 11] },
-      { from:  75000, types: [2, 9, 11, 12, 13] },
-      { from:  90000, types: [4, 7, 12, 13, 14] },
-      { from: 105000, types: [3, 5, 14, 15, 16] },
-      { from: 120000, types: [6, 15, 16, 17, 18] },
-      { from: 135000, types: [1, 10, 12, 17, 18] },
-      { from: 150000, types: [7, 8, 13, 14, 16] },
-      { from: 165000, types: [2, 9, 11, 15, 18] },
-      { from: 180000, types: [3, 6, 10, 12, 17] },
+      { from:      0, types: [1, 4, 5] },
+      { from:    800, types: [1, 2, 4, 5] },
+      { from:   2000, types: [1, 2, 3, 4, 5] },
+      { from:  14000, types: [1, 2, 3, 5, 6] },
+      { from:  24000, types: [2, 3, 5, 6, 9] },
+      { from:  34000, types: [2, 3, 6, 8, 9] },
+      { from:  44000, types: [2, 3, 6, 9, 11] },
+      { from:  56000, types: [3, 6, 7, 9, 11] },
+      { from:  68000, types: [2, 6, 9, 11, 13] },
+      { from:  78000, types: [3, 6, 7, 13, 15] },
+      { from:  88000, types: [2, 6, 7, 9, 10] },
     ];
+    // (V 3.7) 라운드 2 로테이션 (10만점 이후). 라운드 1 과 인덱스가 겹치지 않도록 100 을 더해 구분한다.
+    const ENEMY_PHASES_R2 = [
+      { from: 100000, types: [2, 3, 6, 9, 14] },
+      { from: 105000, types: [2, 6, 9, 12, 15] },
+      { from: 112000, types: [3, 6, 9, 10, 15] },
+      { from: 120000, types: [2, 7, 12, 17, 18] },
+      { from: 134000, types: [6, 9, 15, 17, 18] },
+      { from: 148000, types: [2, 7, 13, 15, 17] },
+      { from: 162000, types: [6, 7, 10, 15, 18] },
+      { from: 176000, types: [6, 7, 10, 17, 18] },
+    ];
+    function activePhases() { return round === 2 ? ENEMY_PHASES_R2 : ENEMY_PHASES; }
     function currentEnemyPhase() {
+      const P = activePhases();
       let p = 0;
-      for (let i = 0; i < ENEMY_PHASES.length; i++) if (score >= ENEMY_PHASES[i].from) p = i;
-      return p;
+      for (let i = 0; i < P.length; i++) if (score >= P[i].from) p = i;
+      return round === 2 ? 100 + p : p;
     }
     // 일반 스폰 가중치 (클수록 자주)
     const SPAWN_WEIGHT = { 1: 3, 2: 3, 3: 2.5, 6: 1.5, 8: 1.5, 9: 2, 10: 1.2, 11: 1.5, 12: 1,
                            13: 1.5, 14: 2.2, 15: 1, 16: 0.8, 17: 1.5, 18: 1.2 };
     // 종류별 동시 등장 상한 (탄막이 겹쳐 화면이 어지러워지는 것 방지)
-    const SPAWN_CAP = { 1: 4, 2: 2, 3: 3, 6: 2, 10: 1, 11: 3, 12: 2, 15: 1, 16: 2, 18: 2 };
+    const SPAWN_CAP = { 1: 4, 2: 1, 3: 3, 6: 2, 10: 1, 11: 3, 12: 2, 15: 1, 16: 2, 18: 2 };
     // 화면에 오래 머무는 적은 합계 4기까지만
     const LINGER_TYPES = new Set([3, 6, 9, 10, 11, 12, 16, 17, 18]);
     const LINGER_MAX = 4;
@@ -3769,6 +3820,8 @@
           this.hp = this.maxHp = 15;   // (V 3.1) 체력 3배
           this.radius = 45;
           this.shootTimer = 60;
+        } else if (this.type === 20) {
+          this.initBoss();
         } else if (this.type >= 9 && this.type <= 19) {
           this.initNew(opts);
         } else {
@@ -3799,7 +3852,7 @@
         }
 
         // (V 3.0) 7만점 이후 일반 적 체력 상승 (보스 Type 7 은 별도 3배 적용)
-        if (this.type !== 7) {
+        if (this.type !== 7 && this.type !== 20) {
           const hm = enemyHpMultiplier();
           if (hm > 1) this.hp = this.maxHp = Math.max(1, Math.round(this.maxHp * hm));
         }
@@ -3829,7 +3882,9 @@
         // 1. 이동 및 사격 패턴 (난이도 배율 difficultyMultiplier 적용: 탄속/주기/탄막 확장, 체력은 고정)
         const dMul = difficultyMultiplier;
 
-        if (this.type >= 9) {
+        if (this.type === 20) {
+          this.updateBoss();
+        } else if (this.type >= 9) {
           this.updateNew(dMul);
         } else if (this.type === 1) {
           // [Type 1] 요격기: 지그재그 강하 + 고속 조준탄 2연사
@@ -4080,7 +4135,7 @@
         // 화면 이탈 시 제거
         // 위로 이탈한 적은 즉시 정리한다(-220 은 너무 넓어 스폰 상한을 낭비했음).
         // (V 3.1) 톱니 드론(1)은 항상 아래로만 움직이고 줄줄이 편대가 화면 위에서 대기하므로 위쪽 정리에서 제외
-        if (this.y > HEIGHT + 160 || (this.y < -140 && this.type !== 1) || this.x < -180 || this.x > WIDTH + 180) {
+        if (this.y > HEIGHT + 160 || (this.y < -140 && this.type !== 1 && this.type !== 20) || this.x < -180 || this.x > WIDTH + 180) {
           this.dead = true;
         }
       }
@@ -4174,7 +4229,7 @@
           this.spin += 0.13;
           if (leaving) { this.y += 5; return; }
           if (this.y < this.targetY) this.y += (this.targetY - this.y) * 0.04 + 1;
-          if (this.y > 150 && this.age % iv(4.5, 3) === 0) {   // (V 3.1) 발사 2배
+          if (this.y > 150 && this.age % iv(8, 5) === 0) {   // (V 3.6) 밸런스: 4.5 -> 8 (단독으로 화면 적탄의 1/3 을 차지하던 이상치 완화)
             [0, Math.PI].forEach(o => {
               const a = this.spin + o;
               shoot(this.x, this.y, Math.cos(a) * 3 * sm, Math.sin(a) * 3 * sm, 9, '#fb7185');
@@ -4247,7 +4302,7 @@
           if (leaving) { this.y += 4; return; }
           this.y += this.y < 220 ? 2.5 : Math.sin(this.age * 0.05) * 0.8;
           this.x = Math.max(80, Math.min(WIDTH - 80, this.baseX + Math.sin(this.age * 0.012) * 140));
-          if (this.y > 150 && ++this.t >= iv(13, 8)) {       // (V 3.1) 발사 2배
+          if (this.y > 150 && ++this.t >= iv(19, 12)) {      // (V 3.6) 밸런스: 13 -> 19
             this.t = 0;
             [-40, 0, 40].forEach((o, i) => shoot(this.x + o, this.y + 30, 0, 6.4 * sm, 9, '#c084fc', { wave: i * 2, f: 0 }));   // 탄속 2배
           }
@@ -4414,6 +4469,144 @@
           ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-10, -22); ctx.lineTo(-30, -44); ctx.stroke();
           ctx.globalAlpha = 1;
         }
+      }
+
+      // ---------------- 최종 보스 (Type 20) ----------------
+      initBoss() {
+        this.x = WIDTH / 2; this.y = -220; this.targetY = 300;
+        this.radius = 120;
+        this.hp = this.maxHp = FINAL_BOSS_HP;
+        this.state = 'enter';
+        this.pattern = 0;          // 0 기관총 / 1 와이드 / 2 레이저
+        this.pt = 0;               // 패턴 내 시간
+        this.rest = 0;             // 패턴 사이 휴식
+        this.lasers = [];          // { x, ph:'warn'|'fire', t }
+        this.flash = 0;
+        this.life = 999999;
+      }
+      updateBoss() {
+        const angry = this.hp <= this.maxHp * 0.5;
+        if (this.flash > 0) this.flash--;
+        if (this.state === 'enter') {
+          this.y += (this.targetY - this.y) * 0.03 + 0.6;
+          if (Math.abs(this.y - this.targetY) < 4) { this.state = 'fight'; this.rest = 40; }
+          return;
+        }
+        // 좌우로 느리게 움직임 (레이저 중에는 멈춤)
+        if (this.pattern !== 2 || this.rest > 0) this.x = WIDTH / 2 + Math.sin(this.age * 0.012) * 170;
+        if (this.rest > 0) { this.rest--; return; }
+        this.pt++;
+        const aim = (x, y) => Math.atan2(playerY - y, playerX - x);
+        const shoot = (x, y, a, sp, r, c) => enemyBullets.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, radius: r, color: c });
+
+        if (this.pattern === 0) {
+          // 1) 기관총: 좌우 포신 번갈아 연사, 약간 흔들림 (2.5초)
+          const every = angry ? 4 : 5;
+          if (this.pt % every === 0) {
+            const side = (this.pt / every) % 2 ? 1 : -1;
+            const gx = this.x + side * 110, gy = this.y + 70;
+            shoot(gx, gy, aim(gx, gy) + (Math.random() - 0.5) * 0.22, 8.5, 8, '#fde047');
+            if (this.pt % (every * 4) === 0) playLaserSound();
+          }
+          if (this.pt >= 150) this.nextPattern(angry);
+        } else if (this.pattern === 1) {
+          // 2) 와이드샷: 넓은 부채꼴 3번, 틈 위치를 번갈아 바꿈 (약 2.3초)
+          if (this.pt === 1 || this.pt === 45 || this.pt === 90) {
+            const n = angry ? 17 : 13, spread = 1.9;
+            const base = Math.PI / 2, off = (this.pt === 45 ? 0.5 : 0) * (spread / (n - 1));
+            for (let i = 0; i < n; i++) {
+              const a = base - spread / 2 + i * spread / (n - 1) + off;
+              shoot(this.x, this.y + 80, a, 4.6, 12, '#f472b6');
+            }
+            playHitSound();
+          }
+          if (this.pt >= 140) this.nextPattern(angry);
+        } else {
+          // 3) 삼중 레이저: 3곳 동시 경고(1.2초) -> 발사(0.8초), 두 번 (가운데 / 양옆)
+          if (this.pt === 1 || this.pt === 131) {
+            const second = this.pt === 131;
+            const px = Math.max(120, Math.min(WIDTH - 120, playerX));
+            const xs = second ? [px - 240, px, px + 240].map(v => Math.max(40, Math.min(WIDTH - 40, v)))
+                              : [WIDTH / 2 - 250, WIDTH / 2, WIDTH / 2 + 250];
+            if (second) { xs[0] = Math.max(40, px - 150); xs[1] = Math.min(WIDTH - 40, px + 150); xs[2] = px < WIDTH / 2 ? WIDTH - 90 : 90; }
+            this.lasers = xs.map(x => ({ x, ph: 'warn', t: 0 }));
+            endingSfx(s => powerTone(880, s, 0.5, 'square', 0.08, 1320, 12));
+          }
+          for (const L of this.lasers) {
+            L.t++;
+            if (L.ph === 'warn' && L.t >= 72) { L.ph = 'fire'; L.t = 0; playExplosionSound(false); }
+            else if (L.ph === 'fire') {
+              if (!isGameOver && !isContinueState && playerInvulnerable <= 0 &&
+                  Math.abs(playerX - L.x) < 30 && playerY > this.y) hitPlayer();
+              if (L.t >= 48) L.ph = 'done';
+            }
+          }
+          this.lasers = this.lasers.filter(L => L.ph !== 'done');
+          if (this.pt >= 260) { this.lasers = []; this.nextPattern(angry); }
+        }
+      }
+      nextPattern(angry) {
+        this.pattern = (this.pattern + 1) % 3;
+        this.pt = 0;
+        this.rest = angry ? 25 : 55;
+      }
+      drawBoss() {
+        const TAU = Math.PI * 2;
+        const angry = this.hp <= this.maxHp * 0.5;
+        // 레이저 (몸체 아래에 깔림)
+        for (const L of this.lasers) {
+          const dx = L.x - this.x;
+          if (L.ph === 'warn') {
+            ctx.globalAlpha = 0.35 + 0.35 * Math.sin(L.t * 0.6);
+            ctx.fillStyle = '#f87171'; ctx.fillRect(dx - 3, 60, 6, HEIGHT);
+            ctx.globalAlpha = 1;
+            if (L.t % 12 < 6) { ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(dx, 70, 14, 0, TAU); ctx.fill(); }
+          } else if (L.ph === 'fire') {
+            const w = 52 + Math.sin(L.t * 1.3) * 8;
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.55)'; ctx.fillRect(dx - w / 2 - 14, 60, w + 28, HEIGHT);
+            ctx.fillStyle = '#fde68a'; ctx.fillRect(dx - w / 2, 60, w, HEIGHT);
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(dx - w / 6, 60, w / 3, HEIGHT);
+          }
+        }
+        ctx.save();
+        if (this.flash > 0) ctx.globalAlpha = 0.6;
+        ctx.lineJoin = 'round'; ctx.strokeStyle = '#000';
+        // 날개 (포신 받침)
+        for (const s of [-1, 1]) {
+          ctx.fillStyle = '#475569'; ctx.lineWidth = 6;
+          ctx.beginPath(); ctx.moveTo(s * 60, -40); ctx.lineTo(s * 200, -10); ctx.lineTo(s * 190, 60); ctx.lineTo(s * 60, 50); ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#1e293b'; ctx.fillRect(s * 110 - 16, 30, 32, 50); ctx.strokeRect(s * 110 - 16, 30, 32, 50);   // 기관총 포신
+          ctx.fillStyle = this.pattern === 0 && this.rest === 0 && this.age % 6 < 3 ? '#fde047' : '#ef4444';
+          ctx.beginPath(); ctx.arc(s * 110, 82, 9, 0, TAU); ctx.fill();
+          ctx.fillStyle = '#ef4444'; ctx.fillRect(s * 175 - 8, 0, 16, 30);                                            // 날개 끝 램프
+        }
+        // 몸통
+        ctx.fillStyle = '#7f1d1d'; ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.moveTo(-90, -80); ctx.lineTo(90, -80); ctx.lineTo(110, 40); ctx.lineTo(60, 100); ctx.lineTo(-60, 100); ctx.lineTo(-110, 40); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#991b1b'; ctx.fillRect(-90, -80, 180, 26);
+        // 뿔 (기계두목)
+        ctx.fillStyle = '#facc15'; ctx.lineWidth = 5;
+        for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * 50, -78); ctx.lineTo(s * 110, -150); ctx.lineTo(s * 80, -70); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+        // 얼굴: 성난 눈 + 이빨
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(-70, -40, 140, 60);
+        ctx.fillStyle = angry ? '#fde047' : '#ef4444';
+        ctx.beginPath(); ctx.moveTo(-60, -30); ctx.lineTo(-14, -14); ctx.lineTo(-60, -4); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(60, -30); ctx.lineTo(14, -14); ctx.lineTo(60, -4); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#e2e8f0';
+        for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(i * 16 - 7, 30); ctx.lineTo(i * 16, 48); ctx.lineTo(i * 16 + 7, 30); ctx.closePath(); ctx.fill(); }
+        // 코어 (레이저 발사구)
+        const glow = 10 + Math.sin(this.age * 0.2) * 4;
+        ctx.fillStyle = this.pattern === 2 && this.rest === 0 ? '#fde047' : '#38bdf8';
+        ctx.beginPath(); ctx.arc(0, 78, 18 + glow * 0.3, 0, TAU); ctx.fill(); ctx.lineWidth = 4; ctx.stroke();
+        // 분노 시 연기
+        if (angry) {
+          for (let i = 0; i < 3; i++) {
+            const k = ((this.age + i * 20) % 60) / 60;
+            ctx.fillStyle = `rgba(60,60,60,${0.5 * (1 - k)})`;
+            ctx.beginPath(); ctx.arc(-120 + i * 110, -60 - k * 80, 18 + k * 20, 0, TAU); ctx.fill();
+          }
+        }
+        ctx.restore();
       }
 
       fireAtPlayer(speed) {
@@ -4615,10 +4808,390 @@
           ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(-90, -82, 180, 7);
           ctx.fillStyle = '#f43f5e'; ctx.fillRect(-90, -82, 180 * fHpRatio, 7);
           ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.strokeRect(-90, -82, 180, 7);
+        } else if (this.type === 20) {
+          this.drawBoss();
         } else if (this.type >= 9) {
           this.drawNew();
         }
 
+        ctx.restore();
+      }
+    }
+
+    // =============================================================
+    // ★ (V 3.7) 라운드 1 배경: 불타는 도시 · 산 · 강 (세로 무한 루프)
+    //   정적인 지형은 오프스크린 캔버스에 한 번만 굽고, 불꽃과 연기만 매 프레임 그린다.
+    //   텍스처 높이 = HEIGHT, 위아래 경계를 넘는 지형은 두 번 그려 이음새가 없게 했다.
+    // =============================================================
+    function createGroundTexture() {
+      const off = document.createElement('canvas');
+      off.width = WIDTH; off.height = HEIGHT;
+      const c = off.getContext('2d');
+      const H = HEIGHT;
+      let sd = 9001;
+      const R = () => seedRandom(sd++);
+      const wrap = (fn) => { fn(0); fn(-H); fn(H); };     // 이음새 없이 위아래로 3번
+
+      // 1) 그을린 땅
+      const g = c.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, '#2a1b14'); g.addColorStop(0.5, '#23170f'); g.addColorStop(1, '#2a1b14');
+      c.fillStyle = g; c.fillRect(0, 0, WIDTH, H);
+      for (let i = 0; i < 90; i++) {
+        const x = R() * WIDTH, y = R() * H, r = 20 + R() * 70;
+        c.fillStyle = R() < 0.5 ? 'rgba(0,0,0,0.18)' : 'rgba(90,55,30,0.14)';
+        wrap(o => { c.beginPath(); c.arc(x, y + o, r, 0, Math.PI * 2); c.fill(); });
+      }
+
+      // 2) 산 (위에서 본 능선: 겹친 다각형 + 능선 줄 + 용암 틈)
+      const mountains = [[120, 260], [690, 620], [140, 1080], [640, 1320]];
+      mountains.forEach(([mx, my]) => {
+        for (let k = 0; k < 5; k++) {
+          const cx = mx + (R() - 0.5) * 120, cy = my + (R() - 0.5) * 120, rr = 70 + R() * 70;
+          const pts = [];
+          for (let a = 0; a < 9; a++) { const ang = a / 9 * Math.PI * 2; const d = rr * (0.7 + R() * 0.45); pts.push([Math.cos(ang) * d, Math.sin(ang) * d]); }
+          const shade = 40 + k * 7;
+          wrap(o => {
+            c.fillStyle = `rgb(${shade + 18}, ${shade}, ${shade - 12})`;
+            c.beginPath(); pts.forEach(([px, py], i) => i ? c.lineTo(cx + px, cy + py + o) : c.moveTo(cx + px, cy + py + o)); c.closePath(); c.fill();
+            c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 3;
+            c.beginPath(); c.moveTo(cx + pts[0][0] * 0.8, cy + pts[0][1] * 0.8 + o); c.lineTo(cx, cy + o); c.lineTo(cx + pts[5][0] * 0.8, cy + pts[5][1] * 0.8 + o); c.stroke();
+          });
+        }
+        wrap(o => {   // 용암 틈
+          c.strokeStyle = 'rgba(234, 88, 12, 0.55)'; c.lineWidth = 3;
+          c.beginPath(); c.moveTo(mx - 50, my - 20 + o); c.lineTo(mx - 10, my + 10 + o); c.lineTo(mx + 30, my - 5 + o); c.lineTo(mx + 60, my + 25 + o); c.stroke();
+        });
+      });
+
+      // 3) 강 (사인 곡선, 한 주기가 텍스처 높이와 같아 이음새가 없다)
+      const riverX = (y) => 400 + Math.sin(y / H * Math.PI * 2) * 170 + Math.sin(y / H * Math.PI * 4) * 50;
+      const riverPath = (o) => { c.beginPath(); for (let y = -20; y <= H + 20; y += 10) { const x = riverX(y); y === -20 ? c.moveTo(x, y + o) : c.lineTo(x, y + o); } };
+      c.lineCap = 'round'; c.lineJoin = 'round';
+      riverPath(0); c.strokeStyle = '#3b3322'; c.lineWidth = 110; c.stroke();   // 강둑
+      riverPath(0); c.strokeStyle = '#17304d'; c.lineWidth = 80; c.stroke();    // 물
+      riverPath(0); c.strokeStyle = 'rgba(251, 146, 60, 0.18)'; c.lineWidth = 40; c.stroke();   // 불빛 반사
+      c.strokeStyle = 'rgba(147, 197, 253, 0.25)'; c.lineWidth = 2;
+      for (let y = 0; y < H; y += 46) { const x = riverX(y); c.beginPath(); c.moveTo(x - 18, y); c.lineTo(x + 14, y + 6); c.stroke(); }
+      // 다리 2개 (한 곳은 끊어짐)
+      [[330, false], [1010, true]].forEach(([by, broken]) => {
+        const bx = riverX(by);
+        c.fillStyle = '#4b5563'; c.fillRect(bx - 75, by - 10, broken ? 55 : 150, 20);
+        if (broken) c.fillRect(bx + 25, by - 10, 50, 20);
+        c.strokeStyle = '#1f2937'; c.lineWidth = 2; c.strokeRect(bx - 75, by - 10, 150, 20);
+      });
+
+      // 4) 도시 블록 (강·산을 피해 배치) + 도로
+      const blocks = [];
+      for (let i = 0; i < 70; i++) {
+        const y = R() * H, x = 40 + R() * (WIDTH - 80);
+        if (Math.abs(x - riverX(y)) < 110) continue;
+        if (mountains.some(([mx, my]) => Math.hypot(x - mx, y - my) < 170)) continue;
+        blocks.push([x, y, 26 + R() * 34, 22 + R() * 30, R()]);
+      }
+      c.strokeStyle = 'rgba(120, 100, 80, 0.35)'; c.lineWidth = 8; c.lineCap = 'butt';
+      for (let y = 90; y < H; y += 260) wrap(o => { c.beginPath(); c.moveTo(0, y + o); c.lineTo(WIDTH, y + o); c.stroke(); });
+      blocks.forEach(([x, y, w, h, k]) => wrap(o => {
+        if (k < 0.3) {                       // 무너진 잔해
+          c.fillStyle = '#3f3a36'; c.beginPath(); c.moveTo(x - w / 2, y + h / 2 + o); c.lineTo(x - w / 4, y - h / 2 + o); c.lineTo(x + w / 3, y - h / 4 + o); c.lineTo(x + w / 2, y + h / 2 + o); c.closePath(); c.fill();
+          c.fillStyle = 'rgba(0,0,0,0.5)'; c.beginPath(); c.arc(x, y + o, w * 0.6, 0, Math.PI * 2); c.fill();
+        } else {                             // 서 있는 건물 (옥상 + 그림자)
+          c.fillStyle = 'rgba(0,0,0,0.4)'; c.fillRect(x - w / 2 + 6, y - h / 2 + 6 + o, w, h);
+          c.fillStyle = k < 0.65 ? '#4b5563' : '#57534e'; c.fillRect(x - w / 2, y - h / 2 + o, w, h);
+          c.fillStyle = 'rgba(255,255,255,0.08)'; c.fillRect(x - w / 2, y - h / 2 + o, w, 4);
+          c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(x - w / 4, y - h / 4 + o, w / 2, h / 2);
+        }
+      }));
+      return { img: off, blocks, riverX };
+    }
+    const groundTex = createGroundTexture();
+    let groundScroll = 0;
+
+    // 불꽃 위치 (텍스처 좌표) — 서 있는 건물과 잔해 위에서 탄다
+    const groundFires = [];
+    (function initFires() {
+      let sd = 4242;
+      const pick = groundTex.blocks.filter((b, i) => i % 3 === 0).slice(0, 18);
+      pick.forEach(([x, y, w]) => groundFires.push({ x, y, s: 0.7 + seedRandom(sd++) * 0.8, ph: seedRandom(sd++) * 6.28 }));
+    })();
+    // 불빛 스프라이트 (흐림 계산은 최초 1회)
+    const fireGlow = (() => {
+      try {
+        const o = document.createElement('canvas'); o.width = 120; o.height = 120;
+        const c = o.getContext('2d');
+        const rg = c.createRadialGradient(60, 60, 4, 60, 60, 60);
+        rg.addColorStop(0, 'rgba(253, 186, 116, 0.75)'); rg.addColorStop(0.4, 'rgba(234, 88, 12, 0.35)'); rg.addColorStop(1, 'rgba(234, 88, 12, 0)');
+        c.fillStyle = rg; c.fillRect(0, 0, 120, 120);
+        return o;
+      } catch (e) { return null; }
+    })();
+
+    function drawGroundBackground(advance) {
+      const H = HEIGHT;
+      if (advance) groundScroll = (groundScroll + 2.4 * (baseSpeed / 14)) % H;
+      const y0 = groundScroll;
+      ctx.drawImage(groundTex.img, 0, y0 - H);
+      ctx.drawImage(groundTex.img, 0, y0);
+      // 불꽃 + 연기
+      const tt = frameCount * 0.25;
+      for (let i = 0; i < groundFires.length; i++) {
+        const f = groundFires[i];
+        let y = f.y + y0; if (y > H + 60) y -= H;
+        if (y < -80 || y > H + 60) continue;
+        const fl = 1 + Math.sin(tt + f.ph) * 0.15;
+        if (fireGlow) ctx.drawImage(fireGlow, f.x - 45 * f.s * fl, y - 45 * f.s * fl, 90 * f.s * fl, 90 * f.s * fl);
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath(); ctx.moveTo(f.x - 10 * f.s, y + 6); ctx.lineTo(f.x, y - (26 + Math.sin(tt * 1.7 + f.ph) * 6) * f.s); ctx.lineTo(f.x + 10 * f.s, y + 6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath(); ctx.moveTo(f.x - 5 * f.s, y + 4); ctx.lineTo(f.x, y - (14 + Math.sin(tt * 2.3 + f.ph) * 4) * f.s); ctx.lineTo(f.x + 5 * f.s, y + 4); ctx.closePath(); ctx.fill();
+        const k = ((frameCount + f.ph * 40) % 90) / 90;
+        ctx.fillStyle = `rgba(60, 50, 45, ${0.35 * (1 - k)})`;
+        ctx.beginPath(); ctx.arc(f.x + k * 18, y - 30 * f.s - k * 70, (10 + k * 22) * f.s, 0, Math.PI * 2); ctx.fill();
+      }
+      // 전투 중인 도시 느낌: 화면 전체를 살짝 붉게
+      ctx.fillStyle = 'rgba(80, 20, 10, 0.12)';
+      ctx.fillRect(0, 0, WIDTH, H);
+    }
+
+    // =============================================================
+    // ★ (V 3.7) 라운드 시스템
+    //   라운드 1 = 0 ~ 10만점 (불타는 도시), 라운드 2 = 10만 ~ 20만점 (우주)
+    //   10만점 도달: 남은 적·적탄 전멸 -> 1초 뒤 컷신 4초 -> 라운드 2 시작 (난이도 3 정도로 내려갔다가 다시 가파르게)
+    //   15만점 이후: 배경에 외계인 모선이 보인다
+    // =============================================================
+    const ROUND2_SCORE = 100000;
+    const MOTHERSHIP_SCORE = 150000;
+    const ROUND_CUT_LEAD = 60;      // 전멸 후 게임 화면 1초
+    const ROUND_CUT_DURATION = 240; // 컷신 4초
+    let round = 1;
+    let roundCutActive = false;
+    let roundClearing = false;      // (V 3.9) 10만점 도달 -> 새 적 멈춤, 남은 적 정리 대기
+    let roundClearTimer = 0;
+    const ROUND_CLEAR_MAX = 60 * 20; // 20초가 지나도 남아 있는 잡몹은 폭발 (요새는 격파할 때까지 기다림)
+    let roundCutTimer = 0;
+    let roundBannerTimer = 0;       // 라운드 2 시작 배너
+    let mothershipBannerTimer = 0;
+    let mothershipBannerShown = false;
+
+    function startRoundCut() {
+      roundCutActive = true;
+      roundCutTimer = -ROUND_CUT_LEAD;
+      enemies.forEach(e => createExplosion(e.x, e.y, (e.radius || 20) * 1.5, '#f59e0b', 24));
+      enemies.length = 0;
+      enemyBullets.length = 0;
+      bombFx = null;
+      playExplosionSound(true);
+    }
+    function finishRoundCut() {
+      roundCutActive = false;
+      round = 2;
+      roundBannerTimer = 150;
+      historyData.length = 0;       // 라운드 1 로 되감기지 않게 기록을 비운다
+      snapshotSkip = 0;
+      enemyPhaseIndex = -1;
+      playerX = targetX = WIDTH / 2;
+      playerY = targetY = HEIGHT * 0.8;
+      playerInvulnerable = Math.max(playerInvulnerable, 120);
+      lastTouchX = null; lastTouchY = null;
+    }
+
+    // 게임 배경: 라운드 1 = 땅, 라운드 2 = 우주 (+15만점 모선)
+    function drawStageBackground() {
+      if (round === 1) { drawGroundBackground(true); return; }
+      drawSpaceBackground();
+      if (score >= MOTHERSHIP_SCORE) {
+        const k = Math.min(1, (score - MOTHERSHIP_SCORE) / (DIFFICULTY_CAP_SCORE - MOTHERSHIP_SCORE));
+        ctx.save();
+        ctx.globalAlpha = 0.42 + k * 0.18;
+        drawMothership(WIDTH / 2 + Math.sin(frameCount * 0.004) * 40, 150 + k * 60, 1.25 + k * 0.6, 0);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = 'rgba(5, 6, 13, 0.25)';      // 앞쪽 전투와 구분되도록 살짝 어둡게
+        ctx.fillRect(0, 0, WIDTH, 420);
+        ctx.restore();
+      }
+    }
+    // 되감기 화면용 (스크롤·애니메이션 진행 없이)
+    function drawStageBackdropStatic() {
+      if (round === 1) drawGroundBackground(false);
+      else ctx.drawImage(spaceTexture, 0, 0);
+    }
+
+    // 게임 중 배너 (전멸 직후 ROUND 1 CLEAR / 라운드 2 시작 / 모선 포착)
+    function drawRoundBanners() {
+      if (roundCutActive && roundCutTimer <= 0) {
+        const k = Math.min(1, (roundCutTimer + ROUND_CUT_LEAD) / 12);
+        ctx.save(); ctx.globalAlpha = k;
+        introText('ROUND 1', WIDTH / 2, 560, 56, '#f8fafc', 'center', '#1e3a8a');
+        introText('CLEAR!!', WIDTH / 2, 650, 86, '#facc15', 'center', '#b91c1c');
+        ctx.restore();
+      }
+      if (roundBannerTimer > 0) {
+        roundBannerTimer--;
+        const a = Math.min(1, roundBannerTimer / 20, (150 - roundBannerTimer) / 10);
+        ctx.save(); ctx.globalAlpha = a;
+        introText('ROUND 2', WIDTH / 2, 470, 80, '#38bdf8', 'center', '#1e3a8a');
+        introText('목표: 외계인 모선!', WIDTH / 2, 560, 44, '#f8fafc', 'center', '#7f1d1d');
+        ctx.restore();
+      }
+      if (round === 2 && !mothershipBannerShown && score >= MOTHERSHIP_SCORE) {
+        mothershipBannerShown = true; mothershipBannerTimer = 130;
+      }
+      if (mothershipBannerTimer > 0) {
+        mothershipBannerTimer--;
+        const a = Math.min(1, mothershipBannerTimer / 20, (130 - mothershipBannerTimer) / 8);
+        ctx.save(); ctx.globalAlpha = a;
+        if (Math.floor(mothershipBannerTimer / 8) % 2 === 0) introText('⚠ 적 모선 포착 ⚠', WIDTH / 2, 520, 50, '#facc15', 'center', '#7f1d1d');
+        ctx.restore();
+      }
+    }
+
+    // 라운드 전환 컷신 (4초): 파일럿 독백 -> 우주로 급상승
+    function drawRoundCut(T) {
+      // 배경: 앞 절반은 땅이 빠르게 흐르고, 뒤 절반은 우주로 바뀐다
+      if (T < 150) {
+        for (let i = 0; i < 3; i++) drawGroundBackground(true);
+      } else {
+        drawSpaceBackground(); drawSpaceBackground();
+      }
+      ctx.fillStyle = 'rgba(8, 10, 18, 0.5)'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      // 집중선
+      ctx.save(); ctx.globalAlpha = 0.35; ctx.strokeStyle = T < 150 ? '#f97316' : '#38bdf8'; ctx.lineWidth = 8;
+      for (let i = 0; i < 26; i++) {
+        const a = Math.PI * 2 / 26 * i + T * 0.02;
+        ctx.beginPath(); ctx.moveTo(WIDTH / 2 + Math.cos(a) * 260, 620 + Math.sin(a) * 260); ctx.lineTo(WIDTH / 2 + Math.cos(a) * 1400, 620 + Math.sin(a) * 1400); ctx.stroke();
+      }
+      ctx.restore();
+      // 컷인 띠 + 파일럿
+      const e = 1 - Math.pow(1 - Math.min(1, T / 14), 3);
+      ctx.save(); ctx.translate(WIDTH / 2, 620); ctx.rotate(-0.05);
+      ctx.fillStyle = 'rgba(8, 10, 18, 0.92)'; ctx.fillRect(-WIDTH, -190, WIDTH * 2, 380);
+      ctx.strokeStyle = '#facc15'; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(-WIDTH, -190); ctx.lineTo(WIDTH, -190); ctx.moveTo(-WIDTH, 190); ctx.lineTo(WIDTH, 190); ctx.stroke();
+      ctx.restore();
+      const sh = T < 24 || (T >= 150 && T < 166) ? (Math.random() - 0.5) * 10 : 0;
+      drawPilotFace(-140 + (WIDTH * 0.24 + 140) * e + sh, 620 + sh, 1.55);
+      // 독백
+      const lx = WIDTH * 0.63;
+      if (T >= 18) introText('좋았어!', lx, 520, 76, '#facc15', 'center', '#b91c1c');
+      if (T >= 70) introText('기왕 이렇게 된 김에', lx, 625, 38, '#f8fafc', 'center');
+      if (T >= 110) {
+        const pop = Math.min(1, (T - 110) / 8), sz = 44 * (1.4 - 0.4 * pop);
+        introText('외계인의 모선까지', lx, 700, sz, '#f8fafc', 'center', '#1e3a8a');
+        introText('간다!!', lx, 700 + sz * 1.25, sz * 1.3, '#ef4444', 'center', '#450a0a');
+      }
+      // 급상승하는 기체
+      if (T >= 150) {
+        const k = (T - 150) / 90, jy = 1300 - k * k * 1700;
+        ctx.fillStyle = T % 4 < 2 ? '#f97316' : '#facc15';
+        ctx.beginPath(); ctx.moveTo(WIDTH / 2 - 16, jy + 40); ctx.lineTo(WIDTH / 2, jy + 160); ctx.lineTo(WIDTH / 2 + 16, jy + 40); ctx.closePath(); ctx.fill();
+        ctx.save(); ctx.translate(WIDTH / 2, jy); ctx.scale(2, 2); drawPlayer(0, 0, 0); ctx.restore();
+      }
+      introPixel('ROUND 1 CLEAR', WIDTH / 2, 180, 30, '#94a3b8');
+      if (T >= 150) introPixel('>> ROUND 2', WIDTH / 2, 1180, 34, '#38bdf8');
+      // 전환 섬광
+      if (T >= 146 && T < 156) { ctx.fillStyle = `rgba(255,255,255,${1 - (T - 146) / 10})`; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
+      if (T > 225) { ctx.fillStyle = `rgba(255,255,255,${(T - 225) / 15})`; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
+    }
+
+    // =============================================================
+    // ★ (V 3.8) 최종 보스 "모선 코어 · 대왕 기계두목" (Type 20)
+    //   20만점 도달 -> 잡몹 전멸 -> 경고 연출 -> 보스 등장 -> 격파 시 엔딩.
+    //   체력: POWER 100% 기준 약 30초 (명중률 50% 가정) — FINAL_BOSS_HP 참고
+    //   패턴 3종을 순서대로 반복:
+    //     1) 기관총: 좌우 포신에서 빠른 조준탄 연사 (조금씩 흔들림)
+    //     2) 와이드샷: 넓은 부채꼴 3연속 (틈이 번갈아 바뀜)
+    //     3) 삼중 레이저: 3곳 동시 경고선 1.2초 -> 굵은 레이저 0.8초 (한 번은 가운데, 한 번은 양옆으로 이동)
+    //   체력 50% 이하: 패턴 사이 휴식이 짧아지고 기관총 탄 수가 늘어난다.
+    // =============================================================
+    const FINAL_BOSS_SCORE = 200000;
+    // 체력 300: 실제 아군 탄으로 측정 (POWER 100%, 보스 아래에 머무는 시간 50~70%)
+    //   비행기 약 27~32초 / 로봇 합체 약 22초 / POWER 40% 약 42초
+    const FINAL_BOSS_HP = 300;
+    let finalBossPhase = 0;                  // 0 = 아직 / 1 = 경고 연출 / 2 = 전투 / 3 = 격파 연출
+    let finalBossTimer = 0;
+    let finalBoss = null;
+
+    function startFinalBoss() {
+      finalBossPhase = 1;
+      finalBossTimer = 0;
+      enemies.forEach(e => createExplosion(e.x, e.y, (e.radius || 20) * 1.4, '#f59e0b', 20));
+      enemies.length = 0;
+      enemyBullets.length = 0;
+      bombFx = null;
+      stopBGM();
+      playExplosionSound(true);
+    }
+    function spawnFinalBoss() {
+      finalBoss = new Enemy(20);
+      enemies.push(finalBoss);
+      finalBossPhase = 2;
+      finalBossTimer = 0;
+      startBGM();
+    }
+    function defeatFinalBoss(b) {
+      finalBossPhase = 3;
+      finalBossTimer = 0;
+      finalBoss = b;                           // 격파 연출용 위치 보존
+      enemyBullets.length = 0;
+      playExplosionSound(true);
+      stopBGM();
+    }
+    // 매 프레임 (적 업데이트 전에 호출): 경고 -> 등장 -> 격파 연출 -> 엔딩
+    function updateFinalBoss() {
+      if (finalBossPhase === 0) {
+        if (score >= FINAL_BOSS_SCORE && round === 2 && !isVictoryState && !roundCutActive &&
+            !isRewinding && !isCombining && !isPilotCutin) startFinalBoss();
+        return;
+      }
+      finalBossTimer++;
+      if (finalBossPhase === 1) {
+        if (finalBossTimer % 30 === 1) endingSfx(s => { powerTone(440, s, 0.18, 'square', 0.12); powerTone(330, s + 0.2, 0.18, 'square', 0.12); });
+        if (finalBossTimer >= 150) spawnFinalBoss();
+      } else if (finalBossPhase === 3) {
+        const b = finalBoss;
+        if (b && finalBossTimer % 6 === 1) {
+          createExplosion(b.x + (Math.random() - 0.5) * 300, b.y + (Math.random() - 0.5) * 160, 70, Math.random() < 0.5 ? '#f59e0b' : '#ef4444', 30);
+          if (finalBossTimer % 18 === 1) playExplosionSound(true);
+        }
+        if (finalBossTimer >= 150) { finalBossPhase = 4; finalBoss = null; triggerVictory(); }
+      }
+    }
+    // 보스 전용 화면 효과 (게임 화면 위)
+    function drawFinalBossOverlay() {
+      if (finalBossPhase === 1) {
+        const T = finalBossTimer;
+        ctx.save();
+        ctx.fillStyle = `rgba(127, 29, 29, ${0.25 + 0.15 * Math.sin(T * 0.25)})`;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        // 위아래 경고 띠
+        for (const y of [360, 900]) {
+          ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, y - 34, WIDTH, 68);
+          ctx.fillStyle = '#facc15';
+          for (let x = -80 + (T * 4) % 80; x < WIDTH; x += 80) {
+            ctx.beginPath(); ctx.moveTo(x, y - 34); ctx.lineTo(x + 40, y - 34); ctx.lineTo(x + 10, y + 34); ctx.lineTo(x - 30, y + 34); ctx.closePath(); ctx.fill();
+          }
+        }
+        if (Math.floor(T / 10) % 2 === 0) introPixel('WARNING', WIDTH / 2, 520, 64, '#ef4444');
+        introText('최종 보스 접근!!', WIDTH / 2, 640, 56, '#facc15', 'center', '#7f1d1d');
+        introText('대왕 기계두목', WIDTH / 2, 730, 40, '#f8fafc', 'center', '#1e3a8a');
+        ctx.restore();
+      }
+      if (finalBossPhase === 2 && finalBoss) {
+        // 화면 위 체력 바
+        const b = finalBoss, k = Math.max(0, b.hp / b.maxHp);
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(60, 180, WIDTH - 120, 30);
+        ctx.fillStyle = k > 0.5 ? '#ef4444' : (Math.floor(frameCount / 6) % 2 ? '#facc15' : '#ef4444');
+        ctx.fillRect(64, 184, (WIDTH - 128) * k, 22);
+        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 3; ctx.strokeRect(60, 180, WIDTH - 120, 30);
+        introPixel('BOSS', 60, 160, 22, '#f8fafc', 'left');
+        ctx.restore();
+      }
+      if (finalBossPhase === 3) {
+        const T = finalBossTimer;
+        ctx.save();
+        if (T < 10) { ctx.fillStyle = `rgba(255,255,255,${1 - T / 10})`; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
+        if (T > 30) introText('격파!!', WIDTH / 2, 620, 110, '#facc15', 'center', '#b91c1c');
+        if (T > 130) { ctx.fillStyle = `rgba(255,255,255,${(T - 130) / 20})`; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
         ctx.restore();
       }
     }
@@ -4654,7 +5227,7 @@
       // ★ 정지형 연출(컷인/합체) 중에는 한 프레임에 1스텝만 진행한다.
       //   고정 타임스텝은 밀린 시간을 따라잡기 위해 한 프레임에 최대 3스텝을 돌리는데,
       //   화면은 마지막 스텝만 보이므로 연출이 2~3배 빠르게 지나가 버린다.
-      const inCutscene = isPilotCutin || isCombining || endingActive;
+      const inCutscene = isPilotCutin || isCombining || endingActive || (roundCutActive && roundCutTimer > 0);
       const maxSteps = inCutscene ? 1 : MAX_STEPS_PER_FRAME;
       while (accumulator >= FIXED_STEP && steps < maxSteps) {
         accumulator -= FIXED_STEP;
@@ -4712,7 +5285,20 @@
       }
 
       // 1~2. 배경 렌더 (심우주 고정 배경 + 별 스크롤)
-      drawSpaceBackground();
+      drawStageBackground();
+
+      // ★ (V 3.7) 라운드 전환 컷신 (전멸 후 1초는 게임 화면 그대로, 이후 4초 컷신)
+      if (roundCutActive) {
+        roundCutTimer++;
+        if (roundCutTimer > 0) {
+          ctx.save();
+          try { drawRoundCut(roundCutTimer - 1); } finally { ctx.restore(); }
+          if (roundCutTimer >= ROUND_CUT_DURATION) finishRoundCut();
+          drawVignette();
+          drawScanlines();
+          return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
+        }
+      }
 
       // ★ 20만점 엔딩 (리드인 0.75초는 게임 화면 그대로, 이후 10초 컷신)
       if (endingActive) {
@@ -5114,6 +5700,7 @@
               if (se.angle !== undefined) ne.angle = se.angle;
               if (se.vx !== undefined) ne.vx = se.vx;
               if (se.vy !== undefined) ne.vy = se.vy;
+              if (se.type === 20) continue;          // (V 3.8) 보스는 되감지 않는다 (아래에서 현재 보스를 다시 넣음)
               if (se.type === 1 && se.bx !== undefined) {
                 ne.baseX = se.bx; ne.phase = se.ph; ne.amplitude = se.amp; ne.speedY = se.sy; ne.fired = se.fired;
               }
@@ -5123,6 +5710,7 @@
             }
           }
 
+          if (finalBoss && finalBossPhase === 2) { finalBoss.lasers = []; enemies.push(finalBoss); }
           // 총알은 단순 데이터이므로 배열 내용만 옮긴다 (배열 객체는 유지)
           enemyBullets.length = 0;
           for (let bi = 0; bi < snap.ebullets.length; bi++) enemyBullets.push(snap.ebullets[bi]);
@@ -5155,7 +5743,7 @@
         const snap = historyData[snapIdx];
 
         // 되감기 중인 과거 장면 재생
-        ctx.drawImage(spaceTexture, 0, 0);
+        drawStageBackdropStatic();
         ctx.fillStyle = 'rgba(8, 12, 20, 0.45)';
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
@@ -5333,6 +5921,7 @@
               break;
             }
             hit = true;
+            if (enemy.type === 20) enemy.flash = 3;
             addHitFlash(pb.x, pb.y, 7);   // 피격 섬광
             createExplosion(pb.x, pb.y, 16, '#facc15', 8);
             playHitSound(); // 적기 피격 타격음 출력
@@ -5371,14 +5960,12 @@
               createExplosion(enemy.x, enemy.y, expRad, '#f59e0b', enemy.type === 7 ? 60 : 24);
               playExplosionSound(enemy.type === 7); // 적기 폭발 격추음 (준보스 시 묵직한 롱 럼블)
               const scores = { 1: 100, 2: 200, 3: 300, 4: 150, 5: 80, 6: 600, 7: 1500,
-                               9: 250, 10: 400, 11: 300, 12: 500, 13: 200, 14: 150, 15: 350, 16: 600, 17: 250, 18: 450, 19: 50 };
+                               9: 250, 10: 400, 11: 300, 12: 500, 13: 200, 14: 150, 15: 350, 16: 600, 17: 250, 18: 450, 19: 50, 20: 20000 };
               score += scores[enemy.type] || 100;
               updateScoreDisplay();
 
-              // 20만점 달성 시 승리 엔딩 체크 (전체 적 전멸 + 팡파레 + 꽃가루 비 + 승리 모달)
-              if (score >= 200000 && !isVictoryState) {
-                triggerVictory();
-              }
+              // (V 3.8) 20만점 -> 최종 보스 (updateFinalBoss 가 감지). 엔딩은 보스 격파 후.
+              if (enemy.type === 20) defeatFinalBoss(enemy);
 
               // ★ Power 아이템 드롭 (적 격추 시에만 출현)
               //   ① 게임 시작 후 첫 격추 -> 100%
@@ -5436,12 +6023,27 @@
       // -----------------------------------------------------------
       // 4. 적 생성 & 업데이트 & 렌더링 (일반 자코 + 그룹 편대 + 소형/중형/대형 자코)
       // -----------------------------------------------------------
-      if (gameStarted && !isGameOver && !isVictoryState) {
-        updateDifficulty(); // 점수 기반 난이도 배율 갱신 (10,000점당 +10%, 최대 6.0배)
+      // ★ (V 3.9) 10만점: 새 적 등장을 멈추고, 남은 적이 모두 죽거나 지나간 뒤 컷신
+      if (gameStarted && round === 1 && !roundCutActive && !isGameOver && !isVictoryState) {
+        if (!roundClearing && score >= ROUND2_SCORE) { roundClearing = true; roundClearTimer = 0; }
+        else if (roundClearing && score < ROUND2_SCORE) roundClearing = false;   // 리와인드로 점수가 돌아간 경우
+        if (roundClearing && !isRewinding && !isCombining && !isPilotCutin && !pendingCombine) {
+          roundClearTimer++;
+          const fortressLeft = enemies.some(e => e.type === 7);
+          if (enemies.length === 0 || (!fortressLeft && roundClearTimer >= ROUND_CLEAR_MAX)) {
+            roundClearing = false;
+            startRoundCut();
+          }
+        }
+      }
+      // ★ (V 3.8) 최종 보스 진행 (20만점 감지 -> 경고 -> 전투 -> 격파 -> 엔딩)
+      if (gameStarted && !isGameOver && !isVictoryState) updateFinalBoss();
+      if (gameStarted && !isGameOver && !isVictoryState && !roundCutActive && !roundClearing && finalBossPhase === 0) {
+        updateDifficulty(); // 점수 기반 난이도 배율 갱신
 
         // ★ 점수 구간별 등장 적 로테이션 (한 구간에 최대 5종)
         const phaseIdx = currentEnemyPhase();
-        const phaseTypes = ENEMY_PHASES[phaseIdx].types;
+        const phaseTypes = round === 2 ? ENEMY_PHASES_R2[phaseIdx - 100].types : ENEMY_PHASES[phaseIdx].types;
         if (phaseIdx !== enemyPhaseIndex) {
           enemyPhaseIndex = phaseIdx;
           // 요새(7)가 포함된 구간에 들어오면 약 15초 뒤 등장하도록 타이머를 당긴다
@@ -5539,11 +6141,14 @@
           const _pdx = playerX - enemy.x, _pdy = playerY - enemy.y;
           const _prr = enemy.radius + 8;
           if (_pdx * _pdx + _pdy * _pdy < _prr * _prr) {
-            enemy.dead = true;
-            createExplosion(enemy.x, enemy.y, 45, '#f59e0b', 24);
-            enemies.splice(i, 1);
-            hitPlayer();
-            continue;
+            if (enemy.type === 20) { hitPlayer(); }   // (V 3.8) 보스와 충돌: 피격만, 보스는 그대로
+            else {
+              enemy.dead = true;
+              createExplosion(enemy.x, enemy.y, 45, '#f59e0b', 24);
+              enemies.splice(i, 1);
+              hitPlayer();
+              continue;
+            }
           }
         }
 
@@ -5939,9 +6544,9 @@
             let aiCount = 0;
             for (let ci = 0; ci < clones.length; ci++) if (clones[ci].phase === 'ai') aiCount++;
             if (aiCount >= 2) {
-              isCombining = true;
-              combineTimer = 0;
-              enemyBullets.length = 0; // 순회 중이므로 재대입 금지
+              // (V 3.9) 폭탄 연출 중이면 폭탄이 끝난 다음에 합체한다
+              if (bombFx) pendingCombine = true;
+              else startCombine();
             }
           }
         } else if (c.phase === 'ai') {
@@ -6031,6 +6636,8 @@
 
       // ★ 폭탄 연출 (2초 지속, 게임은 계속 진행)
       updateBombFx();
+      drawRoundBanners();
+      drawFinalBossOverlay();
 
       // ★ 후처리: 비네팅 + CRT 스캔라인
       drawVignette();
@@ -6309,9 +6916,7 @@
       } else if (e.code === 'KeyO') {
         // O: 3단 합체 연출 강제 발동
         robotMode = false;
-        isCombining = true;
-        combineTimer = 0;
-        enemyBullets.length = 0;
+        startCombine();
       } else if (e.code === 'KeyI') {
         // I: 타임 리와인드 강제 발동
         if (!robotMode) triggerRewind();
