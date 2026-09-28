@@ -805,7 +805,7 @@
         <div class="copyright">&copy; 2026 DDKK GAMES.<br>ALL RIGHTS RESERVED</div>
       </div>
 
-      <div class="title-version">V 3.0</div>
+      <div class="title-version">V 3.5</div>
     </div>
 
     <div class="controls" id="controlsPanel" style="display:none;">
@@ -1185,6 +1185,39 @@
       ctx.globalAlpha = 1;
     }
 
+    // =============================================================
+    // ★ (V 3.5) 아군 탄 빛 번짐 스프라이트
+    //   이전: 탄 루프 전체에 shadowBlur=8 을 켜서 탄 본체 + 꼬리 전부에 실시간 흐림이 걸렸다.
+    //         (탄 색과 무관하게 파란 빛이 번졌고, 로봇/MAX 에서 흐림 그리기가 프레임당 70회 이상)
+    //   이후: 색별 빛 번짐을 오프스크린 캔버스에 한 번만 그려두고 drawImage 로 붙인다.
+    //         흐림 계산은 색마다 최초 1회뿐. 탄 크기·위치·판정은 그대로.
+    // =============================================================
+    const GLOW_PAD = 12;                 // shadowBlur 8 과 비슷하게 퍼지는 여백 (논리 px)
+    const glowCache = {};
+    function getBulletGlow(color, w, h) {
+      const key = color + '|' + w + '|' + h;
+      let g = glowCache[key];
+      if (g !== undefined) return g;
+      try {
+        const S = RENDER_SCALE_X;            // 실제 해상도로 구워 흐릿하지 않게
+        const cw = Math.ceil((w + GLOW_PAD * 2) * S), ch = Math.ceil((h + GLOW_PAD * 2) * S);
+        const off = document.createElement('canvas');
+        off.width = cw; off.height = ch;
+        const c = off.getContext('2d');
+        c.scale(S, S);
+        c.shadowColor = color;
+        c.shadowBlur = 8 * S;
+        c.fillStyle = color;
+        c.globalAlpha = 0.9;
+        c.fillRect(GLOW_PAD, GLOW_PAD, w, h);
+        g = { img: off, w: w + GLOW_PAD * 2, h: h + GLOW_PAD * 2 };
+      } catch (e) {
+        g = null;                           // 미지원 환경: 빛 번짐 없이 그린다
+      }
+      glowCache[key] = g;
+      return g;
+    }
+
     // [4] 총알 궤적 (잔상으로 속도감)
     function drawBulletTrail(x, y, len, w, color) {
       ctx.globalAlpha = 0.3;
@@ -1518,9 +1551,9 @@
     //   firePower = 시작 발사 속도 대비 '추가' 비율 (%). HUD 우측 상단에 표시.
     //   0% 시작 -> Power 1개당 +20% -> 10개 = +200% (최대)
     //   실제 발사 속도 = BASE_FIRE_RATE x (1 + firePower/100)
-    const BASE_FIRE_RATE = 0.8;       // (V 3.0) 시작 발사 속도 2배 (10프레임 간격)
+    const BASE_FIRE_RATE = 0.56;      // (V 3.1) V 3.0 기본(0.8)의 70% (약 14프레임 간격)
     const FIRE_POWER_MIN = 0;
-    const FIRE_POWER_MAX = 200;
+    const FIRE_POWER_MAX = 100;       // (V 3.1) POWER 5개 x 20% = +100% (최대)
     const FIRE_POWER_STEP = 20;
     const POWER_SCORE_STEP = 5000;    // 5,000점 구간마다 드롭 판정
     const POWER_DROP_CHANCE = 0.9;    // 구간 드롭 확률 90%
@@ -1625,7 +1658,8 @@
       introSkipBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        advanceIntro();
+        if (endingActive) finishEnding();
+        else advanceIntro();
       });
     }
 
@@ -2429,6 +2463,302 @@
     }
 
     // 20만점 달성 시 승리 엔딩 발동
+    // =============================================================
+    // ★ 20만점 엔딩 (V 3.2) — 코믹 10초, 컷 4개 x 2.5초
+    //   1. 외계인 모선이 백기를 든다
+    //   2. 외계인 대장: "사실… 토스트 냄새가 좋아서 왔어요"
+    //   3. 식탁에서 주인공과 외계인이 같이 토스트를 먹는다 (프롤로그 첫 컷의 부엌)
+    //   4. "3초 전의 나"들이 몰려와 "우리 빵은?!" -> 3초전대 임무 완료! THE END…?
+    //   엔딩 전 0.75초는 게임 화면에서 적 전멸 폭발을 보여준 뒤 멈춘다.
+    //   우측 상단 SKIP 버튼(인트로와 같은 버튼)으로 건너뛸 수 있다.
+    // =============================================================
+    const ENDING_CUT = 150;
+    const ENDING_DURATION = ENDING_CUT * 4;   // 600프레임 = 10초
+    const ENDING_LEAD_IN = 45;                // 폭발 감상 0.75초
+    let endingActive = false;
+    let endingTimer = 0;
+
+    function endingSfx(fn) {
+      if (!soundEnabled) return;
+      try {
+        initAudio();
+        if (!audioCtx || audioCtx.state === 'suspended') return;
+        fn(audioCtx.currentTime + 0.02);
+      } catch (e) { /* 사운드 실패 무시 */ }
+    }
+    function startEnding() {
+      endingActive = true;
+      endingTimer = -ENDING_LEAD_IN;
+      stopBGM();
+      setIntroUI(true);
+    }
+    function finishEnding() {
+      if (!endingActive) return;
+      endingActive = false;
+      setIntroUI(false);
+      createConfettiShower(300);
+      victoryScoreVal.innerText = score.toString().padStart(9, '0');
+      victoryOverlay.style.display = 'flex';
+      playVictoryAudio();
+    }
+
+    // --- 엔딩 그리기 도우미 ---
+    function endRR(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+    }
+    // 말풍선: 꼬리 끝 (tx, ty)
+    function endSpeech(x, y, w, h, lines, size, tx, ty) {
+      ctx.save();
+      ctx.lineJoin = 'round';
+      ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 5;
+      const cx = x + w / 2;
+      ctx.beginPath(); ctx.moveTo(cx - 22, y + h - 2); ctx.lineTo(tx, ty); ctx.lineTo(cx + 22, y + h - 2); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      endRR(x, y, w, h, 24); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - 20, y + h - 3); ctx.lineTo(cx + 20, y + h - 3);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 7; ctx.stroke();
+      ctx.fillStyle = '#111827';
+      ctx.font = `900 ${size}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      lines.forEach((ln, i) => ctx.fillText(ln, cx, y + h / 2 + (i - (lines.length - 1) / 2) * size * 1.25));
+      ctx.restore();
+    }
+    // 외계인: 초록 큰 머리, 눈 3개, 더듬이. mood = 'scared' | 'sorry' | 'happy'
+    function drawAlien(x, y, s, mood, t) {
+      ctx.save();
+      ctx.translate(x, y); ctx.scale(s, s);
+      ctx.lineJoin = 'round'; ctx.strokeStyle = '#000'; ctx.lineWidth = 5;
+      // 몸 (보라 망토)
+      ctx.fillStyle = '#6d28d9';
+      ctx.beginPath(); ctx.moveTo(-54, 150); ctx.lineTo(-34, 60); ctx.lineTo(34, 60); ctx.lineTo(54, 150); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      // 더듬이
+      for (const sd of [-1, 1]) {
+        const bob = Math.sin((t || 0) * 0.25 + sd) * 6;
+        ctx.beginPath(); ctx.moveTo(sd * 20, -52); ctx.quadraticCurveTo(sd * 34, -92, sd * 30 + bob, -112); ctx.stroke();
+        ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.arc(sd * 30 + bob, -114, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
+      // 머리
+      ctx.fillStyle = '#84cc16';
+      ctx.beginPath(); ctx.ellipse(0, 0, 70, 62, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      // 눈 3개
+      [[-30, -6], [30, -6], [0, -30]].forEach(([ex, ey], i) => {
+        const r = i === 2 ? 11 : 15;
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ex, ey, r, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
+        ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.arc(ex + (mood === 'happy' ? 0 : 2), ey + 2, r * 0.45, 0, Math.PI * 2); ctx.fill();
+      });
+      // 입 / 눈썹
+      ctx.lineWidth = 5; ctx.lineCap = 'round';
+      if (mood === 'happy') {
+        ctx.beginPath(); ctx.arc(0, 22, 18, 0.15, Math.PI - 0.15); ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.moveTo(-14, 34); ctx.quadraticCurveTo(0, 24, 14, 34); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-46, -30); ctx.lineTo(-18, -24); ctx.moveTo(46, -30); ctx.lineTo(18, -24); ctx.stroke();
+        // 식은땀
+        ctx.fillStyle = '#7dd3fc';
+        const dy = ((t || 0) * 1.5) % 30;
+        ctx.beginPath(); ctx.moveTo(64, -28 + dy); ctx.quadraticCurveTo(76, -10 + dy, 64, -4 + dy); ctx.quadraticCurveTo(52, -10 + dy, 64, -28 + dy); ctx.fill();
+      }
+      ctx.lineCap = 'butt';
+      ctx.restore();
+    }
+    function drawMothership(x, y, s, shake) {
+      ctx.save();
+      ctx.translate(x + (Math.random() - 0.5) * shake, y + (Math.random() - 0.5) * shake);
+      ctx.scale(s, s);
+      ctx.lineJoin = 'round'; ctx.strokeStyle = '#000'; ctx.lineWidth = 6;
+      ctx.fillStyle = '#a5f3fc'; ctx.beginPath(); ctx.ellipse(0, -40, 110, 70, 0, Math.PI, 0); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#64748b'; ctx.beginPath(); ctx.ellipse(0, 0, 300, 70, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#334155'; ctx.beginPath(); ctx.ellipse(0, 20, 230, 34, 0, 0, Math.PI); ctx.fill();
+      for (let i = -3; i <= 3; i++) {
+        ctx.fillStyle = (Math.floor(Date.now() / 150) + i) % 2 ? '#facc15' : '#ef4444';
+        ctx.beginPath(); ctx.arc(i * 72, 8, 12, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 3; ctx.stroke();
+      }
+      // 반창고 (전투 흔적)
+      ctx.fillStyle = '#fde68a'; ctx.save(); ctx.translate(-150, -18); ctx.rotate(0.4); ctx.fillRect(-32, -10, 64, 20); ctx.lineWidth = 3; ctx.strokeRect(-32, -10, 64, 20); ctx.restore();
+      ctx.save(); ctx.translate(-150, -18); ctx.rotate(-0.4); ctx.fillRect(-32, -10, 64, 20); ctx.lineWidth = 3; ctx.strokeRect(-32, -10, 64, 20); ctx.restore();
+      ctx.restore();
+    }
+    function drawKitchen(tint) {
+      const wall = ctx.createLinearGradient(0, 140, 0, 1180);
+      wall.addColorStop(0, tint ? '#fecdd3' : '#fde68a'); wall.addColorStop(1, '#fb923c');
+      ctx.fillStyle = wall; ctx.fillRect(0, 140, WIDTH, 1040);
+      ctx.fillStyle = '#7dd3fc'; ctx.fillRect(60, 220, 280, 240);
+      ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(260, 300, 40, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#78350f'; ctx.lineWidth = 12; ctx.strokeRect(60, 220, 280, 240);
+      ctx.beginPath(); ctx.moveTo(200, 220); ctx.lineTo(200, 460); ctx.moveTo(60, 340); ctx.lineTo(340, 340); ctx.stroke();
+      // TV: 평화 뉴스
+      ctx.fillStyle = '#1f2937'; ctx.fillRect(450, 300, 310, 240);
+      ctx.fillStyle = '#111827'; ctx.fillRect(580, 540, 50, 40);
+      ctx.fillStyle = '#1d4ed8'; ctx.fillRect(470, 320, 270, 170);
+      introText('평화 속보', 605, 360, 32, '#facc15');
+      ctx.fillStyle = '#f472b6';
+      ctx.beginPath(); ctx.moveTo(605, 460); ctx.bezierCurveTo(560, 425, 575, 395, 605, 415); ctx.bezierCurveTo(635, 395, 650, 425, 605, 460); ctx.fill();
+      ctx.fillStyle = '#92400e'; ctx.fillRect(0, 1010, WIDTH, 170);
+      ctx.fillStyle = '#78350f'; ctx.fillRect(0, 1010, WIDTH, 16);
+    }
+
+    function drawEnding(T) {
+      const cut = Math.min(3, Math.floor(T / ENDING_CUT));
+      const t = T - cut * ENDING_CUT;
+      const sub = (a, b, colA, colB) => {
+        introText(a, WIDTH / 2, b ? 1255 : 1290, 42, colA || '#f8fafc');
+        if (b) introText(b, WIDTH / 2, 1330, 42, colB || '#f8fafc');
+      };
+
+      if (cut === 0) {
+        // ── 컷 1: 모선이 백기를 든다 ──
+        if (t === 1) endingSfx(s => powerTone(98, s, 0.9, 'triangle', 0.3, 60));
+        if (t === 45) endingSfx(s => {             // 뿌앙~ 실패 트롬본
+          [392, 370, 349].forEach((f, i) => powerTone(f, s + i * 0.22, 0.2, 'square', 0.11));
+          powerTone(330, s + 0.66, 0.7, 'square', 0.11, 311, 6);
+        });
+        const sky = ctx.createLinearGradient(0, 140, 0, 1180);
+        sky.addColorStop(0, '#1e1b4b'); sky.addColorStop(1, '#7c2d12');
+        ctx.fillStyle = sky; ctx.fillRect(0, 140, WIDTH, 1040);
+        for (let i = 0; i < 40; i++) { ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect((i * 197) % WIDTH, 150 + (i * 131) % 700, 3, 3); }
+        const shake = t < 45 ? 10 : 3;
+        // 연기
+        for (let i = 0; i < 5; i++) {
+          const k = ((t * 1.2 + i * 30) % 150) / 150;
+          ctx.fillStyle = `rgba(100,116,139,${0.5 * (1 - k)})`;
+          ctx.beginPath(); ctx.arc(250 + i * 70, 480 - k * 260, 26 + k * 40, 0, Math.PI * 2); ctx.fill();
+        }
+        // 백기
+        if (t >= 40) {
+          const up = Math.min(1, (t - 40) / 14);
+          const fx = 400, fy = 470 - up * 230;
+          ctx.strokeStyle = '#000'; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(fx, 470); ctx.lineTo(fx, fy); ctx.stroke();
+          ctx.strokeStyle = '#d6d3d1'; ctx.lineWidth = 6; ctx.stroke();
+          ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 5;
+          ctx.beginPath(); ctx.moveTo(fx, fy);
+          for (let k = 0; k <= 8; k++) ctx.lineTo(fx + k * 22, fy + Math.sin(t * 0.3 + k * 0.8) * 8);
+          for (let k = 8; k >= 0; k--) ctx.lineTo(fx + k * 22, fy + 110 + Math.sin(t * 0.3 + k * 0.8) * 8);
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+          introText('항복', fx + 92, fy + 56, 44, '#111827');
+        }
+        drawMothership(400, 540, 1, shake);
+        // 우리 기체 (합체 중이면 로봇)
+        ctx.save(); ctx.translate(400, 980 + Math.sin(t * 0.12) * 10); ctx.scale(2.4, 2.4); drawPlayer(0, 0, 0); ctx.restore();
+        if (t >= 58) introText('!?', 520, 900, 70, '#facc15', 'center', '#7f1d1d');
+        drawLetterbox('ENDING  1/4');
+        if (t < 45) sub('최후의 모선이 흔들린다…!');
+        else sub('…백기를 들었다!?', '', '#facc15');
+
+      } else if (cut === 1) {
+        // ── 컷 2: 외계인 대장의 고백 ──
+        if (t === 1) endingSfx(s => powerTone(660, s, 0.08, 'square', 0.1));
+        if (t === 70) endingSfx(s => { powerTone(440, s, 0.12, 'square', 0.13); powerTone(880, s + 0.12, 0.35, 'square', 0.13, 1320); });
+        ctx.fillStyle = '#312e81'; ctx.fillRect(0, 140, WIDTH, 1040);
+        ctx.save(); ctx.globalAlpha = 0.25; ctx.strokeStyle = '#a5b4fc'; ctx.lineWidth = 6;
+        for (let i = 0; i < 22; i++) {
+          const a = Math.PI * 2 / 22 * i + t * 0.01;
+          ctx.beginPath(); ctx.moveTo(240 + Math.cos(a) * 180, 720 + Math.sin(a) * 180); ctx.lineTo(240 + Math.cos(a) * 900, 720 + Math.sin(a) * 900); ctx.stroke();
+        }
+        ctx.restore();
+        // 꾸벅 (20~55프레임)
+        const bow = t > 18 && t < 60 ? Math.sin((t - 18) / 42 * Math.PI) * 0.5 : 0;
+        ctx.save(); ctx.translate(230, 900); ctx.rotate(bow); ctx.translate(-230, -900);
+        drawAlien(230, 760, 1.6, 'sorry', t);
+        ctx.restore();
+        if (t < 60) endSpeech(60, 240, 420, 130, ['죄송합니다…'], 40, 220, 560);
+        else endSpeech(40, 200, 470, 200, ['사실… 토스트 냄새가', '너무 좋아서 왔어요…'], 36, 210, 560);
+        // 파일럿 반응
+        if (t >= 70) {
+          ctx.save();
+          ctx.translate(590, 760);
+          ctx.fillStyle = 'rgba(8,10,18,0.9)'; ctx.fillRect(-170, -210, 340, 420);
+          ctx.strokeStyle = '#facc15'; ctx.lineWidth = 6; ctx.strokeRect(-170, -210, 340, 420);
+          ctx.beginPath(); ctx.rect(-164, -204, 328, 408); ctx.clip();
+          ctx.globalAlpha = 0.35; ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 6;
+          for (let i = 0; i < 16; i++) { const a = Math.PI * 2 / 16 * i; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 110, Math.sin(a) * 110); ctx.lineTo(Math.cos(a) * 400, Math.sin(a) * 400); ctx.stroke(); }
+          ctx.restore();
+          const sh = t < 84 ? (Math.random() - 0.5) * 12 : 0;
+          drawPilotFace(590 + sh, 740, 1.2);
+          introText('뭐어어?!', 590 + sh, 950, 58, '#facc15', 'center', '#b91c1c');
+        }
+        drawLetterbox('ENDING  2/4');
+        sub('외계인 대장의 충격 고백', t >= 70 ? '침공 이유: 토스트' : '', '#f8fafc', '#facc15');
+
+      } else if (cut === 2) {
+        // ── 컷 3: 같이 토스트를 먹는다 ──
+        if (t === 1) endingSfx(s => [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5].forEach((f, i) => powerTone(f, s + i * 0.12, 0.1, 'square', 0.08)));
+        if (t % 30 === 20) endingSfx(s => powerTone(1200, s, 0.04, 'square', 0.06, 700));   // 냠
+        drawKitchen(false);
+        const chew = Math.sin(t * 0.4) * 3;
+        drawHeroCasual(230, 800 + chew, 1.4, false);
+        drawAlien(570, 840 - chew, 1.2, 'happy', t);
+        // 토스트 (한 입씩 줄어든다)
+        const bites = Math.min(3, Math.floor(t / 35));
+        for (const [tx, ty] of [[330, 820], [480, 860]]) {
+          drawToast(tx, ty + chew, -0.15);
+          ctx.fillStyle = '#fb923c';
+          for (let b = 0; b < bites; b++) { ctx.beginPath(); ctx.arc(tx + 22 - b * 14, ty - 26 + chew, 12, 0, Math.PI * 2); ctx.fill(); }
+        }
+        if (t % 30 < 14) { introText('냠', 330, 700, 40, '#b45309'); introText('냠', 500, 720, 40, '#15803d'); }
+        // 하트
+        for (let i = 0; i < 3; i++) {
+          const k = ((t + i * 40) % 120) / 120;
+          ctx.save(); ctx.globalAlpha = 1 - k; ctx.fillStyle = '#f43f5e';
+          const hx = 400 + Math.sin(k * 6 + i) * 30, hy = 660 - k * 180;
+          ctx.beginPath(); ctx.moveTo(hx, hy + 18); ctx.bezierCurveTo(hx - 28, hy - 4, hx - 14, hy - 24, hx, hy - 8); ctx.bezierCurveTo(hx + 14, hy - 24, hx + 28, hy - 4, hx, hy + 18); ctx.fill();
+          ctx.restore();
+        }
+        drawLetterbox('ENDING  3/4');
+        sub('그렇게 지구의 평화는', '토스트로 지켜졌다…', '#f8fafc', '#facc15');
+
+      } else {
+        // ── 컷 4: 3초 전의 나들 등장 -> 임무 완료 ──
+        if (t === 12) endingSfx(s => { powerTone(784, s, 0.07, 'square', 0.1); powerTone(784, s + 0.1, 0.07, 'square', 0.1); powerTone(622, s + 0.2, 0.3, 'square', 0.1); });
+        if (t === 70) playVictoryAudio();
+        drawKitchen(true);
+        drawHeroCasual(400, 820, 1.4, t >= 12 && t < 70);
+        drawToast(500, 840, -0.15);
+        // 3초 전의 나 (반투명 하늘색) 들이 양옆에서 몰려온다
+        const slide = Math.min(1, t / 14);
+        for (const [sd, i] of [[-1, 0], [1, 1]]) {
+          ctx.save();
+          ctx.globalAlpha = 0.55;
+          const px = 400 + sd * (560 - 350 * slide);
+          drawHeroCasual(px, 840, 1.15, false);
+          ctx.restore();
+          ctx.save(); ctx.globalAlpha = 0.9;
+          introText('3초 전의 나', px, 610, 24, '#a5f3fc');
+          ctx.restore();
+        }
+        if (t >= 12 && t < 70) endSpeech(170, 190, 460, 140, ['우리 빵은?!'], 50, 240, 560);
+        if (t >= 22 && t < 70) introText('(땀)', 520, 700, 30, '#1e3a8a');
+        if (t >= 70) {
+          const pop = Math.min(1, (t - 70) / 8);
+          const sz = 76 * (1.5 - 0.5 * pop);
+          ctx.save();
+          ctx.translate(WIDTH / 2, 380); ctx.rotate(-0.05);
+          ctx.font = `900 ${sz}px "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+          const w1 = ctx.measureText('3초').width, w2 = ctx.measureText('전대').width;
+          const x0 = -(w1 + w2) / 2;
+          introText('3초', x0, 0, sz, '#ef4444', 'left', '#450a0a');
+          introText('전대', x0 + w1, 0, sz, '#facc15', 'left', '#7f1d1d');
+          introText('임무 완료!!', 0, sz * 1.1, sz * 0.82, '#f8fafc', 'center', '#1e3a8a');
+          ctx.restore();
+          if (t >= 100 && Math.floor(t / 12) % 2 === 0) introPixel('THE END...?', WIDTH / 2, 1060, 30, '#f8fafc');
+        }
+        drawLetterbox('ENDING  4/4');
+        if (t < 70) sub('앗, 3초 전의 나들이…', '(빵은 모자랐다)', '#f8fafc', '#94a3b8');
+        else sub('모두 함께 토스트를 더 굽자!', '', '#facc15');
+        if (t > 135) { ctx.fillStyle = `rgba(255,255,255,${(t - 135) / 15})`; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
+      }
+
+      // 컷 전환 섬광
+      if (t < 8 && cut > 0) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${1 - t / 8})`;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      }
+    }
+
     function triggerVictory() {
       if (isVictoryState) return;
       isVictoryState = true;
@@ -2441,15 +2771,10 @@
       });
       enemies = [];
       enemyBullets = [];
+      bombFx = null;
 
-      // 무수한 꽃가루 비
-      createConfettiShower(300);
-
-      // 모달 표시
-      victoryScoreVal.innerText = score.toString().padStart(9, '0');
-      setTimeout(() => {
-        victoryOverlay.style.display = 'flex';
-      }, 350);
+      // (V 3.2) 꽃가루 + 승리 모달은 엔딩(10초)이 끝난 뒤 finishEnding() 에서 띄운다
+      startEnding();
     }
 
     // 타이틀 화면으로 완전히 돌아가기 (RESET)
@@ -2457,6 +2782,7 @@
       stopBGM();
       introPhase = null;
       introTimer = 0;
+      endingActive = false;
       setIntroUI(false);
       isContinueState = false;
       isGameOver = false;
@@ -2486,7 +2812,7 @@
       enemies = [];
       enemyBullets = [];
       playerBullets = [];
-      explosions = [];
+      while (explosions.length) releaseExplosion(explosions.pop());
       confettis = [];
       items = [];
       bombShockwaves = [];
@@ -2922,35 +3248,68 @@
         }
         const fall = Math.min(1, (T - 18) / 30), impactT = 48;
         ctx.fillStyle = `rgba(0,0,0,${T < impactT ? Math.min(0.45, fall * 0.45) : 0.12})`; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-        if (T < impactT && T % 8 < 4) bombHeroText('⚠ 초대형 주의 ⚠', WIDTH / 2, 700, 44, '#facc15', '#7f1d1d');
-        // 주먹은 화면 위쪽 절반까지만 내려온다 (플레이어 영역은 비워둠)
+        if (T < impactT && T % 8 < 4) bombHeroText('⚠ 초대형 주의 ⚠', WIDTH / 2, 1070, 44, '#facc15', '#7f1d1d');
         let fy, tilt = 0;
-        if (T < impactT) fy = -900 + fall * fall * 1240;
-        else if (T < 72) fy = 340 + (Math.random() - 0.5) * (72 - T) * 1.2;
-        else if (T < 100) { fy = 340; tilt = Math.sin(((T - 72) / 28) * Math.PI) * 0.3; }
-        else fy = 340 - ((T - 100) / 20) * 1500;
+        // (V 3.4) 주먹 앞면이 화면 위에서 2/3 지점(y 948)을 때린다 -> 팔이 화면에 더 길게 보인다
+        const FIST_Y = Math.round(HEIGHT * 2 / 3) - 66;   // 882
+        if (T < impactT) fy = -300 + fall * fall * (FIST_Y + 300);
+        else if (T < 72) fy = FIST_Y + (Math.random() - 0.5) * (72 - T) * 1.2;
+        else if (T < 100) { fy = FIST_Y; tilt = Math.sin(((T - 72) / 28) * Math.PI) * 0.3; }
+        else fy = FIST_Y - ((T - 100) / 20) * 1800;
+        // (V 3.3) 로봇 주먹을 화면 안에 들어오는 크기로 축소 (폭 920 -> 약 380)
+        //   주먹 전체 실루엣(마디 4개 + 엄지 + 손목 관절 + 팔뚝 장갑 + 로켓 분사구)이 보여야 "로봇 주먹"으로 읽힌다.
         ctx.save(); ctx.translate(WIDTH / 2, fy); ctx.rotate(tilt);
-        ctx.fillStyle = '#dc2626'; ctx.strokeStyle = '#000'; ctx.lineWidth = 14;
-        ctx.fillRect(-380, -1500, 760, 1100); ctx.strokeRect(-380, -1500, 760, 1100);
-        ctx.fillStyle = '#facc15'; ctx.fillRect(-380, -520, 760, 70); ctx.strokeRect(-380, -520, 760, 70);
-        ctx.fillStyle = '#e2e8f0'; ctx.fillRect(-460, -460, 920, 520); ctx.strokeRect(-460, -460, 920, 520);
-        ctx.lineWidth = 10;
-        for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(i * 230, -400); ctx.lineTo(i * 230, 30); ctx.stroke(); }
-        ctx.fillStyle = '#94a3b8';
-        for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(-345 + i * 230, 20, 26, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+        ctx.lineJoin = 'round'; ctx.strokeStyle = '#000';
+        // 팔뚝 장갑 (위쪽, 화면 밖으로 이어짐)
+        ctx.fillStyle = '#dc2626'; ctx.lineWidth = 8;
+        ctx.fillRect(-120, -900, 240, 690); ctx.strokeRect(-120, -900, 240, 690);
+        ctx.fillStyle = '#b91c1c'; ctx.fillRect(-120, -900, 50, 690);            // 측면 음영
+        ctx.fillStyle = '#facc15'; ctx.fillRect(-120, -560, 240, 34); ctx.strokeRect(-120, -560, 240, 34);   // 금색 띠
+        ctx.fillStyle = '#1e293b';                                               // 리벳
+        for (let i = -1; i <= 1; i += 2) for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(i * 88, -470 + k * 90, 9, 0, Math.PI * 2); ctx.fill(); }
+        // 로켓 분사구 2개 (복귀할 때 불꽃)
+        ctx.fillStyle = '#475569'; ctx.lineWidth = 6;
+        for (const i of [-1, 1]) { ctx.fillRect(i * 70 - 30, -640, 60, 60); ctx.strokeRect(i * 70 - 30, -640, 60, 60); }
         if (T >= 100) {
-          ctx.fillStyle = '#f97316';
-          for (let i = -1; i <= 1; i += 2) { ctx.beginPath(); ctx.moveTo(i * 200 - 50, -1500); ctx.lineTo(i * 200, -1080 + Math.random() * 80); ctx.lineTo(i * 200 + 50, -1500); ctx.fill(); }
+          for (const i of [-1, 1]) {
+            ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.moveTo(i * 70 - 26, -640); ctx.lineTo(i * 70, -640 + 170 + Math.random() * 50); ctx.lineTo(i * 70 + 26, -640); ctx.fill();
+            ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.moveTo(i * 70 - 12, -640); ctx.lineTo(i * 70, -640 + 90 + Math.random() * 30); ctx.lineTo(i * 70 + 12, -640); ctx.fill();
+          }
         }
+        // 손목 관절 (회색 원통)
+        ctx.fillStyle = '#64748b'; ctx.lineWidth = 8;
+        ctx.fillRect(-140, -220, 280, 60); ctx.strokeRect(-140, -220, 280, 60);
+        ctx.fillStyle = '#94a3b8'; ctx.fillRect(-140, -214, 280, 14);
+        // 손등 (흰 장갑)
+        ctx.fillStyle = '#e2e8f0'; ctx.lineWidth = 9;
+        ctx.beginPath();
+        ctx.moveTo(-170, -160); ctx.lineTo(170, -160); ctx.lineTo(190, -40); ctx.lineTo(-190, -40); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        // 엄지 (왼쪽에서 손가락 앞으로 감싸는 모양)
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath(); ctx.moveTo(-190, -120); ctx.lineTo(-240, -60); ctx.lineTo(-200, 20); ctx.lineTo(-130, 10); ctx.lineTo(-150, -60); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        // 손가락 마디 4개 (아래쪽이 주먹 앞면)
+        for (let i = 0; i < 4; i++) {
+          const x = -180 + i * 90;
+          ctx.fillStyle = '#e2e8f0'; ctx.lineWidth = 8;
+          ctx.fillRect(x, -44, 90, 110); ctx.strokeRect(x, -44, 90, 110);
+          ctx.fillStyle = '#94a3b8'; ctx.fillRect(x + 6, 40, 78, 20);          // 마디 아래 음영
+          ctx.fillStyle = '#475569'; ctx.beginPath(); ctx.arc(x + 45, -14, 10, 0, Math.PI * 2); ctx.fill();   // 관절 볼트
+        }
+        // 손등의 빨간 로봇 엠블럼
+        ctx.fillStyle = '#ef4444'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(0, -150); ctx.lineTo(40, -100); ctx.lineTo(0, -60); ctx.lineTo(-40, -100); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(0, -100, 12, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
         if (T >= impactT && T < 90) {
           const r = (T - impactT) * 42;
           if (T < impactT + 6) { ctx.fillStyle = `rgba(255,255,255,${0.85 * (1 - (T - impactT) / 6)})`; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
           ctx.strokeStyle = `rgba(250, 204, 21, ${1 - (T - impactT) / 42})`; ctx.lineWidth = 30;
-          ctx.beginPath(); ctx.ellipse(WIDTH / 2, 420, r * 1.4, r * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
-          bombHeroText('콰과광!!!', WIDTH / 2, 520, 86, '#ef4444', '#000', -0.08);
+          ctx.beginPath(); ctx.ellipse(WIDTH / 2, 950, r * 1.4, r * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
+          bombHeroText('콰과광!!!', WIDTH / 2, 1070, 86, '#ef4444', '#000', -0.08);
         }
-        if (T >= 76 && T < 100) bombHeroText('(꾸벅) 실례했습니다', WIDTH / 2, 540, 42, '#f8fafc', '#1e3a8a');
+        if (T >= 76 && T < 100) bombHeroText('(꾸벅) 실례했습니다', WIDTH / 2, 1070, 42, '#f8fafc', '#1e3a8a');
       }
     }
 
@@ -2981,8 +3340,10 @@
       bombShockwaves.push({ radius: 10, maxRadius: Math.max(WIDTH, HEIGHT) * 1.1, alpha: 1.0 });
 
       // 발동 즉시 1회 제거 (지속 제거는 updateBombFx 가 2초간 매 프레임 수행)
+      // (V 3.2) 이 제거로 20만점이 되면 엔딩이 시작되며 bombFx 가 비워지므로 종류를 먼저 저장한다
+      const kind = bombFx.kind;
       bombSweep();
-      playBombSfx(bombFx.kind);
+      if (bombFx) playBombSfx(kind);
     }
 
     bombBtn.addEventListener('click', (e) => {
@@ -2998,35 +3359,50 @@
     });
 
     // 폭발 이펙트 생성기 (파티클 시스템)
-    function createExplosion(x, y, radius, color, count = 18) {
-      // [성능] Array.from({length}) 는 중간 이터러블을 만든다 → 단순 for 루프로 교체
-      //   또한 동시 폭발 수에 상한을 둬서 탄막이 몰릴 때 파티클이 폭증하지 않게 한다
-      if (explosions.length >= MAX_EXPLOSIONS) {
-        explosions.shift(); // 가장 오래된 폭발 제거
+    // (V 3.5) 폭발 객체 풀: 폭발마다 파티클 객체를 새로 만들고 버리면 가비지가 쌓여
+    //   브라우저가 한꺼번에 정리할 때 '가끔 멈칫' 하는 렉이 생긴다.
+    //   폭발(상한 MAX_EXPLOSIONS)과 파티클 배열을 미리 만들어 두고 재사용한다.
+    //   파티클 수 / 방향 / 속도 / 색 / 크기 / 사라지는 속도 계산식은 이전과 동일.
+    const EXPLOSION_MAX_PARTICLES = 70;   // 코드 내 최대 count (70) 기준
+    const explosionPool = [];
+    function newExplosionSlot() {
+      const parts = new Array(EXPLOSION_MAX_PARTICLES);
+      for (let i = 0; i < EXPLOSION_MAX_PARTICLES; i++) {
+        parts[i] = { x: 0, y: 0, vx: 0, vy: 0, size: 0, color: '#facc15', alpha: 0, decay: 0 };
       }
-      const particles = new Array(count);
-      for (let i = 0; i < count; i++) {
+      return { x: 0, y: 0, particles: parts, n: 0, ringRadius: 0, ringMax: 0, ringAlpha: 0, dead: false };
+    }
+    for (let i = 0; i < MAX_EXPLOSIONS + 2; i++) explosionPool.push(newExplosionSlot());
+    function releaseExplosion(exp) { explosionPool.push(exp); }
+
+    function createExplosion(x, y, radius, color, count = 18) {
+      // 동시 폭발 수 상한: 초과 시 가장 오래된 폭발을 풀로 돌려보낸다
+      if (explosions.length >= MAX_EXPLOSIONS) {
+        releaseExplosion(explosions.shift());
+      }
+      const exp = explosionPool.pop() || newExplosionSlot();
+      const n = Math.min(count, EXPLOSION_MAX_PARTICLES);
+      const particles = exp.particles;
+      for (let i = 0; i < n; i++) {
+        const p = particles[i];
         const angle = Math.random() * Math.PI * 2;
         const spd = 2 + Math.random() * 7;
-        particles[i] = {
-          x: 0,
-          y: 0,
-          vx: Math.cos(angle) * spd,
-          vy: Math.sin(angle) * spd,
-          size: 3 + Math.random() * 5,
-          color: Math.random() > 0.4 ? color : '#facc15',
-          alpha: 1.0,
-          decay: 0.02 + Math.random() * 0.03
-        };
+        p.x = 0;
+        p.y = 0;
+        p.vx = Math.cos(angle) * spd;
+        p.vy = Math.sin(angle) * spd;
+        p.size = 3 + Math.random() * 5;
+        p.color = Math.random() > 0.4 ? color : '#facc15';
+        p.alpha = 1.0;
+        p.decay = 0.02 + Math.random() * 0.03;
       }
-      explosions.push({
-        x, y,
-        particles,
-        ringRadius: 5,
-        ringMax: radius * 1.5,
-        ringAlpha: 1.0,
-        dead: false
-      });
+      exp.x = x; exp.y = y;
+      exp.n = n;
+      exp.ringRadius = 5;
+      exp.ringMax = radius * 1.5;
+      exp.ringAlpha = 1.0;
+      exp.dead = false;
+      explosions.push(exp);
     }
 
     // 플레이어 피격 처리
@@ -3233,7 +3609,8 @@
       spawnMultiplier = sp0 + (sp1 - sp0) * k;
       difficultyMultiplier = bu0 + (bu1 - bu0) * k;
       // 데스블로우: 아군/합체와 무관하게 18만점부터 x1 (리와인드로 점수가 돌아가면 함께 돌아간다)
-      deathBlowCount = score >= DEATH_BLOW_SCORE ? 1 : 0;
+      // (V 3.1) 로봇 합체 중에도 x1 (18만점 이상과 겹쳐도 x1)
+      deathBlowCount = (score >= DEATH_BLOW_SCORE || robotMode) ? 1 : 0;
     }
 
     // -------------------------------------------------------------
@@ -3266,7 +3643,7 @@
     const SPAWN_WEIGHT = { 1: 3, 2: 3, 3: 2.5, 6: 1.5, 8: 1.5, 9: 2, 10: 1.2, 11: 1.5, 12: 1,
                            13: 1.5, 14: 2.2, 15: 1, 16: 0.8, 17: 1.5, 18: 1.2 };
     // 종류별 동시 등장 상한 (탄막이 겹쳐 화면이 어지러워지는 것 방지)
-    const SPAWN_CAP = { 2: 2, 3: 3, 6: 2, 10: 1, 11: 3, 12: 2, 15: 1, 16: 2, 18: 2 };
+    const SPAWN_CAP = { 1: 4, 2: 2, 3: 3, 6: 2, 10: 1, 11: 3, 12: 2, 15: 1, 16: 2, 18: 2 };
     // 화면에 오래 머무는 적은 합계 4기까지만
     const LINGER_TYPES = new Set([3, 6, 9, 10, 11, 12, 16, 17, 18]);
     const LINGER_MAX = 4;
@@ -3295,6 +3672,16 @@
           this.burstCount = 0;
           this.burstTimer = 0;
           this.hp = this.maxHp = 2; // 톱니 드론
+          // (V 3.1) 3기가 줄줄이 나온다: x 를 시간이 아니라 y 로 계산해 뒤따르는 기체가 같은 궤적을 밟는다
+          this.baseX = 150 + Math.random() * (WIDTH - 300);
+          this.phase = Math.random() * Math.PI * 2;
+          this.fired = false;                         // 조준탄 1기당 1발
+          if (opts.chain) {
+            const L = opts.chain;
+            this.baseX = L.baseX; this.phase = L.phase; this.amplitude = L.amplitude; this.speedY = L.speedY;
+            this.y = L.y - 72 * opts.idx;
+          }
+          this.x = this.baseX + Math.sin(this.y * 0.009 + this.phase) * this.amplitude;
         } else if (this.type === 2) {
           // [Type 2] 전폭기 (초록색) - 1방에 즉시 사망
           this.startX = Math.random() > 0.5 ? 80 : WIDTH - 80;
@@ -3317,9 +3704,9 @@
           this.maxHover = 180; // 3초간 호버링
           this.width = 128;
           this.height = 116;
-          this.radius = 64; // 크기 2배
+          this.radius = 96; // (V 3.1) 크기 1.5배 (64 -> 96)
           this.wideShotTimer = 45;
-          this.hp = this.maxHp = 4; // 악마 기계수
+          this.hp = this.maxHp = 8; // (V 3.1) 악마 기계수 체력 2배
         } else if (this.type === 4) {
           // [Type 4] 그룹 편대 자코 (Squad Zako) - 좌→우 또는 우→좌 횡대 이동
           // opts로 편대 방향과 편대 내 위치(row/col)를 전달받음
@@ -3379,7 +3766,7 @@
           this.x = 100 + Math.random() * (WIDTH - 200);
           this.y = -80;
           this.speedY = 2.5 + Math.random() * 1.5;
-          this.hp = this.maxHp = 5;
+          this.hp = this.maxHp = 15;   // (V 3.1) 체력 3배
           this.radius = 45;
           this.shootTimer = 60;
         } else if (this.type >= 9 && this.type <= 19) {
@@ -3403,7 +3790,7 @@
             { dx: 80, dy: -10, hp: 4, maxHp: 4, alive: true }
           ];
           // 달마시안 요새 코어. 재등장마다 체력 10% 증가 (1회차 26, 2회차 28.6 -> 29 ...)
-          const bossScale = Math.pow(1.10, fortressSpawnCount);
+          const bossScale = Math.pow(2, fortressSpawnCount);   // (V 3.1) 재등장마다 체력 2배
           this.hp = this.maxHp = Math.round(78 * bossScale);   // (V 3.0) 26 -> 78 (3배)
           // 포탑 체력도 같은 비율로 상향
           this.turrets.forEach(t => {
@@ -3447,13 +3834,14 @@
         } else if (this.type === 1) {
           // [Type 1] 요격기: 지그재그 강하 + 고속 조준탄 2연사
           this.y += this.speedY;
-          this.x = this.baseX + Math.sin(this.age * this.freq) * this.amplitude;
+          this.x = this.baseX + Math.sin(this.y * 0.009 + this.phase) * this.amplitude;
 
-          if (this.y > 100 && this.y < HEIGHT * 0.75) {
+          // (V 3.1) 조준탄은 1기당 1발만
+          if (!this.fired && this.y > 100 && this.y < HEIGHT * 0.75) {
             this.burstTimer++;
             const interval = Math.max(20, Math.floor(55 / dMul));
             if (this.burstTimer >= interval) {
-              this.burstTimer = 0;
+              this.fired = true;
               this.fireAtPlayer(8.5 * Math.min(2.5, dMul));
             }
           }
@@ -3507,11 +3895,11 @@
             if (this.wideShotTimer >= interval) {
               this.wideShotTimer = 0;
               const bSpeed = 4.2 * Math.min(2.2, dMul);
-              [-24, 24].forEach((offX, idx) => {
-                const dirX = idx === 0 ? -2.8 : 2.8;
+              // (V 3.1) 2발 -> 4발 부채꼴
+              [[-54, -3.6], [-18, -1.2], [18, 1.2], [54, 3.6]].forEach(([offX, dirX]) => {
                 enemyBullets.push({
                   x: this.x + offX,
-                  y: this.y + 6,
+                  y: this.y + 9,
                   vx: dirX * Math.min(2.0, dMul),
                   vy: bSpeed,
                   radius: 13, // 보라색 대구경 탄환 (매우 굵게)
@@ -3627,12 +4015,15 @@
           this.shootTimer--;
           if (this.shootTimer <= 0) {
             this.shootTimer = 80;
+            // (V 3.1) 보라 작은 탄은 배경에 묻혀 잘 안 보였다 -> 밝은 연두 큰 탄, 2발
             const ang = Math.atan2(playerY - this.y, playerX - this.x);
-            enemyBullets.push({
-              x: this.x, y: this.y + 20,
-              vx: Math.cos(ang) * 5.5, vy: Math.sin(ang) * 5.5,
-              radius: 8, color: '#9333ea'
-            });
+            for (const off of [-0.12, 0.12]) {
+              enemyBullets.push({
+                x: this.x, y: this.y + 20,
+                vx: Math.cos(ang + off) * 5.5, vy: Math.sin(ang + off) * 5.5,
+                radius: 11, color: '#d9f99d'
+              });
+            }
           }
 
         } else if (this.type === 7) {
@@ -3688,7 +4079,8 @@
 
         // 화면 이탈 시 제거
         // 위로 이탈한 적은 즉시 정리한다(-220 은 너무 넓어 스폰 상한을 낭비했음).
-        if (this.y > HEIGHT + 160 || this.y < -140 || this.x < -180 || this.x > WIDTH + 180) {
+        // (V 3.1) 톱니 드론(1)은 항상 아래로만 움직이고 줄줄이 편대가 화면 위에서 대기하므로 위쪽 정리에서 제외
+        if (this.y > HEIGHT + 160 || (this.y < -140 && this.type !== 1) || this.x < -180 || this.x > WIDTH + 180) {
           this.dead = true;
         }
       }
@@ -3702,9 +4094,10 @@
       initNew(o) {
         const t = this.type;
         //         [hp, radius, 화면 체류 한계(프레임)]
-        const SPEC = { 9: [3, 26, 540], 10: [5, 36, 560], 11: [3, 30, 480], 12: [6, 34, 620],
-                       13: [4, 30, 0], 14: [2, 26, 0], 15: [4, 38, 0], 16: [8, 44, 900],
-                       17: [3, 34, 560], 18: [4, 28, 620], 19: [1, 14, 0] };
+        // (V 3.1) 10 체력2배·크기2배 / 12 체력2배·크기1.5배 / 16 체력3배·크기2배 / 18 크기2배 / 9 가로1.5배
+        const SPEC = { 9: [3, 32, 540], 10: [10, 72, 560], 11: [3, 30, 480], 12: [12, 50, 620],
+                       13: [4, 30, 0], 14: [2, 26, 0], 15: [4, 38, 0], 16: [24, 88, 900],
+                       17: [3, 34, 560], 18: [4, 56, 620], 19: [1, 14, 0] };
         const sp = SPEC[t];
         this.hp = this.maxHp = sp[0];
         this.radius = sp[1];
@@ -3773,7 +4166,7 @@
             this.x += this.dir * 2.5;
             if (this.x < 120 || this.x > WIDTH - 120) this.dir *= -1;
           }
-          if (this.y >= 180 && ++this.t >= iv(55, 30)) {
+          if (this.y >= 180 && ++this.t >= iv(27.5, 15)) {   // (V 3.1) 발사 2배
             this.t = 0;
             [-1, 1].forEach(d => shoot(this.x, this.y + 16, d * 5 * sm, 3.4 * sm, 10, '#22d3ee', { bounce: 1 }));
           }
@@ -3781,7 +4174,7 @@
           this.spin += 0.13;
           if (leaving) { this.y += 5; return; }
           if (this.y < this.targetY) this.y += (this.targetY - this.y) * 0.04 + 1;
-          if (this.y > 150 && this.age % iv(9, 6) === 0) {
+          if (this.y > 150 && this.age % iv(4.5, 3) === 0) {   // (V 3.1) 발사 2배
             [0, Math.PI].forEach(o => {
               const a = this.spin + o;
               shoot(this.x, this.y, Math.cos(a) * 3 * sm, Math.sin(a) * 3 * sm, 9, '#fb7185');
@@ -3804,10 +4197,10 @@
             this.x = Math.max(80, Math.min(WIDTH - 80, this.x));
             if (this.pt > iv(90, 50) && this.y >= 170) { this.ph = 'warn'; this.pt = 0; }
           } else if (this.ph === 'warn') {
-            if (this.pt > 60) { this.ph = 'fire'; this.pt = 0; }   // 경고 시간은 난이도와 무관하게 고정
+            if (this.pt > 90) { this.ph = 'fire'; this.pt = 0; }   // (V 3.1) 경고 1초 -> 1.5초 (난이도와 무관하게 고정)
           } else if (this.ph === 'fire') {
             if (!isGameOver && !isContinueState && playerInvulnerable <= 0 &&
-                Math.abs(playerX - this.x) < 23 && playerY > this.y) {
+                Math.abs(playerX - this.x) < 34 && playerY > this.y) {   // (V 3.1) 레이저 폭 1.5배
               hitPlayer();
             }
             if (this.pt > 42) { this.ph = 'move'; this.pt = 0; }
@@ -3848,24 +4241,25 @@
           this.open = p > cyc - 40;
           if (p === cyc - 38) {
             const b = aim(this.x, this.y);
-            [-0.18, 0, 0.18].forEach(o => shoot(this.x, this.y + 30, Math.cos(b + o) * 6.5 * sm, Math.sin(b + o) * 6.5 * sm, 10, '#60a5fa'));
+            [-0.18, 0, 0.18].forEach(o => shoot(this.x, this.y + 60, Math.cos(b + o) * 6.5 * sm, Math.sin(b + o) * 6.5 * sm, 10, '#60a5fa'));
           }
         } else if (t === 17) {    // 파도: 떠다니며 사인파 탄 3줄기
           if (leaving) { this.y += 4; return; }
           this.y += this.y < 220 ? 2.5 : Math.sin(this.age * 0.05) * 0.8;
           this.x = Math.max(80, Math.min(WIDTH - 80, this.baseX + Math.sin(this.age * 0.012) * 140));
-          if (this.y > 150 && ++this.t >= iv(26, 16)) {
+          if (this.y > 150 && ++this.t >= iv(13, 8)) {       // (V 3.1) 발사 2배
             this.t = 0;
-            [-40, 0, 40].forEach((o, i) => shoot(this.x + o, this.y + 30, 0, 3.2 * sm, 9, '#c084fc', { wave: i * 2, f: 0 }));
+            [-40, 0, 40].forEach((o, i) => shoot(this.x + o, this.y + 30, 0, 6.4 * sm, 9, '#c084fc', { wave: i * 2, f: 0 }));   // 탄속 2배
           }
         } else if (t === 18) {    // 잔상: 잔상 예고 -> 출현 + 사격 -> 사라짐
           if (this.ph === 'show') {
             if (this.pt === 6) {
-              for (let k = 0; k < 4; k++) {
-                const a = k * Math.PI / 2 + Math.PI / 4;
-                shoot(this.x, this.y, Math.cos(a) * 4.2 * sm, Math.sin(a) * 4.2 * sm, 9, '#f472b6');
+              // (V 3.1) 탄 3배 (십자 4 + 조준 1 = 5발 -> 12방향 + 조준 3 = 15발), 탄속 2배
+              for (let k = 0; k < 12; k++) {
+                const a = k * Math.PI / 6 + Math.PI / 12;
+                shoot(this.x, this.y, Math.cos(a) * 8.4 * sm, Math.sin(a) * 8.4 * sm, 9, '#f472b6');
               }
-              aimed(this.x, this.y, 6 * sm, 9, '#f472b6');
+              for (const off of [-0.15, 0, 0.15]) aimed(this.x, this.y, 12 * sm, 9, '#f472b6', off);
             }
             if (this.pt > 70) {
               if (leaving) { this.dead = true; return; }   // 점수 없이 퇴장
@@ -3894,11 +4288,13 @@
         const outline = (c, w) => { ctx.strokeStyle = c; ctx.lineWidth = w || 2; ctx.stroke(); };
 
         if (t === 9) {
+          ctx.scale(1.5, 1);   // (V 3.1) 좌우 1.5배
           ctx.fillStyle = '#0e7490'; rr(-30, -16, 60, 32, 8); ctx.fill(); outline('#67e8f9');
           ctx.fillStyle = '#164e63'; ctx.fillRect(-38, -6, 10, 12); ctx.fillRect(28, -6, 10, 12);
           ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU); ctx.fill();
           ctx.fillStyle = '#fca5a5'; ctx.beginPath(); ctx.arc(-2, -2, 2.5, 0, TAU); ctx.fill();
         } else if (t === 10) {
+          ctx.scale(2, 2);     // (V 3.1) 크기 2배
           ctx.save(); ctx.rotate(this.spin || 0);
           ctx.fillStyle = '#881337'; ctx.beginPath();
           for (let i = 0; i < 6; i++) {
@@ -3921,14 +4317,15 @@
           // 경고선 / 레이저 (적 몸체보다 먼저 그려 아래에 깔리게)
           if (this.ph === 'warn') {
             ctx.globalAlpha = 0.35 + 0.35 * Math.sin(this.pt * 0.6);
-            ctx.fillStyle = '#f87171'; ctx.fillRect(-2, 26, 4, HEIGHT);
+            ctx.fillStyle = '#f87171'; ctx.fillRect(-3, 39, 6, HEIGHT);
             ctx.globalAlpha = 1;
           } else if (this.ph === 'fire') {
-            const w = 34 + Math.sin(this.pt * 1.3) * 6;
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.55)'; ctx.fillRect(-w / 2 - 8, 26, w + 16, HEIGHT);
-            ctx.fillStyle = '#fde68a'; ctx.fillRect(-w / 2, 26, w, HEIGHT);
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(-w / 6, 26, w / 3, HEIGHT);
+            const w = (34 + Math.sin(this.pt * 1.3) * 6) * 1.5;
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.55)'; ctx.fillRect(-w / 2 - 12, 39, w + 24, HEIGHT);
+            ctx.fillStyle = '#fde68a'; ctx.fillRect(-w / 2, 39, w, HEIGHT);
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(-w / 6, 39, w / 3, HEIGHT);
           }
+          ctx.scale(1.5, 1.5);   // (V 3.1) 몸체 1.5배 (레이저는 위에서 이미 1.5배 폭으로 그림)
           ctx.fillStyle = '#3f3f46'; ctx.beginPath();
           ctx.moveTo(-36, -20); ctx.lineTo(36, -20); ctx.lineTo(24, 18); ctx.lineTo(-24, 18);
           ctx.closePath(); ctx.fill(); outline('#d4d4d8');
@@ -3968,6 +4365,7 @@
           for (let i = -30; i <= 30; i += 15) { ctx.beginPath(); ctx.arc(i, -18, 5, 0, TAU); ctx.fill(); }
           ctx.fillStyle = '#ef4444'; ctx.fillRect(-16, -6, 10, 6); ctx.fillRect(6, -6, 10, 6);
         } else if (t === 16) {
+          ctx.scale(2, 2);     // (V 3.1) 크기 2배
           ctx.fillStyle = '#1e3a8a'; ctx.beginPath();
           ctx.moveTo(-26, -30); ctx.lineTo(26, -30); ctx.lineTo(22, 12); ctx.lineTo(-22, 12);
           ctx.closePath(); ctx.fill(); outline('#93c5fd');
@@ -3999,12 +4397,13 @@
           if (this.ph === 'hide' && this.pt > 12) {
             ctx.globalAlpha = 0.15 + 0.25 * ((this.pt % 10) / 10);
             ctx.fillStyle = '#f472b6';
-            ctx.beginPath(); ctx.arc(this.nx - this.x, this.ny - this.y, 30, 0, TAU); ctx.fill();
+            ctx.beginPath(); ctx.arc(this.nx - this.x, this.ny - this.y, 60, 0, TAU); ctx.fill();
             ctx.globalAlpha = 1;
           }
           const a = this.ph === 'show' ? Math.min(1, this.pt / 6) : Math.max(0, 1 - this.pt / 8);
           if (a <= 0) return;
           ctx.globalAlpha = a;
+          ctx.scale(2, 2);     // (V 3.1) 크기 2배
           ctx.fillStyle = '#1f2937'; ctx.beginPath();
           ctx.moveTo(0, -30); ctx.lineTo(22, -6); ctx.lineTo(16, 26); ctx.lineTo(-16, 26); ctx.lineTo(-22, -6);
           ctx.closePath(); ctx.fill(); outline('#f9a8d4');
@@ -4094,9 +4493,9 @@
           ctx.fillRect(-28, -26, 8, 40); ctx.fillRect(20, -26, 8, 40);
           ctx.fillStyle = '#ef4444'; ctx.fillRect(-10, -12, 6, 6); ctx.fillRect(4, -12, 6, 6);
 
-        // [Type 3] 악마 기계수 (박쥐 날개 + 해골) - 크기 2배
+        // [Type 3] 악마 기계수 (박쥐 날개 + 해골) - (V 3.1) 크기 3배 (이전 2배의 1.5배)
         } else if (this.type === 3) {
-          ctx.scale(2.0, 2.0);
+          ctx.scale(3.0, 3.0);
           ctx.fillStyle = '#4c1d95';
           ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(36, -10); ctx.lineTo(12, -28); ctx.lineTo(0, -15);
           ctx.lineTo(-12, -28); ctx.lineTo(-36, -10); ctx.closePath(); ctx.fill();
@@ -4255,7 +4654,7 @@
       // ★ 정지형 연출(컷인/합체) 중에는 한 프레임에 1스텝만 진행한다.
       //   고정 타임스텝은 밀린 시간을 따라잡기 위해 한 프레임에 최대 3스텝을 돌리는데,
       //   화면은 마지막 스텝만 보이므로 연출이 2~3배 빠르게 지나가 버린다.
-      const inCutscene = isPilotCutin || isCombining;
+      const inCutscene = isPilotCutin || isCombining || endingActive;
       const maxSteps = inCutscene ? 1 : MAX_STEPS_PER_FRAME;
       while (accumulator >= FIXED_STEP && steps < maxSteps) {
         accumulator -= FIXED_STEP;
@@ -4314,6 +4713,19 @@
 
       // 1~2. 배경 렌더 (심우주 고정 배경 + 별 스크롤)
       drawSpaceBackground();
+
+      // ★ 20만점 엔딩 (리드인 0.75초는 게임 화면 그대로, 이후 10초 컷신)
+      if (endingActive) {
+        endingTimer++;
+        if (endingTimer > 0) {
+          ctx.save();
+          try { drawEnding(endingTimer - 1); } finally { ctx.restore(); }
+          if (endingTimer >= ENDING_DURATION) finishEnding();
+          drawVignette();
+          drawScanlines();
+          return; // 이 프레임 렌더 종료 (예약은 gameLoop 래퍼가 담당)
+        }
+      }
 
       // ★ 인트로 (조작 설명 -> 프롤로그). 게임은 시작 전 상태로 멈춰 있다.
       if (introPhase) {
@@ -4702,6 +5114,9 @@
               if (se.angle !== undefined) ne.angle = se.angle;
               if (se.vx !== undefined) ne.vx = se.vx;
               if (se.vy !== undefined) ne.vy = se.vy;
+              if (se.type === 1 && se.bx !== undefined) {
+                ne.baseX = se.bx; ne.phase = se.ph; ne.amplitude = se.amp; ne.speedY = se.sy; ne.fired = se.fired;
+              }
               enemies.push(ne);
             } catch (err) {
               // 타입 복원 실패 시 해당 적만 건너뛴다
@@ -4820,7 +5235,8 @@
             snap.enemies.push({
               type: e.type, x: e.x, y: e.y, radius: e.radius,
               hp: e.hp, maxHp: e.maxHp, angle: e.angle, age: e.age,
-              vx: e.vx, vy: e.vy, dead: e.dead
+              vx: e.vx, vy: e.vy, dead: e.dead,
+              bx: e.baseX, ph: e.phase, amp: e.amplitude, sy: e.speedY, fired: e.fired
             });
           }
           for (let si = 0; si < enemyBullets.length; si++) {
@@ -4844,7 +5260,7 @@
 
       // -----------------------------------------------------------
       // 3. 플레이어 자동 총알 발사
-      //    발사 속도 = BASE_FIRE_RATE(0.8) x (1 + firePower/100)
+      //    발사 속도 = BASE_FIRE_RATE(0.56) x (1 + firePower/100), POWER 0 ~ 100%
       //    POWER 0% -> 20프레임 간격 / +20%씩 / POWER 200% -> 약 6.7프레임 간격 (시작의 3배)
       //    탄속은 -15로 고정 (연사 아이템이므로 탄속에는 관여하지 않음)
       // -----------------------------------------------------------
@@ -4861,7 +5277,7 @@
             //   [밸런스] 전방을 1발로 두면 전방 화력이 혼자일 때(2발)의 절반으로
             //   떨어져 합체가 약화처럼 느껴진다. 전방 2발을 유지하고 좌우를 '얹는다'.
             //   전방 초당 15발 유지 + 좌우 커버 추가 = 총 화력 200%.
-            // (V 3.0) POWER 200% 달성 시 탄 색 변경: 흰 심 + 주황 불꽃 꼬리 (열혈 MAX)
+            // (V 3.0) POWER 최대 달성 시 탄 색 변경: 흰 심 + 주황 불꽃 꼬리 (열혈 MAX)
             const cSide = powerMax ? '#fb923c' : '#facc15', cFront = powerMax ? '#fef9c3' : '#ef4444';
             const tr = powerMax ? '#f97316' : undefined;
             playerBullets.push({ x: playerX, y: playerY - 26, vx: -5, vy: bulletSpeed, width: 7, height: 20, color: cSide, trail: tr });
@@ -4881,9 +5297,7 @@
       }
 
       // 플레이어 총알 이동 & 렌더링
-      ctx.fillStyle = '#38bdf8';
-      ctx.shadowColor = '#0284c7';
-      ctx.shadowBlur = 8;
+      // (V 3.5) 실시간 shadowBlur 제거 -> 색별로 구워둔 빛 번짐 스프라이트 사용
       for (let i = playerBullets.length - 1; i >= 0; i--) {
         const pb = playerBullets[i];
         pb.x += (pb.vx || 0);
@@ -4891,7 +5305,10 @@
 
         // 잔상 궤적 -> 속도감
         drawBulletTrail(pb.x, pb.y + pb.height, pb.trail ? 34 : 22, pb.width * (pb.trail ? 1.1 : 0.7), pb.trail || pb.color || '#38bdf8');
-        ctx.fillStyle = pb.color || '#38bdf8';
+        const bc = pb.color || '#38bdf8';
+        const glow = getBulletGlow(bc, pb.width, pb.height);
+        if (glow) ctx.drawImage(glow.img, pb.x - pb.width / 2 - GLOW_PAD, pb.y - GLOW_PAD, glow.w, glow.h);
+        ctx.fillStyle = bc;
         ctx.fillRect(pb.x - pb.width / 2, pb.y, pb.width, pb.height);
 
         // 적과의 충돌 검사 (HP 차감 및 격추 판정 - 요새 코어는 외곽 포탑이 남아있어도 타격 가능)
@@ -5015,7 +5432,6 @@
           playerBullets.splice(i, 1);
         }
       }
-      ctx.shadowBlur = 0; // 리셋
 
       // -----------------------------------------------------------
       // 4. 적 생성 & 업데이트 & 렌더링 (일반 자코 + 그룹 편대 + 소형/중형/대형 자코)
@@ -5092,7 +5508,14 @@
           if (pool.length) {
             let r = Math.random() * wsum, nextType = pool[0][0];
             for (const [tp, w] of pool) { r -= w; if (r <= 0) { nextType = tp; break; } }
-            enemies.push(new Enemy(nextType));
+            if (nextType === 1) {
+              // (V 3.1) 톱니 드론은 3기 줄줄이
+              const lead = new Enemy(1);
+              enemies.push(lead);
+              for (let c = 1; c < 3; c++) enemies.push(new Enemy(1, { chain: lead, idx: c }));
+            } else {
+              enemies.push(new Enemy(nextType));
+            }
           }
         }
 
@@ -5264,7 +5687,7 @@
               }
               createExplosion(it.x, it.y, 40, '#ef4444', 25);
             } else {
-              // POWER +20% (최대 200%)
+              // POWER +20% (최대 100%, 5개)
               if (firePower < FIRE_POWER_MAX) {
                 firePower = Math.min(FIRE_POWER_MAX, firePower + FIRE_POWER_STEP);
                 updateRapidDisplay();
@@ -5406,7 +5829,7 @@
         // [성능] forEach -> for (클로저 생성 제거), globalAlpha 는 루프 후 1회만 복원
         let aliveParticles = 0;
         const parts = exp.particles;
-        for (let k = 0; k < parts.length; k++) {
+        for (let k = 0; k < exp.n; k++) {
           const p = parts[k];
           if (p.alpha <= 0) continue;
           p.x += p.vx;
@@ -5423,6 +5846,7 @@
 
         if (aliveParticles === 0 && exp.ringAlpha <= 0) {
           explosions.splice(i, 1);
+          releaseExplosion(exp);
         }
       }
 
