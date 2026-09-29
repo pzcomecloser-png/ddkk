@@ -805,7 +805,7 @@
         <div class="copyright">&copy; 2026 DDKK GAMES.<br>ALL RIGHTS RESERVED</div>
       </div>
 
-      <div class="title-version">V 3.9</div>
+      <div class="title-version">V 4.0</div>
     </div>
 
     <div class="controls" id="controlsPanel" style="display:none;">
@@ -4880,7 +4880,7 @@
         c.strokeStyle = '#1f2937'; c.lineWidth = 2; c.strokeRect(bx - 75, by - 10, 150, 20);
       });
 
-      // 4) 도시 블록 (강·산을 피해 배치) + 도로
+      // 4) 도시 블록 (강·산을 피해 배치)
       const blocks = [];
       for (let i = 0; i < 70; i++) {
         const y = R() * H, x = 40 + R() * (WIDTH - 80);
@@ -4888,8 +4888,6 @@
         if (mountains.some(([mx, my]) => Math.hypot(x - mx, y - my) < 170)) continue;
         blocks.push([x, y, 26 + R() * 34, 22 + R() * 30, R()]);
       }
-      c.strokeStyle = 'rgba(120, 100, 80, 0.35)'; c.lineWidth = 8; c.lineCap = 'butt';
-      for (let y = 90; y < H; y += 260) wrap(o => { c.beginPath(); c.moveTo(0, y + o); c.lineTo(WIDTH, y + o); c.stroke(); });
       blocks.forEach(([x, y, w, h, k]) => wrap(o => {
         if (k < 0.3) {                       // 무너진 잔해
           c.fillStyle = '#3f3a36'; c.beginPath(); c.moveTo(x - w / 2, y + h / 2 + o); c.lineTo(x - w / 4, y - h / 2 + o); c.lineTo(x + w / 3, y - h / 4 + o); c.lineTo(x + w / 2, y + h / 2 + o); c.closePath(); c.fill();
@@ -4901,7 +4899,33 @@
           c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(x - w / 4, y - h / 4 + o, w / 2, h / 2);
         }
       }));
-      return { img: off, blocks, riverX };
+
+      // 5) (V 4.0) 나무: 드문드문. 강·산·건물을 피해 배치 (별도 시드라 건물·불꽃 위치는 그대로)
+      let ts = 7331;
+      const TR = () => seedRandom(ts++);
+      const trees = [];
+      for (let i = 0; i < 60 && trees.length < 16; i++) {
+        const x = 30 + TR() * (WIDTH - 60), y = TR() * H, r = 11 + TR() * 8;
+        if (Math.abs(x - riverX(y)) < 75 + r) continue;
+        if (mountains.some(([mx, my]) => Math.hypot(x - mx, y - my) < 160)) continue;
+        if (blocks.some(([bx, by, bw, bh]) => Math.abs(x - bx) < bw / 2 + r + 6 && Math.abs(y - by) < bh / 2 + r + 6)) continue;
+        if (trees.some(([tx, ty]) => Math.hypot(x - tx, y - ty) < 60)) continue;
+        trees.push([x, y, r, TR()]);
+      }
+      trees.forEach(([x, y, r, k]) => wrap(o => {
+        const yy = y + o;
+        c.fillStyle = 'rgba(0,0,0,0.35)';                                   // 그림자
+        c.beginPath(); c.arc(x + 5, yy + 5, r, 0, Math.PI * 2); c.fill();
+        c.fillStyle = k < 0.5 ? '#2f4a26' : '#35522a';                      // 잎 (작은 원 3개 + 가운데)
+        for (let a = 0; a < 3; a++) {
+          const ang = a / 3 * Math.PI * 2 + k * 6;
+          c.beginPath(); c.arc(x + Math.cos(ang) * r * 0.45, yy + Math.sin(ang) * r * 0.45, r * 0.7, 0, Math.PI * 2); c.fill();
+        }
+        c.beginPath(); c.arc(x, yy, r * 0.75, 0, Math.PI * 2); c.fill();
+        c.fillStyle = 'rgba(163, 190, 120, 0.22)';                          // 윗면 빛
+        c.beginPath(); c.arc(x - r * 0.25, yy - r * 0.3, r * 0.4, 0, Math.PI * 2); c.fill();
+      }));
+      return { img: off, blocks, riverX, trees };
     }
     const groundTex = createGroundTexture();
     let groundScroll = 0;
