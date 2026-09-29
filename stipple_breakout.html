@@ -1,0 +1,2174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>STIPPLE BREAKOUT</title>
+    <style>
+        /* iPhone Safari 대응: 폰트는 반드시 실명으로 지정한다.
+           generic monospace는 Mac(Menlo)과 iOS(Courier)에서 글자폭이 달라
+           같은 문자열이 다른 너비로 렌더링된다. */
+        :root {
+            --mono: "Menlo", "Monaco", "Courier New", monospace;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #fff;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: var(--mono);
+            /* iOS 터치 보정 끄기 - 게임 조작 간섭 방지 */
+            -webkit-text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+            overscroll-behavior: none;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* dvh: iOS Safari 주소창 표시/숨김에 따라 100vh가 변하는 문제 회피.
+               미지원 브라우저는 앞의 100vh로 폴백된다. */
+            height: 100vh;
+            height: 100dvh;
+        }
+
+        /* 1170x2080 9:16 비율 유지 및 레터박싱 */
+        #game-container {
+            position: relative;
+            width: 100vmin;
+            height: calc(100vmin * 2080 / 1170);
+            max-height: 100vh;
+            max-height: 100dvh;
+            max-width: calc(100vh * 1170 / 2080);
+            max-width: calc(100dvh * 1170 / 2080);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            background: #020202;
+            display: block;
+            /* iOS에서 캔버스 드래그가 스크롤/새로고침으로 넘어가지 않게 함 */
+            touch-action: none;
+        }
+
+        /* CRT 스캔라인 오버레이 */
+        #game-container::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.18) 50%);
+            z-index: 2;
+            background-size: 100% 4px;
+            pointer-events: none;
+        }
+
+        /* 개발자 모드 진입 버튼 (게임 영역 내부 좌측 하단) */
+        #dev-entry {
+            position: absolute;
+            left: 2%;
+            bottom: 2%;
+            width: 8%;
+            height: 4%;
+            background: transparent;
+            border: none;
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        /* 개발자 모드 오버레이 - 게임 영역(1170x2080) 내부로 제한 */
+        #dev-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.95);
+            color: #fff;
+            font-family: var(--mono);
+            z-index: 20;
+            justify-content: center;
+            align-items: center;
+            overflow-y: auto;
+            box-sizing: border-box;
+            padding: 4% 0;
+        }
+        #dev-overlay.open { display: flex; }
+        #dev-panel {
+            width: 92%;
+            border: 1px solid #fff;
+            padding: 4%;
+            box-sizing: border-box;
+            margin: auto;
+        }
+        #dev-panel h2 {
+            text-align: center;
+            font-size: 20px;
+            letter-spacing: 2px;
+            margin-top: 0;
+        }
+        .dev-menu-btn {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            background: #000;
+            color: #fff;
+            border: 1px solid #fff;
+            font-family: var(--mono);
+            font-size: 16px;
+            padding: 12px;
+            margin-top: 10px;
+            cursor: pointer;
+            text-align: left;
+        }
+        .dev-menu-btn:hover { background: #fff; color: #000; }
+        #dev-close {
+            margin-top: 16px;
+            width: 100%;
+            padding: 10px;
+            background: #000;
+            color: #fff;
+            border: 1px solid #fff;
+            font-family: var(--mono);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="1170" height="2080"></canvas>
+    <button id="dev-entry" aria-label="dev mode"></button>
+
+    <div id="dev-overlay">
+        <div id="dev-panel">
+            <div id="dev-menu-screen">
+                <h2>DEVELOPER MODE</h2>
+                <button class="dev-menu-btn" data-cat="paddle">1. 패들 디자인</button>
+                <button class="dev-menu-btn" data-cat="brick">2. 벽돌 디자인</button>
+                <button class="dev-menu-btn" data-cat="item">3. 아이템 디자인</button>
+                <button class="dev-menu-btn" data-cat="stage">4. 스테이지 디자인</button>
+                <button class="dev-menu-btn" data-cat="prologue">5. 프롤로그 검토</button>
+                <button class="dev-menu-btn" data-cat="ending">6. 엔딩 검토</button>
+            </div>
+            <div id="dev-detail-screen" style="display:none;">
+                <h2 id="dev-detail-title"></h2>
+                <div id="dev-detail-body" style="font-size:14px; line-height:1.6; min-height:80px;"></div>
+                <button class="dev-menu-btn" id="dev-back-btn" style="text-align:center;">&lt; BACK</button>
+            </div>
+            <button id="dev-close">CLOSE</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // 게임 내부 논리 해상도 (고정)
+    const LOGIC_WIDTH = 1170;
+    const LOGIC_HEIGHT = 2080;
+
+    let gameState = 'START'; // START, PLAY, GAME_OVER, CLEAR
+
+    // 캔버스 폰트 스택 - CSS와 동일하게 실명 지정.
+    // generic monospace는 macOS와 iOS에서 서로 다른 폰트로 해석되어
+    // 글자폭이 달라지므로 절대 단독 사용하지 않는다.
+    const MONO = '"Menlo", "Monaco", "Courier New", monospace';
+    const font = (spec) => `${spec} ${MONO}`;
+
+    // 고정 타임스텝 - 60Hz 기준. iPhone ProMotion(120Hz)에서도 같은 속도 보장
+    const STEP_MS = 1000 / 60;
+    let lastTime = 0;
+    let accumulator = 0;
+
+    // ===== 샌드아트 도트 렌더링 공통 파라미터 =====
+    const DOT_SPACING = 3.4;     // 도트 간격. 작을수록 촘촘한 모래알
+    const DOT_SIZE = 1.5;        // 도트 지름. 네모 느낌 없애려고 아주 작게
+    const DOT_JITTER = 1.25;     // 도트 위치 흔들림. 격자 느낌 제거용
+    const SAND_INTERVAL = 110;   // ms. 모래알이 다시 자리잡는 주기
+    const SAND_FRAMES = 6;       // 미리 만들어 두는 모래 배치 프레임 수
+
+    // 결정론적 해시 - 같은 입력이면 항상 같은 값
+    function hash3(a, b, c) {
+        let h = (a * 73856093) ^ (b * 19349663) ^ (c * 83492791);
+        h = (h ^ (h >>> 13)) * 1274126177;
+        return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    }
+
+    // 임의 컨텍스트에 도트를 흩뿌린다. 샌드아트 렌더링의 핵심 단 하나의 함수.
+    //  density: 0~1, 도트가 찍힐 확률 (밀도)
+    //  lum: 0~255 또는 (nx, ny) => 0~255 함수
+    //  mask: (nx, ny) => bool, 도형 내부 판정. 생략하면 사각형 전체
+    function scatterDotsColor(c, x, y, w, h, opts) {
+        const {
+            density = 1, lum = 255, mask = null, seed = 0, frame = 0,
+            spacing = DOT_SPACING, size = DOT_SIZE, jitter = DOT_JITTER,
+            r = 255, g = 255, b = 255
+        } = opts;
+
+        const cols = Math.max(1, Math.round(w / spacing));
+        const rows = Math.max(1, Math.round(h / spacing));
+        const stepX = w / cols;
+        const stepY = h / rows;
+        const isLumFn = (typeof lum === 'function');
+        const half = size / 2;
+
+        for (let gr = 0; gr < rows; gr++) {
+            for (let gc = 0; gc < cols; gc++) {
+                const nx = (gc + 0.5) / cols;
+                const ny = (gr + 0.5) / rows;
+                if (mask && !mask(nx, ny)) continue;
+
+                const r1 = hash3(seed + gc * 31 + gr * 17, gr, frame);
+                const localDensity = (typeof density === 'function') ? density(nx, ny) : density;
+                if (r1 > localDensity) continue;
+
+                const r2 = hash3(seed + 911, gc * 7 + gr, frame);
+                const r3 = hash3(seed + 1777, gr * 13 + gc, frame);
+
+                const dx = x + stepX * (gc + 0.5) + (r2 - 0.5) * jitter * 2;
+                const dy = y + stepY * (gr + 0.5) + (r3 - 0.5) * jitter * 2;
+
+                let L = isLumFn ? lum(nx, ny) : lum;
+                L = Math.max(0, Math.min(255, L * (0.75 + r2 * 0.35)));
+                const fR = Math.min(255, Math.round((L / 255) * r));
+                const fG = Math.min(255, Math.round((L / 255) * g));
+                const fB = Math.min(255, Math.round((L / 255) * b));
+
+                c.fillStyle = `rgb(${fR},${fG},${fB})`;
+                c.fillRect(dx - half, dy - half, size, size);
+            }
+        }
+    }
+
+    function scatterDots(c, x, y, w, h, opts) {
+        const {
+            density = 1,
+            lum = 255,
+            mask = null,
+            seed = 0,
+            frame = 0,
+            spacing = DOT_SPACING,
+            size = DOT_SIZE,
+            jitter = DOT_JITTER
+        } = opts;
+
+        const cols = Math.max(1, Math.round(w / spacing));
+        const rows = Math.max(1, Math.round(h / spacing));
+        const stepX = w / cols;
+        const stepY = h / rows;
+        const isLumFn = (typeof lum === 'function');
+        const half = size / 2;
+
+        for (let gr = 0; gr < rows; gr++) {
+            for (let gc = 0; gc < cols; gc++) {
+                // 정규화 좌표 - 명암/마스크 계산에 사용
+                const nx = (gc + 0.5) / cols;
+                const ny = (gr + 0.5) / rows;
+
+                if (mask && !mask(nx, ny)) continue;
+
+                const r1 = hash3(seed + gc * 31 + gr * 17, gr, frame);
+                const localDensity = (typeof density === 'function') ? density(nx, ny) : density;
+                if (r1 > localDensity) continue;
+
+                const r2 = hash3(seed + 911, gc * 7 + gr, frame);
+                const r3 = hash3(seed + 1777, gr * 13 + gc, frame);
+
+                // 격자에서 살짝 벗어나게 흔들어 모래알처럼 보이게 함
+                const dx = x + stepX * (gc + 0.5) + (r2 - 0.5) * jitter * 2;
+                const dy = y + stepY * (gr + 0.5) + (r3 - 0.5) * jitter * 2;
+
+                let L = isLumFn ? lum(nx, ny) : lum;
+                // 알알이 밝기를 조금씩 다르게 해서 모래 질감을 살림
+                L = Math.max(0, Math.min(255, L * (0.75 + r2 * 0.35)));
+
+                c.fillStyle = `rgb(${L|0},${L|0},${L|0})`;
+                c.fillRect(dx - half, dy - half, size, size);
+            }
+        }
+    }
+
+    // ===== 입력 =====
+    let keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function handleMove(clientX) {
+        const rect = canvas.getBoundingClientRect();
+        // 캔버스는 CSS로 축소 표시되므로 논리 좌표로 환산해야 한다.
+        // iPhone에서는 rect.width가 논리 해상도(1170)와 크게 다르다.
+        const scaleX = LOGIC_WIDTH / rect.width;
+        const newX = (clientX - rect.left) * scaleX - paddle.width / 2;
+        // 바로 이동하지 않고 목표만 정함. update()에서 부드럽게 따라가 약간의 관성이 생김
+        paddle.targetX = Math.max(0, Math.min(newX, LOGIC_WIDTH - paddle.width));
+    }
+
+    // touchstart도 처리해야 첫 터치에 패들이 즉시 반응한다.
+    canvas.addEventListener('touchstart', e => {
+        e.preventDefault();
+        handleMove(e.touches[0].clientX);
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+        e.preventDefault();
+        handleMove(e.touches[0].clientX);
+    }, { passive: false });
+
+    canvas.addEventListener('mousemove', e => handleMove(e.clientX));
+
+    // iOS는 더블탭 확대와 핀치 줌을 문서 레벨에서 시도하므로 차단한다.
+    document.addEventListener('gesturestart', e => e.preventDefault());
+    document.addEventListener('dblclick', e => e.preventDefault());
+
+    // ===== 조작감 튜닝 (Pretext Breaker에서 흡수) =====
+    const PADDLE_FOLLOW = 16;              // 패들이 목표를 따라가는 속도 (초당 계수)
+    const PADDLE_HIT_MARGIN = 2;           // 패들 좌우 판정 여유 (px)
+    const PADDLE_MIN_OFFSET = 0.18;        // 정중앙 반사 방지 - 최소 기울기
+    const PADDLE_MAX_ANGLE = 65 * Math.PI / 180;   // 최대 반사 각도
+    const SHAKE_PADDLE = 1.4;              // 패들 타격 흔들림
+    const SHAKE_BRICK = 2.6;               // 벽돌 파괴 흔들림
+    const SHAKE_CHIP = 1.2;                // 벽돌이 버틸 때 흔들림
+    const SHAKE_METAL = 0.8;               // 금속에 튕길 때 흔들림
+    const SHAKE_DECAY = 16;                // 흔들림 감쇠 (초당)
+    let screenShake = 0;
+    let hitStopTimer = 0;
+
+    // 공 초기 속도 (속력 = hypot(VX, VY)). V2.9 16.0 -> V3.0 12.8 (20% 감소)
+    const BALL_VX = 7.68;
+    const BALL_VY = 10.24;
+
+    // ===== 엔티티 =====
+    const paddle = {
+        x: LOGIC_WIDTH / 2 - 252 / 2,
+        y: LOGIC_HEIGHT - 200,
+        width: 252,          // V3.1 280 -> V3.1.1 252 (10% 감소)
+        height: 46,
+        speed: 24
+    };
+
+    const ball = {
+        x: LOGIC_WIDTH / 2,
+        y: LOGIC_HEIGHT - 300,
+        vx: BALL_VX,
+        vy: -BALL_VY,
+        radius: 18
+    };
+
+    // 공 잔상(혜성 꼬리)
+    const TRAIL_MAX = 16;
+    const trail = [];
+
+    // ===== 배경 먼지 (공기 중에 떠다니는 모래 입자) =====
+    // Pretext Breaker의 텍스트 월 방식을 입자에 적용:
+    //  - 먼지마다 "원래 자리(home)"가 있고, 원래 자리는 공기 흐름으로 아주 천천히 떠다닌다.
+    //  - 공과 공이 지나간 흔적(구멍)이 원래 자리를 덮으면 목표 위치를 구멍 가장자리로 밀어낸다.
+    //  - 구멍은 짧게 살다 사라지므로, 먼지는 항상 원래 자리로 돌아와 빈자리가 채워진다.
+    // 객체 대신 Float32Array 풀을 써서 매 프레임 할당이 없도록 함 (iPhone 성능 고려)
+    const DUST_COUNT = 1400;
+    const DUST_LUM = [72, 90, 108, 126];    // 연한 회색 4단계 (벽돌 180~250보다 확실히 어둡게)
+    const DUST_MIN_SCREEN_PX = 1.3;         // 화면에 실제로 찍히는 최소 점 크기 (CSS px)
+    const DUST_BUCKETS = DUST_LUM.length;   // 단계별로 묶어 그려 fillStyle 변경을 4회로 제한
+    const DUST_EASE = 0.2;                  // 현재 위치가 목표 위치를 따라가는 비율 (프레임당)
+
+    const BALL_HOLE_R = 60;                 // 공이 먼지를 비워내는 반경
+    const WAKE_HOLE_R = 46;                 // 공이 지나간 흔적 구멍 반경
+    const WAKE_SPACING = 28;                // 공이 이만큼 이동할 때마다 흔적 구멍 1개
+    const WAKE_LIFE = 0.42;                 // 흔적 구멍 수명 (초). 오래된 것부터 닫혀 꼬리부터 채워짐
+    const HOLE_CLOSE_PORTION = 0.35;        // 수명 마지막 35% 동안 반경을 줄여 부드럽게 닫힘
+
+    const dust = {
+        x:  new Float32Array(DUST_COUNT), y:  new Float32Array(DUST_COUNT),   // 현재 위치
+        hx: new Float32Array(DUST_COUNT), hy: new Float32Array(DUST_COUNT),   // 원래 자리
+        bx: new Float32Array(DUST_COUNT), by: new Float32Array(DUST_COUNT),   // 원래 자리 표류 방향
+        ph: new Float32Array(DUST_COUNT)
+    };
+    const dustHoles = [];                   // { x, y, r, life, max }
+    const MAX_HOLES = 64;                   // 프레임당 계산용 구멍 버퍼 (할당 없이 재사용)
+    const holeX = new Float32Array(MAX_HOLES), holeY = new Float32Array(MAX_HOLES), holeR = new Float32Array(MAX_HOLES);
+    const holeType = new Int8Array(MAX_HOLES); // 0: Normal, 1: Blackhole Suck
+    let wakeX = null, wakeY = null;
+    let dustTick = 0;
+
+    function initDust() {
+        for (let i = 0; i < DUST_COUNT; i++) {
+            dust.hx[i] = dust.x[i] = Math.random() * LOGIC_WIDTH;
+            dust.hy[i] = dust.y[i] = Math.random() * LOGIC_HEIGHT;
+            dust.bx[i] = (Math.random() - 0.5) * 0.12;
+            dust.by[i] = (Math.random() - 0.5) * 0.12;
+            dust.ph[i] = Math.random() * Math.PI * 2;
+        }
+    }
+
+    function resetDustHoles() {
+        dustHoles.length = 0;
+        wakeX = wakeY = null;
+    }
+
+    // 벽돌이 깨진 자리에 큰 구멍 - 파편이 흩어지며 먼지를 밀어냄
+    function addBrickDustHole(brick) {
+        if (dustHoles.length >= MAX_HOLES - 1) dustHoles.shift();
+        dustHoles.push({ x: brick.x + brick.w / 2, y: brick.y + brick.h / 2, r: brick.w * 0.6, life: 0.5, max: 0.5, type: 'NORMAL' });
+    }
+
+    function updateDustHoles() {
+        const dt = STEP_MS / 1000;
+        for (let i = dustHoles.length - 1; i >= 0; i--) {
+            const h = dustHoles[i];
+            h.life -= dt;
+            if (h.life <= 0) dustHoles.splice(i, 1);
+        }
+        if (gameState !== 'PLAY') { wakeX = wakeY = null; return; }
+        if (balls.length > 0) {
+            const primary = balls[0];
+            if (wakeX === null) { wakeX = primary.x; wakeY = primary.y; return; }
+            const dx = primary.x - wakeX, dy = primary.y - wakeY;
+            if (dx * dx + dy * dy >= WAKE_SPACING * WAKE_SPACING) {
+                if (dustHoles.length >= MAX_HOLES - 1) dustHoles.shift();
+                dustHoles.push({ x: primary.x, y: primary.y, r: WAKE_HOLE_R, life: WAKE_LIFE, max: WAKE_LIFE });
+                wakeX = primary.x; wakeY = primary.y;
+            }
+        }
+    }
+
+    // (px, py)가 구멍 안이면 목표 좌표를 out에 담는다
+    const pushOut = { x: 0, y: 0 };
+    function carveHole(px, py, cx, cy, r, i, type = 0) {
+        const rx = px - cx, ry = py - cy;
+        if (rx <= -r || rx >= r || ry <= -r || ry >= r) return false;
+        const d2 = rx * rx + ry * ry;
+        if (d2 >= r * r) return false;
+        
+        // type 1: 블랙홀 흡입. 중심점으로 입자를 당긴다.
+        if (type === 1) {
+            pushOut.x = cx + (hash3(777, i, 0)-0.5)*10;
+            pushOut.y = cy + (hash3(888, i, 0)-0.5)*10;
+            return true;
+        }
+
+        let d = Math.sqrt(d2), ux, uy;
+        if (d > 0.01) { ux = rx / d; uy = ry / d; }
+        else { ux = (i & 1) ? 1 : -1; uy = 0; }      // 정중앙이면 좌우로 나눠 보냄
+        pushOut.x = cx + ux * r;
+        pushOut.y = cy + uy * r;
+        return true;
+    }
+
+    function updateDust() {
+        dustTick++;
+        updateDustHoles();
+
+        const t = dustTick * 0.012;
+        const ballActive = gameState === 'PLAY';
+        const { x, y, hx, hy, bx, by, ph } = dust;
+
+        // 이번 프레임에 쓸 구멍 목록을 미리 계산 (반경 축소 포함) - 입자마다 다시 계산하지 않음
+        let HN = 0;
+        for (let k = 0; k < dustHoles.length; k++) {
+            const h = dustHoles[k];
+            // 블랙홀일 경우 흡입 단계와 폭발 단계 처리
+            if (h.type === 'BLACKHOLE') {
+                const age = h.life / h.max;
+                if (age > 0.1) {
+                    // 빨아들이는 단계 (90% 시간)
+                    holeX[HN] = h.x; holeY[HN] = h.y; holeR[HN] = h.r * 2.5; holeType[HN] = 1; HN++;
+                } else {
+                    // 터지는 단계 (마지막 10% 시간)
+                    holeX[HN] = h.x; holeY[HN] = h.y; holeR[HN] = h.r * 3; holeType[HN] = 0; HN++;
+                }
+                continue;
+            }
+
+            const r = h.r * Math.min(1, (h.life / h.max) / HOLE_CLOSE_PORTION);
+            if (r < 1) continue;
+            holeX[HN] = h.x; holeY[HN] = h.y; holeR[HN] = r; holeType[HN] = 0; HN++;
+        }
+        if (ballActive) {
+            for (let b = 0; b < balls.length && HN < MAX_HOLES; b++) {
+                holeX[HN] = balls[b].x; holeY[HN] = balls[b].y; holeR[HN] = BALL_HOLE_R; holeType[HN] = 0; HN++;
+            }
+        }
+
+        // 모든 구멍을 감싸는 경계 - 밖에 있는 입자는 구멍 검사를 통째로 건너뜀
+        let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+        for (let k = 0; k < HN; k++) {
+            minX = Math.min(minX, holeX[k] - holeR[k]); maxX = Math.max(maxX, holeX[k] + holeR[k]);
+            minY = Math.min(minY, holeY[k] - holeR[k]); maxY = Math.max(maxY, holeY[k] + holeR[k]);
+        }
+
+        for (let i = 0; i < DUST_COUNT; i++) {
+            // 1) 원래 자리 - 공기 흐름으로 아주 천천히 표류, 화면 밖으로 나가면 반대편으로
+            let nhx = hx[i] + bx[i] + Math.sin(t + ph[i]) * 0.06;
+            let nhy = hy[i] + by[i] + Math.cos(t * 0.8 + ph[i] * 1.3) * 0.05;
+            if (nhx < 0)             { nhx += LOGIC_WIDTH;  x[i] += LOGIC_WIDTH; }
+            else if (nhx >= LOGIC_WIDTH)  { nhx -= LOGIC_WIDTH;  x[i] -= LOGIC_WIDTH; }
+            if (nhy < 0)             { nhy += LOGIC_HEIGHT; y[i] += LOGIC_HEIGHT; }
+            else if (nhy >= LOGIC_HEIGHT) { nhy -= LOGIC_HEIGHT; y[i] -= LOGIC_HEIGHT; }
+            hx[i] = nhx; hy[i] = nhy;
+
+            // 2) 목표 위치 = 원래 자리. 구멍이 덮고 있으면 가장자리로 밀어냄
+            let tx = nhx, ty = nhy;
+            if (HN > 0 && tx > minX && tx < maxX && ty > minY && ty < maxY) {
+                for (let k = 0; k < HN; k++) {
+                    if (carveHole(tx, ty, holeX[k], holeY[k], holeR[k], i, holeType[k])) { tx = pushOut.x; ty = pushOut.y; }
+                }
+            }
+
+            // 3) 현재 위치가 목표 위치를 부드럽게 따라감
+            x[i] += (tx - x[i]) * DUST_EASE;
+            y[i] += (ty - y[i]) * DUST_EASE;
+        }
+    }
+
+    // 캔버스가 축소 표시되면 1.5px 점은 1px 미만으로 뭉개져 사라진다.
+    // 화면 표시 배율을 역산해 실제 화면에서 최소 DUST_MIN_SCREEN_PX 크기가 되도록 보정한다.
+    let dustDotSize = 2.6;
+    function updateDustDotSize() {
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width > 0) {
+            dustDotSize = Math.max(2.6, DUST_MIN_SCREEN_PX * LOGIC_WIDTH / rect.width);
+        }
+    }
+    window.addEventListener('resize', updateDustDotSize);
+
+    function drawDust() {
+        const s = dustDotSize, half = s / 2;
+        const { x, y } = dust;
+        for (let b = 0; b < DUST_BUCKETS; b++) {
+            const L = DUST_LUM[b];
+            ctx.fillStyle = `rgb(${L},${L},${L})`;
+            for (let i = b; i < DUST_COUNT; i += DUST_BUCKETS) {
+                ctx.fillRect(x[i] - half, y[i] - half, s, s);
+            }
+        }
+    }
+
+    // ===== 아이템 및 다중 공 =====
+    const balls = [];
+    const lasers = [];
+    const items = [];
+    
+    // 아이템 종류
+    const ITEM_TYPES = [
+        { type: 'E', desc: 'EXPAND (패들 확장)', color: 255 },
+        { type: 'L', desc: 'LASER (레이저 포)', color: 210 },
+        { type: 'M', desc: 'MULTI (공 분열)', color: 170 },
+        { type: 'P', desc: 'POWER (공 파워+1)', color: 120 }
+    ];
+
+    // ===== 벽돌 =====
+    const bricks = [];
+    const rows = 6;
+    const cols = 13;
+    const brickWidth = LOGIC_WIDTH / cols;
+    const brickHeight = brickWidth * (11 / 36) * 1.5;
+    const rowGap = brickHeight * 0.6;
+    const brickInset = 3;
+    const brickRadius = 6;
+    const offsetX = 0;
+    const offsetY = LOGIC_HEIGHT * 0.32;
+
+    // ===== 벽돌 6종 (내구도 + 밀도 + 무늬) - 스테이지 적용 =====
+    //  hp: 파괴에 필요한 타격 수 (Infinity = 파괴 불가)
+    //  density / lum: 밀도가 높을수록 도트가 촘촘하고 밝음
+    //  pattern(nx, ny, w, h): 0~1 사이 가중치. 밀도에 곱해져 무늬가 됨
+    //  density: 무늬가 없는 곳의 기본 밀도 (단계가 오를수록 증가)
+    //  dAmp: 무늬 홈에서 밀도를 줄이는 비율 / lAmp: 무늬 홈에서 밝기를 줄이는 비율
+    //  낮은 단계는 도트가 비는 무늬(밀도), 높은 단계는 새겨진 무늬(밝기)로 표현해 밀도 순서가 유지됨
+    const BRICK_TIERS = [
+        { name: 'SAND',    hp: 1,        density: 0.30, lum: 150, dAmp: 0,    lAmp: 0,    desc: '1타 파괴 - 무늬 없음, 흩날리는 모래',
+          pattern: () => 1 },
+        { name: 'GRAIN',   hp: 2,        density: 0.50, lum: 180, dAmp: 0.6,  lAmp: 0.25, desc: '2타 파괴 - 가로 결',
+          pattern: (nx, ny) => Math.sin(ny * Math.PI * 6) > 0 ? 1 : 0 },
+        { name: 'WEAVE',   hp: 3,        density: 0.66, lum: 200, dAmp: 0.5,  lAmp: 0.35, desc: '3타 파괴 - 사선 교차 짜임',
+          pattern: (nx, ny, w, h) => {
+              const u = nx * w / 12, v = ny * h / 12;
+              const a = Math.abs(((u + v) % 1) - 0.5) < 0.2, b = Math.abs(((u - v + 100) % 1) - 0.5) < 0.2;
+              return (a || b) ? 1 : 0;
+          } },
+        { name: 'CRYSTAL', hp: 4,        density: 0.82, lum: 215, dAmp: 0.25, lAmp: 0.55, desc: '4타 파괴 - 다이아몬드 결정',
+          pattern: (nx, ny, w, h) => {
+              const u = nx * w / 18, v = ny * h / 18;
+              const dx = Math.abs((u % 1) - 0.5), dy = Math.abs((v % 1) - 0.5);
+              return (dx + dy < 0.38) ? 1 : 0;                  // 다이아몬드 홈
+          } },
+        { name: 'SILVER',  hp: 5,        density: 0.98, lum: 250, dAmp: 0.1,  lAmp: 0.2,  desc: '5타 파괴 - 제일 파괴하기 어려운 은색 블럭',
+          pattern: (nx, ny) => Math.sin(nx * Math.PI * 8) > 0 ? 1 : 0.8 },
+        { name: 'GOLD',    hp: Infinity, density: 0.98, lum: 180, dAmp: 0,    lAmp: 0,    desc: '파괴 불가 - 파괴되지 않는 금색 블럭',
+          pattern: () => 1 }
+    ];
+
+    // 벽돌 1개를 그림. hits = 지금까지 맞은 횟수 (균열 표현용)
+    function drawTierBrick(c, x, y, w, h, tierIdx, hits, f) {
+        const T = BRICK_TIERS[tierIdx];
+        const inset = 3, vx = x + inset, vy = y + inset, vw = w - inset * 2, vh = h - inset * 2;
+        const seed = 7000 + tierIdx * 97;
+
+        if (T.hp === Infinity) {
+            // GOLD: 촘촘하고 흔들림이 적은 도트 + 금속 반사 명암. 흑백이지만 금색의 무거운 톤 부여
+            scatterDots(c, vx, vy, vw, vh, {
+                seed, frame: f, spacing: 1.9, jitter: 0.35, density: T.density,
+                lum: (nx, ny) => (metalLum(ny) * 0.4 + 20) * (0.92 + 0.08 * Math.sin(nx * Math.PI))
+            });
+            // 두꺼운 이중 테두리
+            strokeDotRect(c, vx, vy, vw, vh, 3, { seed: seed + 1, frame: f, lum: 255, density: 1, spacing: 1.6 });
+            strokeDotRect(c, vx + 3, vy + 3, vw - 6, vh - 6, 2, { seed: seed + 2, frame: f, lum: 70, density: 1, spacing: 1.8 });
+            // 네 모서리 리벳 (밝은 머리 + 오른쪽 아래 그림자)
+            const r = Math.max(2.2, vh * 0.09);
+            [[0.1, 0.24], [0.9, 0.24], [0.1, 0.76], [0.9, 0.76]].forEach(([px, py], k) => {
+                const cx = vx + vw * px, cy = vy + vh * py;
+                const disc = (nx, ny) => Math.hypot(nx - 0.5, ny - 0.5) <= 0.5;
+                scatterDots(c, cx - r + 1, cy - r + 1, r * 2, r * 2, { seed: seed + 10 + k, frame: f, spacing: 1.2, jitter: 0.1, mask: disc, density: 1, lum: 30 });
+                scatterDots(c, cx - r, cy - r, r * 2, r * 2, { seed: seed + 20 + k, frame: f, spacing: 1.2, jitter: 0.1, mask: disc, density: 1,
+                    lum: (nx, ny) => 255 - Math.hypot(nx - 0.3, ny - 0.3) * 130 });
+            });
+            return;
+        }
+
+        // 일반 벽돌: 무늬 홈(pattern=0)에서 밀도와 밝기를 각각 dAmp, lAmp만큼 줄임
+        scatterDots(c, vx, vy, vw, vh, {
+            seed, frame: f,
+            density: (nx, ny) => T.density * (1 - T.dAmp * (1 - T.pattern(nx, ny, vw, vh))),
+            lum: (nx, ny) => T.lum * (1 - T.lAmp * (1 - T.pattern(nx, ny, vw, vh))) * (0.88 + (1 - ny) * 0.16)
+        });
+        strokeDotRect(c, vx, vy, vw, vh, brickRadius, { seed: seed + 1, frame: f, lum: 255, density: 0.9 });
+
+        // 남은 체력 표시 - 아래쪽 작은 점 눈금 (남은 타격 수만큼)
+        const left = T.hp - hits;
+        if (T.hp > 1) {
+            const pip = 3.2, gap = 5, total = T.hp * pip + (T.hp - 1) * gap;
+            for (let p = 0; p < T.hp; p++) {
+                const px = vx + vw / 2 - total / 2 + p * (pip + gap), py = vy + vh - pip - 3;
+                scatterDots(c, px, py, pip, pip, { seed: seed + 40 + p, frame: f, spacing: 1.1, jitter: 0.1, density: 1, lum: p < left ? 255 : 55 });
+            }
+        }
+
+        // 맞은 횟수만큼 균열 - 중앙에서 뻗는 지그재그 도트 선
+        for (let k = 0; k < hits; k++) {
+            const ang = (k * 2.39996) + tierIdx;            // 황금각으로 겹치지 않게 분산
+            const len = Math.min(vw, vh * 2.4) * (0.32 + 0.1 * k);
+            let px = vx + vw / 2, py = vy + vh / 2;
+            const steps = Math.round(len / 2.2);
+            for (let s = 0; s < steps; s++) {
+                const wob = (hash3(seed + 60 + k, s, 0) - 0.5) * 1.3;
+                px += Math.cos(ang + wob) * 2.2;
+                py += Math.sin(ang + wob) * 2.2 * 0.55;
+                if (px < vx + 2 || px > vx + vw - 2 || py < vy + 2 || py > vy + vh - 2) break;
+                c.fillStyle = 'rgb(10,10,10)';
+                c.fillRect(px - 1.1, py - 1.1, 2.2, 2.2);
+            }
+        }
+    }
+
+    // 벽돌은 매 프레임 수천 개 도트를 다시 찍으면 느려지므로
+    // [단계][맞은 횟수][모래 프레임] 조합을 미리 그려 두고 블리팅한다.
+    // 일반 벽돌 hp 합계 15 + 금속 1 = 16 상태 x 6 프레임 = 96장
+    const brickSprites = []; // brickSprites[tier][hits][frame] = canvas
+
+    function buildBrickSprites() {
+        brickSprites.length = 0;
+        const sw = Math.ceil(brickWidth);
+        const sh = Math.ceil(brickHeight);
+        BRICK_TIERS.forEach((T, ti) => {
+            const states = [];
+            const hitStates = T.hp === Infinity ? 1 : T.hp;
+            for (let h = 0; h < hitStates; h++) {
+                const frames = [];
+                for (let f = 0; f < SAND_FRAMES; f++) {
+                    const off = document.createElement('canvas');
+                    off.width = sw;
+                    off.height = sh;
+                    drawTierBrick(off.getContext('2d'), 0, 0, sw, sh, ti, h, f);
+                    frames.push(off);
+                }
+                states.push(frames);
+            }
+            brickSprites.push(states);
+        });
+    }
+
+    // 라운드 사각 경계를 따라 도트를 촘촘히 배치
+    function strokeDotRect(c, x, y, w, h, r, opts) {
+        const { seed = 0, frame = 0, lum = 255, density = 1, spacing = 2.4 } = opts;
+        const path = [];
+
+        // 라운드 사각형 둘레를 따라 점 좌표를 생성
+        const addLine = (x1, y1, x2, y2) => {
+            const len = Math.hypot(x2 - x1, y2 - y1);
+            const n = Math.max(1, Math.round(len / spacing));
+            for (let i = 0; i < n; i++) {
+                const t = i / n;
+                path.push([x1 + (x2 - x1) * t, y1 + (y2 - y1) * t]);
+            }
+        };
+        const addArc = (cx, cy, a1, a2) => {
+            const len = Math.abs(a2 - a1) * r;
+            const n = Math.max(1, Math.round(len / spacing));
+            for (let i = 0; i <= n; i++) {
+                const a = a1 + (a2 - a1) * (i / n);
+                path.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+            }
+        };
+
+        addLine(x + r, y, x + w - r, y);
+        addArc(x + w - r, y + r, -Math.PI / 2, 0);
+        addLine(x + w, y + r, x + w, y + h - r);
+        addArc(x + w - r, y + h - r, 0, Math.PI / 2);
+        addLine(x + w - r, y + h, x + r, y + h);
+        addArc(x + r, y + h - r, Math.PI / 2, Math.PI);
+        addLine(x, y + h - r, x, y + r);
+        addArc(x + r, y + r, Math.PI, Math.PI * 1.5);
+
+        const half = DOT_SIZE / 2;
+        path.forEach(([px, py], i) => {
+            if (hash3(seed, i, frame) > density) return;
+            const j1 = hash3(seed + 7, i, frame) - 0.5;
+            const j2 = hash3(seed + 13, i, frame) - 0.5;
+            const L = Math.min(255, lum * (0.8 + hash3(seed + 21, i, frame) * 0.3));
+            c.fillStyle = `rgb(${L|0},${L|0},${L|0})`;
+            c.fillRect(px + j1 * 1.4 - half, py + j2 * 1.4 - half, DOT_SIZE, DOT_SIZE);
+        });
+    }
+
+    let currentStage = 0;
+    let lives = 2;
+    let score = 0;
+    const STAGES = [
+        // Stage 1
+        [
+            '4444444444444',
+            '3333333333333',
+            '2222222222222',
+            '1111111111111',
+            '0000000000000',
+            '0000000000000'
+        ],
+        // Stage 2
+        [
+            '4............',
+            '44...........',
+            '444..........',
+            '3333.........',
+            '33333........',
+            '222222.......',
+            '2222222......',
+            '11111111.....',
+            '111111111....',
+            '0000000000...',
+            '00000000000..',
+            '000000000000.'
+        ],
+        // Stage 3
+        [
+            'XXXXXXXXXXXXX',
+            '.............',
+            '4444444444444',
+            '.............',
+            '3333333333333',
+            '.............',
+            '2222222222222',
+            '.............',
+            '11.11.11.11.1'
+        ],
+        // Stage 4
+        [
+            '...444.444...',
+            '...444.444...',
+            '...333.333...',
+            '...333.333...',
+            '...222.222...',
+            '...222.222...',
+            '...111.111...',
+            '...111.111...',
+            '...000.000...',
+            '...000.000...'
+        ],
+        // Stage 5 (Space Invader)
+        [
+            '....4...4....',
+            '...44...44...',
+            '..444444444..',
+            '.44344444344.',
+            '.44444444444.',
+            '.4.4444444.4.',
+            '.4.4.....4.4.',
+            '...44...44...'
+        ],
+        // Stage 6 (H / Pillars)
+        [
+            '.X...X...X...',
+            '.4...4...4...',
+            '.333333333...',
+            '.3...3...3...',
+            '.222222222...',
+            '.2...2...2...',
+            '.111111111...',
+            '.1...1...1...',
+            '.0...0...0...'
+        ],
+        // Stage 7 (Globe)
+        [
+            '....XXXXX....',
+            '...4444444...',
+            '..333333333..',
+            '.33333333333.',
+            '.22222222222.',
+            '.22222222222.',
+            '.11111111111.',
+            '..111111111..',
+            '...0000000...',
+            '....00000....'
+        ],
+        // Stage 8 (Checkerboard)
+        [
+            '.X.4.X.4.X.4.',
+            '4.X.3.X.3.X.X',
+            '.3.4.2.4.2.3.',
+            '3.2.3.1.3.2.3',
+            '.2.1.2.0.2.1.',
+            '1.0.1.0.1.0.1'
+        ],
+        // Stage 9 (Faces)
+        [
+            '.444.....444.',
+            '.434.....434.',
+            '.444.....444.',
+            '.............',
+            '....22222....',
+            '....21112....',
+            '....22222....',
+            '....00000....'
+        ],
+        // Stage 10 (Diamond)
+        [
+            '......X......',
+            '.....444.....',
+            '....33333....',
+            '...2222222...',
+            '..111111111..',
+            '.00000000000.',
+            '..111111111..',
+            '...2222222...',
+            '....33333....',
+            '.....444.....',
+            '......X......'
+        ],
+        // Stage 11 (Concentric)
+        [
+            'XXXXXXXXXXXXX',
+            'X...........X',
+            'X.444444444.X',
+            'X.4.......4.X',
+            'X.4.33333.4.X',
+            'X.4.3...3.4.X',
+            'X.4.3.2.3.4.X',
+            'X.4.3...3.4.X',
+            'X.4.33333.4.X',
+            'X.4.......4.X',
+            'X.444444444.X'
+        ],
+        // Stage 12 (Maze)
+        [
+            'X.X.44444.X.X',
+            'X.X.4...4.X.X',
+            '3.3.3.X.3.3.3',
+            '3.3...X...3.3',
+            '2.22222.222.2',
+            '1...........1',
+            '0000000000000'
+        ],
+        // Stage 13 (Three Blocks)
+        [
+            '.444..444..444.',
+            '.333..333..333.',
+            '.222..222..222.',
+            '.111..111..111.',
+            '.000..000..000.'
+        ],
+        // Stage 14 (Lines)
+        [
+            '..444444444..',
+            '.............',
+            '.33333333333.',
+            '.............',
+            'X.222222222.X',
+            '.............',
+            '.11111111111.',
+            '.............',
+            '..000000000..'
+        ],
+        // Stage 15 (Heart / Wings)
+        [
+            '.3333...3333.',
+            '333333.333333',
+            '3333333333333',
+            '.22222222222.',
+            '..222222222..',
+            '...1111111...',
+            '....11111....',
+            '.....000.....',
+            '......0......'
+        ],
+        // Stage 16 (Arch)
+        [
+            '......4......',
+            '....44444....',
+            '..444444444..',
+            '3333333333333',
+            '222222.222222',
+            '1111.....1111',
+            '00.........00'
+        ],
+        // Stage 17 (Umbrella)
+        [
+            '......4......',
+            '....44444....',
+            '..444444444..',
+            '.33333333333.',
+            '3333333333333',
+            '22.22.2.22.22',
+            '......1......',
+            '......1......',
+            '....001......',
+            '....00.......'
+        ],
+        // Stage 18 (Pillars)
+        [
+            'X...........X',
+            'X.44.....44.X',
+            'X.44.....44.X',
+            'X.33.333.33.X',
+            'X.22.222.22.X',
+            'X.11.111.11.X',
+            'X.11.....11.X',
+            'X.00.....00.X',
+            'X...........X'
+        ],
+        // Stage 19 (Rectangle)
+        [
+            '.............',
+            '..444444444..',
+            '..433333334..',
+            '..432222234..',
+            '..432111234..',
+            '..432101234..',
+            '..432111234..',
+            '..432222234..',
+            '..433333334..',
+            '..444444444..'
+        ],
+        // Stage 20 (Dotted)
+        [
+            '.4.4.4.4.4.4.',
+            '4.4.4.4.4.4.4',
+            '3333333333333',
+            '.2.2.2.2.2.2.',
+            '2.2.2.2.2.2.2',
+            '1111111111111',
+            '.0.0.0.0.0.0.',
+            '0.0.0.0.0.0.0'
+        ],
+        // Stage 21 (Concentric Box)
+        [
+            '4444444444444',
+            '4...........4',
+            '4.333333333.4',
+            '4.3.......3.4',
+            '4.3.22222.3.4',
+            '4.3.2...2.3.4',
+            '4.3.2.1.2.3.4',
+            '4.3.2...2.3.4',
+            '4.3.22222.3.4',
+            '4.3.......3.4',
+            '4.333333333.4',
+            '4...........4',
+            '4444444444444'
+        ],
+        // Stage 22 (Bridge)
+        [
+            '.44444444444.',
+            '..333333333..',
+            'X...........X',
+            'X.222...222.X',
+            'X.222...222.X',
+            'X.111...111.X',
+            'X...........X',
+            '..000000000..'
+        ],
+        // Stage 23 (Checkers Grid)
+        [
+            '.4.4.4.4.4.4.',
+            '4.4.4.4.4.4.4',
+            '.............',
+            '.3.3.3.3.3.3.',
+            '3.3.3.3.3.3.3',
+            '.............',
+            '.2.2.2.2.2.2.',
+            '2.2.2.2.2.2.2',
+            '.............',
+            '.1.1.1.1.1.1.',
+            '1.1.1.1.1.1.1'
+        ],
+        // Stage 24 (Mountain)
+        [
+            '......4......',
+            '.....444.....',
+            '....44444....',
+            '...3333333...',
+            '..333333333..',
+            '.22222222222.',
+            '2222222222222',
+            '1111111111111',
+            '0000000000000'
+        ],
+        // Stage 25 (Hollow Box)
+        [
+            '4444444444444',
+            '3...........3',
+            '2.X.X.X.X.X.2',
+            '1...........1',
+            '0.X.X...X.X.0',
+            '0...........0',
+            '1.X.X.X.X.X.1',
+            '2...........2',
+            '3333333333333'
+        ],
+        // Stage 26 (Eye)
+        [
+            '..333333333..',
+            '.3.........3.',
+            '3..2222222..3',
+            '3.2.......2.3',
+            '3.2.11111.2.3',
+            '3.2.1...1.2.3',
+            '3.2.1.0.1.2.3',
+            '3.2.1...1.2.3',
+            '3.2.11111.2.3',
+            '3.2.......2.3',
+            '3..2222222..3',
+            '.3.........3.',
+            '..333333333..'
+        ],
+        // Stage 27 (Double Line)
+        [
+            '4444444444444',
+            '.............',
+            '3333333333333',
+            '.............',
+            '2222222222222',
+            '.............',
+            '1111111111111',
+            '.............',
+            '0000000000000'
+        ],
+        // Stage 28 (V Shape)
+        [
+            '4444444444444',
+            '.33333333333.',
+            '..222222222..',
+            '...1111111...',
+            '....00000....',
+            '.....000.....',
+            '......0......'
+        ],
+        // Stage 29 (Split Box)
+        [
+            '.4444...4444.',
+            '.3333...3333.',
+            '.2222...2222.',
+            '.1111...1111.',
+            '.0000...0000.',
+            '.0000...0000.',
+            '.1111...1111.',
+            '.2222...2222.',
+            '.3333...3333.',
+            '.4444...4444.'
+        ],
+        // Stage 30 (Stairs)
+        [
+            '4............',
+            '43...........',
+            '432..........',
+            '4321.........',
+            '43210........',
+            '.32104.......',
+            '..21043......',
+            '...10432.....',
+            '....04321....',
+            '.....43210...',
+            '......32104..',
+            '.......21043.'
+        ],
+        // Stage 31 (Sparse Checkers)
+        [
+            'X.X.X.X.X.X.X',
+            '.4.3.2.1.0.4.',
+            '4.3.2.1.0.4.3',
+            '.3.2.1.0.4.3.',
+            '3.2.1.0.4.3.2',
+            '.2.1.0.4.3.2.',
+            '2.1.0.4.3.2.1',
+            '.1.0.4.3.2.1.',
+            '1.0.4.3.2.1.0'
+        ],
+        // Stage 32 (Final Fortress)
+        [
+            'XXXXX...XXXXX',
+            'X444X...X444X',
+            'X434X...X434X',
+            'X444X...X444X',
+            'XXXXX...XXXXX',
+            '.............',
+            '....X...X....',
+            '....XX.XX....',
+            '....X.X.X....',
+            '....X...X....',
+            '.............',
+            '..000000000..'
+        ]
+    ];
+
+    function isBreakable(brick) {
+        return BRICK_TIERS[brick.tier].hp !== Infinity;
+    }
+
+    function initGame(stageIndex = 0, resetBricks = true) {
+        currentStage = stageIndex;
+        if (currentStage >= STAGES.length) currentStage = 0; // 올클리어 시 처음으로
+        
+        if (resetBricks) {
+            bricks.length = 0;
+            const layout = STAGES[currentStage];
+            const layoutRows = layout.length;
+            
+            for (let r = 0; r < layoutRows; r++) {
+                const rowStr = layout[r];
+                for (let c = 0; c < cols; c++) {
+                    const ch = rowStr[c];
+                    if (ch === '.') continue;
+                    const tier = ch === 'X' ? 5 : parseInt(ch, 10);
+                    
+                    bricks.push({
+                        x: offsetX + c * brickWidth,
+                        y: offsetY + r * (brickHeight + rowGap),
+                        w: brickWidth,
+                        h: brickHeight,
+                        alive: true,
+                        tier,
+                        hits: 0,
+                        phase: (r * cols + c) % SAND_FRAMES
+                    });
+                }
+            }
+        }
+
+        paddle.x = LOGIC_WIDTH / 2 - paddle.width / 2;
+        paddle.targetX = paddle.x;
+        screenShake = 0;
+        resetDustHoles();
+        paddle.hasLaser = false;
+        paddle.targetWidth = 252;
+        paddle.width = 252;
+        paddle.laserTimer = 0;
+        paddle.defaultLaserTimer = 0;
+        hitStopTimer = 0;
+        
+        balls.length = 0;
+        balls.push({
+            x: LOGIC_WIDTH / 2,
+            y: LOGIC_HEIGHT - 300,
+            vx: (Math.random() > 0.5 ? 1 : -1) * BALL_VX,
+            vy: -BALL_VY,
+            radius: 18,
+            power: 1,
+            trail: []
+        });
+        lasers.length = 0;
+        items.length = 0;
+    }
+
+    // power 인자를 받아 데미지를 줌. 기본값은 1 (레이저 용)
+    function damageBrick(hit, power = 1) {
+        if (!isBreakable(hit)) {
+            spawnBurst(hit, 8);
+            screenShake = Math.max(screenShake, SHAKE_METAL);
+        } else {
+            hit.hits += power;
+            if (hit.hits >= BRICK_TIERS[hit.tier].hp) {
+                hit.alive = false;
+                spawnBurst(hit);
+                const isBlackhole = BRICK_TIERS[hit.tier].name === 'GRAVITY';
+                addBrickDustHole(hit, isBlackhole ? 'BLACKHOLE' : 'NORMAL');
+                screenShake = Math.max(screenShake, SHAKE_BRICK);
+                if (isBlackhole) {
+                    hitStopTimer = 80; // 블랙홀은 파괴 시 좀 더 길게 히트스톱
+                } else {
+                    hitStopTimer = 50;
+                }
+                // 점수 획득
+                score += (hit.tier + 1) * 100;
+                
+                // 8% 확률로 아이템 드롭 (이전보다 절반 수준)
+                if (Math.random() < 0.08) {
+                    const t = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
+                    // 크기를 2.5배(100x50)에서 15% 줄여서 85x42로 조정
+                    items.push({ x: hit.x + hit.w/2 - 42.5, y: hit.y + hit.h/2 - 21, w: 85, h: 42, type: t.type, color: t.color });
+                }
+            } else {
+                spawnBurst(hit, 14);
+                screenShake = Math.max(screenShake, SHAKE_CHIP);
+            }
+        }
+    }
+
+    // ===== 물리 =====
+    function checkCollision(b, rect) {
+        return b.x + b.radius > rect.x &&
+               b.x - b.radius < rect.x + rect.w &&
+               b.y + b.radius > rect.y &&
+               b.y - b.radius < rect.y + rect.h;
+    }
+
+    function update() {
+        if (gameState !== 'PLAY') return;
+
+        if (keys['ArrowLeft']) paddle.targetX -= paddle.speed;
+        if (keys['ArrowRight']) paddle.targetX += paddle.speed;
+        paddle.targetX = Math.max(0, Math.min(paddle.targetX, LOGIC_WIDTH - paddle.width));
+        // 목표 위치를 부드럽게 따라감 (Pretext Breaker: dt x 16)
+        paddle.x += (paddle.targetX - paddle.x) * Math.min(1, PADDLE_FOLLOW * STEP_MS / 1000);
+
+        // 패들 넓이 보간 (아이템 효과)
+        if (paddle.targetWidth) {
+            paddle.width += (paddle.targetWidth - paddle.width) * 0.15;
+        }
+
+        // 아이템 이동 및 패들 충돌
+        for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i];
+            item.y += 3.0;    // 크기가 커졌으므로 떨어지는 속도를 약간 늦춰 잡기 쉽게 함
+            if (item.y > LOGIC_HEIGHT) {
+                items.splice(i, 1);
+                continue;
+            }
+            if (item.y + item.h > paddle.y && item.y < paddle.y + paddle.height &&
+                item.x + item.w > paddle.x && item.x < paddle.x + paddle.width) {
+                
+                if (item.type === 'E') {
+                    paddle.targetWidth = 340;
+                } else if (item.type === 'L') {
+                    paddle.hasLaser = true;
+                } else if (item.type === 'M') {
+                    if (balls.length > 0 && balls.length < 9) {
+                        const b = balls[0];
+                        for (let k = 0; k < 2; k++) {
+                            const ang = Math.atan2(b.vy, b.vx) + (k === 0 ? 0.3 : -0.3);
+                            const spd = Math.hypot(b.vx, b.vy);
+                            balls.push({
+                                x: b.x, y: b.y,
+                                vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+                                radius: b.radius,
+                                power: b.power || 2,
+                                trail: []
+                            });
+                        }
+                    }
+                } else if (item.type === 'P') {
+                    balls.forEach(b => b.power = (b.power || 2) + 1);
+                }
+                items.splice(i, 1);
+            }
+        }
+
+        // 기본 레이저 발사 (아이템 L이 아닐 때, 1줄, 파워 1, 1초마다)
+        if (!paddle.hasLaser) {
+            paddle.defaultLaserTimer += STEP_MS;
+            if (paddle.defaultLaserTimer >= 1000) {
+                paddle.defaultLaserTimer = 0;
+                lasers.push({ x: paddle.x + paddle.width / 2 - 2, y: paddle.y - 10, w: 4, h: 20 });
+            }
+        }
+
+        // 아이템 레이저 발사
+        if (paddle.hasLaser) {
+            paddle.laserTimer += STEP_MS;
+            if (paddle.laserTimer > 350) {
+                paddle.laserTimer = 0;
+                const leftX = paddle.x + paddle.width * 0.28;
+                const rightX = paddle.x + paddle.width * 0.72;
+                lasers.push({ x: leftX, y: paddle.y - 10, w: 4, h: 20 });
+                lasers.push({ x: rightX, y: paddle.y - 10, w: 4, h: 20 });
+            }
+        }
+        
+        // 레이저 이동 및 충돌
+        for (let i = lasers.length - 1; i >= 0; i--) {
+            const l = lasers[i];
+            l.y -= 18;
+            if (l.y < 0) { lasers.splice(i, 1); continue; }
+            
+            let hit = null;
+            for (const brick of bricks) {
+                if (!brick.alive) continue;
+                if (l.x + l.w > brick.x && l.x < brick.x + brick.w && l.y < brick.y + brick.h && l.y + l.h > brick.y) {
+                    hit = brick; break;
+                }
+            }
+            if (hit) {
+                lasers.splice(i, 1);
+                damageBrick(hit, 1);
+            }
+        }
+
+        // 여러 공 처리
+        for (let bIdx = balls.length - 1; bIdx >= 0; bIdx--) {
+            const ball = balls[bIdx];
+            const speed = Math.hypot(ball.vx, ball.vy);
+            const steps = Math.max(1, Math.ceil(speed / (ball.radius * 0.5)));
+            const stepX = ball.vx / steps;
+            const stepY = ball.vy / steps;
+
+            for (let s = 0; s < steps; s++) {
+                ball.x += stepX;
+                ball.y += stepY;
+
+                if (ball.x - ball.radius < 0) { ball.x = ball.radius; ball.vx = Math.abs(ball.vx); }
+                if (ball.x + ball.radius > LOGIC_WIDTH) { ball.x = LOGIC_WIDTH - ball.radius; ball.vx = -Math.abs(ball.vx); }
+                if (ball.y - ball.radius < 0) { ball.y = ball.radius; ball.vy = Math.abs(ball.vy); }
+
+                if (ball.vy > 0 && checkCollision(ball, { x: paddle.x - PADDLE_HIT_MARGIN, y: paddle.y, w: paddle.width + PADDLE_HIT_MARGIN * 2, h: paddle.height })) {
+                    ball.y = paddle.y - ball.radius - 1;
+                    let hitPoint = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+                    hitPoint = Math.max(-1, Math.min(1, hitPoint));
+                    if (Math.abs(hitPoint) < PADDLE_MIN_OFFSET) {
+                        const dir = hitPoint !== 0 ? Math.sign(hitPoint) : (ball.vx >= 0 ? 1 : -1);
+                        hitPoint = dir * PADDLE_MIN_OFFSET;
+                    }
+                    const maxAngle = PADDLE_MAX_ANGLE;
+                    const angle = hitPoint * maxAngle;
+                    screenShake = Math.max(screenShake, SHAKE_PADDLE);
+                    ball.vx = speed * Math.sin(angle);
+                    ball.vy = -speed * Math.cos(angle);
+                    break;
+                }
+
+                let hit = null, hitMin = Infinity, hitAxis = null;
+                for (const brick of bricks) {
+                    if (!brick.alive) continue;
+                    if (!checkCollision(ball, brick)) continue;
+                    const oL = (ball.x + ball.radius) - brick.x;
+                    const oR = (brick.x + brick.w) - (ball.x - ball.radius);
+                    const oT = (ball.y + ball.radius) - brick.y;
+                    const oB = (brick.y + brick.h) - (ball.y - ball.radius);
+                    const m = Math.min(oL, oR, oT, oB);
+                    if (m < hitMin) {
+                        hitMin = m; hit = brick;
+                        hitAxis = (m === oL) ? 'left' : (m === oR) ? 'right' : (m === oT) ? 'top' : 'bottom';
+                    }
+                }
+
+                if (hit) {
+                    const pwr = ball.power || 1;
+                    const hpLeft = isBreakable(hit) ? BRICK_TIERS[hit.tier].hp - hit.hits : Infinity;
+                    const pierce = hpLeft <= pwr; // 현재 파워보다 체력이 적거나 같으면 관통 (파괴)
+                    
+                    damageBrick(hit, pwr);
+                    
+                    if (!pierce) {
+                        if (hitAxis === 'left')   { ball.x = hit.x - ball.radius;         ball.vx = -Math.abs(ball.vx); }
+                        if (hitAxis === 'right')  { ball.x = hit.x + hit.w + ball.radius; ball.vx =  Math.abs(ball.vx); }
+                        if (hitAxis === 'top')    { ball.y = hit.y - ball.radius;         ball.vy = -Math.abs(ball.vy); }
+                        if (hitAxis === 'bottom') { ball.y = hit.y + hit.h + ball.radius; ball.vy =  Math.abs(ball.vy); }
+                    }
+                    break;
+                }
+            }
+
+            if (ball.y > LOGIC_HEIGHT) {
+                balls.splice(bIdx, 1);
+                continue;
+            }
+
+            ball.trail.unshift({ x: ball.x, y: ball.y });
+            if (ball.trail.length > TRAIL_MAX) ball.trail.pop();
+        }
+
+        if (balls.length === 0) {
+            if (lives > 0) {
+                lives--;
+                gameState = 'LIFE_LOST';
+            } else {
+                gameState = 'GAME_OVER';
+            }
+        }
+
+        updateBurst();
+
+        // 금속(파괴 불가)은 클리어 조건에서 제외
+        if (!bricks.some(b => b.alive && isBreakable(b))) gameState = 'NEXT_STAGE';
+    }
+
+    // ===== 벽돌 파괴 시 모래가 흩어지는 파티클 =====
+    const burst = [];
+    // 파괴 시 파티클 개수를 2.5배 늘림
+    const BURST_PER_BRICK = 150;
+
+    function spawnBurst(brick, count = BURST_PER_BRICK) {
+        for (let i = 0; i < count; i++) {
+            const a = Math.random() * Math.PI * 2;
+            // 튀어 나가는 속도를 높여서 더 확 퍼지게 함
+            const sp = 2 + Math.random() * 8;
+            burst.push({
+                x: brick.x + Math.random() * brick.w,
+                y: brick.y + Math.random() * brick.h,
+                vx: Math.cos(a) * sp,
+                vy: Math.sin(a) * sp - 2, // 위로 솟는 힘 강화
+                life: 1 + Math.random() * 0.5 // 수명도 약간 늘림
+            });
+        }
+    }
+
+    function updateBurst() {
+        for (let i = burst.length - 1; i >= 0; i--) {
+            const p = burst[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.35;      // 더 무겁게 빨리 가라앉게
+            p.vx *= 0.95;      // 공기 저항을 늘려 옆으로는 빨리 멈춤 (포물선 형태 강조)
+            p.life -= 0.02;    // 사라지는 속도 감소 (더 오래 보임)
+            if (p.life <= 0) burst.splice(i, 1);
+        }
+    }
+
+    function drawBurst() {
+        const half = DOT_SIZE / 2;
+        for (const p of burst) {
+            // 입자가 더 밝게 빛나며 시작해 서서히 어두워짐
+            const L = Math.min(255, Math.round(p.life * 300));
+            ctx.fillStyle = `rgb(${L},${L},${L})`;
+            ctx.fillRect(p.x - half, p.y - half, DOT_SIZE, DOT_SIZE);
+        }
+    }
+
+    // ===== 패들 렌더링 (도트) =====
+    // 게임 기본 패들 = 개발자 모드 5번 CLASSIC VAUS + 아이템 효과
+    function drawPaddle() {
+        const frame = Math.floor(performance.now() / SAND_INTERVAL) % SAND_FRAMES;
+        if (paddle.mode === 'LASER') {
+            pvRailLaser(ctx, paddle.x, paddle.y, paddle.width, paddle.height, frame);
+        } else {
+            pvClassicVaus(ctx, paddle.x, paddle.y, paddle.width, paddle.height, frame);
+        }
+    }
+
+    // ===== 공, 레이저, 아이템 렌더링 =====
+    function drawBall() {
+        const frame = Math.floor(performance.now() / SAND_INTERVAL) % SAND_FRAMES;
+        
+        balls.forEach((ball, bIdx) => {
+            const pwr = ball.power || 1;
+            
+
+
+            // 파워 2 이상: 공 크기는 그대로 두고, 공 안에서 회전하는 밝은 점(파워-1개)과
+            // 촘촘한 코어로 표현. 공 테두리 밖으로 아무것도 그리지 않는다.
+            if (pwr >= 2) {
+                const t = performance.now() / 260;
+                const orbit = ball.radius * 0.55;
+                const n = Math.min(pwr - 1, 6);
+                for (let k = 0; k < n; k++) {
+                    const a = t + k * Math.PI * 2 / n;
+                    const ox = ball.x + Math.cos(a) * orbit, oy = ball.y + Math.sin(a) * orbit;
+                    ctx.fillStyle = '#fff';
+                    ctx.fillRect(ox - 2.5, oy - 2.5, 5, 5);
+                }
+            }
+
+            const d = ball.radius * 2;
+            scatterDots(ctx, ball.x - ball.radius, ball.y - ball.radius, d, d, {
+                seed: 4001 + bIdx * 10, frame, spacing: 2.5,
+                mask: (nx, ny) => Math.hypot(nx - 0.5, ny - 0.5) <= 0.5,
+                density: (nx, ny) => Math.max(0.25, 1 - Math.hypot(nx - 0.34, ny - 0.34) * 1.05),
+                lum: (nx, ny) => Math.max(70, 255 - Math.hypot(nx - 0.34, ny - 0.34) * 210)
+            });
+        });
+        
+        lasers.forEach((l, i) => {
+            scatterDots(ctx, l.x, l.y, l.w, l.h, { seed: 8000 + i, frame, density: 1, lum: 255, spacing: 1.5 });
+        });
+        
+        items.forEach((item, i) => {
+            // 알약 캡슐 형태 아이템
+            scatterDots(ctx, item.x, item.y, item.w, item.h, { 
+                seed: 8100 + i, frame, spacing: 2.5, density: 0.95, lum: item.color,
+                mask: (nx, ny) => {
+                    // 크기가 커졌으므로 양끝 반원을 정확히 그리기 위해 종횡비(2:1) 반영
+                    const cx = Math.max(0.25, Math.min(0.75, nx));
+                    return Math.hypot((nx - cx) * 2, ny - 0.5) <= 0.5;
+                }
+            });
+            // 외곽선 추가로 선명도 향상
+            strokeDotRect(ctx, item.x, item.y, item.w, item.h, item.h / 2, { seed: 8150 + i, frame, lum: 255, density: 0.95, spacing: 2.0 });
+            // 가운데 밴드선 (캡슐 뚜껑 느낌)
+            scatterDots(ctx, item.x + item.w/2 - 1, item.y, 2, item.h, { seed: 8160 + i, frame, density: 1, lum: 0 });
+
+            // 글씨 크기를 키우고, 진하게 파냄
+            ctx.fillStyle = '#000';
+            ctx.font = font('bold 30px');
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(item.type, item.x + item.w/2, item.y + item.h/2 + 2);
+        });
+    }
+
+    // ===== 잔상 렌더링 (도트 혜성 꼬리) =====
+    function drawTrail() {
+        const frame = Math.floor(performance.now() / SAND_INTERVAL) % SAND_FRAMES;
+        
+        balls.forEach((b, bIdx) => {
+            for (let i = b.trail.length - 1; i >= 1; i--) {
+                const p = b.trail[i];
+                const fade = 1 - i / TRAIL_MAX;
+                const size = b.radius * 2 * (0.3 + fade * 0.7);
+
+                scatterDots(ctx, p.x - size / 2, p.y - size / 2, size, size, {
+                    seed: 5000 + i + bIdx * 100, frame,
+                    spacing: 2.8,
+                    mask: (nx, ny) => Math.hypot(nx - 0.5, ny - 0.5) <= 0.5,
+                    density: fade * fade * 0.85,
+                    lum: 40 + fade * 200
+                });
+            }
+        });
+    }
+
+    // ===== 메인 드로우 =====
+    function draw() {
+        ctx.fillStyle = '#020202';
+        ctx.fillRect(0, 0, LOGIC_WIDTH, LOGIC_HEIGHT);
+
+        // 화면 흔들림 - 게임 장면에만 적용
+        ctx.save();
+        if (screenShake > 0) {
+            ctx.translate((Math.random() - 0.5) * screenShake * 2.8, (Math.random() - 0.5) * screenShake * 2.2);
+        }
+
+        // 배경 먼지 - 가장 먼저 그려 모든 오브젝트 뒤에 깔림
+        drawDust();
+
+        const baseFrame = Math.floor(performance.now() / SAND_INTERVAL);
+
+        // 벽돌 - 미리 만든 모래 스프라이트를 블리팅
+        for (const brick of bricks) {
+            if (!brick.alive) continue;
+            const f = (baseFrame + brick.phase) % SAND_FRAMES;
+            const displayHits = Math.min(brick.hits, BRICK_TIERS[brick.tier].hp === Infinity ? 0 : BRICK_TIERS[brick.tier].hp - 1);
+            ctx.drawImage(brickSprites[brick.tier][displayHits][f], brick.x, brick.y);
+        }
+
+        drawBurst();
+        drawTrail();
+        drawPaddle();
+        drawBall();
+        ctx.restore();
+
+        // ===== 상태 오버레이 (START / GAME_OVER / NEXT_STAGE / LIFE_LOST) =====
+        if (gameState !== 'PLAY') {
+            ctx.fillStyle = 'rgba(0,0,0,0.85)';
+            ctx.fillRect(0, 0, LOGIC_WIDTH, LOGIC_HEIGHT);
+            drawDust();
+
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            if (gameState === 'START') {
+                ctx.font = font('bold 82px');
+                ctx.fillText('STIPPLE', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 - 180);
+                ctx.font = font('bold 110px');
+                ctx.fillText('BREAKOUT', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 - 70);
+                ctx.font = font('40px');
+                ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);
+                ctx.font = font('28px');
+                ctx.fillText('V4.5.1', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+            } else if (gameState === 'GAME_OVER') {
+                ctx.font = font('bold 100px');
+                ctx.fillText('SYSTEM_FAILURE', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 - 100);
+                ctx.font = font('40px');
+                ctx.fillText('> REBOOT (CLICK) <', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 100);
+            } else if (gameState === 'NEXT_STAGE') {
+                ctx.font = font('bold 90px');
+                ctx.fillText(`STAGE ${currentStage + 1} CLEARED`, LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 - 100);
+                ctx.font = font('40px');
+                ctx.fillText('> CLICK FOR NEXT STAGE <', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 100);
+            } else if (gameState === 'LIFE_LOST') {
+                ctx.font = font('bold 80px');
+                ctx.fillText('SIGNAL LOST', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 - 100);
+                ctx.font = font('40px');
+                ctx.fillText('> CLICK TO RESUME <', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 100);
+            }
+        }
+
+        drawHUD();
+    }
+
+    // ===== 상시 HUD (모든 상태에서 가장 위에 그림) =====
+    const HUD_TOP_H = 96;          // 72px 점수가 들어가도록 76 -> 96
+    const HUD_COLOR = 'rgb(178,178,178)';   // HUD 글씨/아이콘 밝기 70% (255 x 0.7)
+    const HUD_BOTTOM_H = 96;
+    const VOL_BTN = { x: LOGIC_WIDTH - 96, y: 20, w: 80, h: 56 };
+    let soundOn = true;   // 볼륨 상태 (사운드 구현 시 이 값을 참조)
+
+    function drawHUD() {
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(0, 0, LOGIC_WIDTH, HUD_TOP_H);
+        ctx.fillRect(0, LOGIC_HEIGHT - HUD_BOTTOM_H, LOGIC_WIDTH, HUD_BOTTOM_H);
+
+        ctx.textBaseline = 'middle';
+        ctx.font = font('bold 36px');
+
+        // 좌측 상단: STAGE
+        ctx.fillStyle = HUD_COLOR;
+        ctx.textAlign = 'left';
+        ctx.fillText(`STAGE : ${currentStage + 1}`, 24, HUD_TOP_H / 2);
+
+        // 상단 가운데: 점수
+        ctx.textAlign = 'center';
+        ctx.font = font('bold 72px');
+        ctx.fillText(String(score).padStart(6, '0'), LOGIC_WIDTH / 2, HUD_TOP_H / 2);
+
+        // 우측 상단: 볼륨 버튼 (이모지 대신 도형으로 그려 iPhone/Mac 동일하게)
+        drawVolumeButton();
+
+        // 좌측 하단: 남은 패들 (미니 패들 아이콘)
+        const mw = 64, mh = 18, gap = 14, my = LOGIC_HEIGHT - HUD_BOTTOM_H / 2 - mh / 2;
+        for (let i = 0; i < lives; i++) {
+            const mx = 24 + i * (mw + gap);
+            ctx.fillStyle = HUD_COLOR;
+            ctx.beginPath(); ctx.roundRect(mx, my, mw, mh, mh / 2); ctx.fill();
+            ctx.fillStyle = '#000';                         // 양끝 캡 구분선
+            ctx.fillRect(mx + mh, my, 2, mh);
+            ctx.fillRect(mx + mw - mh - 2, my, 2, mh);
+        }
+
+        // 하단 가운데: 볼 파워 (크게)
+        let maxPwr = 1;
+        balls.forEach(b => { if ((b.power || 1) > maxPwr) maxPwr = b.power; });
+        ctx.fillStyle = HUD_COLOR;
+        ctx.font = font('bold 32px');
+        ctx.textAlign = 'center';
+        ctx.fillText(`POWER ${maxPwr}`, LOGIC_WIDTH / 2, LOGIC_HEIGHT - HUD_BOTTOM_H / 2);
+    }
+
+    function drawVolumeButton() {
+        const { x, y, w, h } = VOL_BTN;
+        ctx.strokeStyle = HUD_COLOR;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.stroke();
+
+        // 스피커 몸체
+        const cx = x + 26, cy = y + h / 2;
+        ctx.fillStyle = HUD_COLOR;
+        ctx.beginPath();
+        ctx.moveTo(cx - 12, cy - 7); ctx.lineTo(cx - 4, cy - 7); ctx.lineTo(cx + 6, cy - 15);
+        ctx.lineTo(cx + 6, cy + 15); ctx.lineTo(cx - 4, cy + 7); ctx.lineTo(cx - 12, cy + 7);
+        ctx.closePath(); ctx.fill();
+
+        ctx.lineWidth = 3;
+        if (soundOn) {
+            // 음파 2줄
+            [10, 18].forEach(r => { ctx.beginPath(); ctx.arc(cx + 8, cy, r, -Math.PI / 4, Math.PI / 4); ctx.stroke(); });
+        } else {
+            // X 표시
+            ctx.beginPath();
+            ctx.moveTo(cx + 14, cy - 9); ctx.lineTo(cx + 30, cy + 9);
+            ctx.moveTo(cx + 30, cy - 9); ctx.lineTo(cx + 14, cy + 9);
+            ctx.stroke();
+        }
+    }
+
+    // 캔버스 좌표가 볼륨 버튼 안이면 토글하고 true 반환
+    function hitVolumeButton(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        const lx = (clientX - rect.left) * LOGIC_WIDTH / rect.width;
+        const ly = (clientY - rect.top) * LOGIC_HEIGHT / rect.height;
+        const pad = 16;   // 손가락 터치 여유
+        if (lx >= VOL_BTN.x - pad && lx <= VOL_BTN.x + VOL_BTN.w + pad &&
+            ly >= VOL_BTN.y - pad && ly <= VOL_BTN.y + VOL_BTN.h + pad) {
+            soundOn = !soundOn;
+            return true;
+        }
+        return false;
+    }
+
+    function loop(now) {
+        if (lastTime === 0) lastTime = now;
+        let delta = now - lastTime;
+        lastTime = now;
+
+        if (delta > 250) delta = STEP_MS;
+
+        accumulator += delta;
+        let steps = 0;
+        while (accumulator >= STEP_MS && steps < 5) {
+            updateDust();
+            screenShake = Math.max(0, screenShake - SHAKE_DECAY * STEP_MS / 1000);
+            
+            if (hitStopTimer > 0) {
+                hitStopTimer -= STEP_MS;
+            } else {
+                update();
+            }
+            
+            accumulator -= STEP_MS;
+            steps++;
+        }
+
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    // 게임 시작/재시작 - iOS에서 touchstart가 click을 막으므로 양쪽 모두 연결
+    function tryStart() {
+        if (gameState === 'START' || gameState === 'GAME_OVER') {
+            lives = 2;
+            score = 0;
+            initGame(0);
+            gameState = 'PLAY';
+        } else if (gameState === 'NEXT_STAGE') {
+            initGame(currentStage + 1);
+            gameState = 'PLAY';
+        } else if (gameState === 'LIFE_LOST') {
+            initGame(currentStage, false);
+            gameState = 'PLAY';
+        }
+    }
+    canvas.addEventListener('click', e => {
+        if (hitVolumeButton(e.clientX, e.clientY)) return;
+        tryStart();
+    });
+    canvas.addEventListener('touchend', e => {
+        e.preventDefault();
+        const t = e.changedTouches[0];
+        if (t && hitVolumeButton(t.clientX, t.clientY)) return;
+        tryStart();
+    }, { passive: false });
+
+    buildBrickSprites();
+    initDust();
+    updateDustDotSize();
+    initGame();
+    gameState = 'START';
+    requestAnimationFrame(loop);
+
+    // ===== 개발자 모드 =====
+    const devEntry = document.getElementById('dev-entry');
+    const devOverlay = document.getElementById('dev-overlay');
+    const devMenuScreen = document.getElementById('dev-menu-screen');
+    const devDetailScreen = document.getElementById('dev-detail-screen');
+    const devDetailTitle = document.getElementById('dev-detail-title');
+    const devDetailBody = document.getElementById('dev-detail-body');
+
+    const devContent = {
+        paddle: {
+            title: '1. PADDLE DESIGN',
+            body: `<span style="color:#aaa;">패들 후보 5종. 번호 알려주면 적용.</span>
+                   <canvas id="dev-paddle-canvas" width="1170" height="1500" style="width:100%; background:#000; margin:12px 0; border:1px solid #444;"></canvas>`
+        },
+        brick: {
+            title: '2. BRICK DESIGN',
+            body: `<span style="color:#aaa;">벽돌 6종 (스테이지 적용됨). 밀도가 높을수록 단단함. 1~5타 파괴, 6번은 파괴 불가.</span>
+                   <canvas id="dev-brick-canvas" width="1170" height="600" style="width:100%; background:#000; margin:12px 0; border:1px solid #444;"></canvas>
+                   SPACING: ${DOT_SPACING} / DOT: ${DOT_SIZE}px / JITTER: ${DOT_JITTER}`
+        },
+        item: {
+            title: '3. ITEM DESIGN',
+            body: `<span style="color:#aaa;">캡슐 형태 도트 아이템 4종. 레이저와 확장은 중첩 가능.</span>
+                   <canvas id="dev-item-canvas" width="1170" height="400" style="width:100%; background:#000; margin:12px 0; border:1px solid #444;"></canvas>`
+        },
+        stage: { title: '4. STAGE DESIGN', body: `스테이지 1~12 적용 완료. (1170 해상도, 13칸 격자)` },
+        prologue: { title: '5. PROLOGUE REVIEW', body: '프롤로그 미작성.' },
+        ending: { title: '6. ENDING REVIEW', body: '엔딩 미작성.' }
+    };
+
+    // --- 패들 후보: 기본 패들(1번)에서 조금씩만 변형 ---
+    const paddleVariants = [
+        { name: '1. SAND RAIL (이전 기본)',        fn: pvSandRail },
+        { name: '2. VAUS + LASER (내장형)',   fn: pvRailLaser },
+        { name: '3. BASE LONG (x1.4)',        fn: pvRailLong },
+        { name: '4. BASE TRI-CELL (전기 연결)', fn: pvRailTriCell },
+        { name: '5. CLASSIC VAUS (현재 적용)',    fn: pvClassicVaus }
+    ];
+
+    // 기본 패들의 레일 + 본체 외곽 + 양끝 브래킷 (공통 부분)
+    function drawRailShell(c, x, y, w, h, f, seedBase) {
+        const railH = h * 0.16, by = y + railH + 3, bh = h - railH - 5;
+        scatterDots(c, x + w*0.04, y, w*0.92, railH, {
+            seed: seedBase + 1, frame: f, spacing: 2.6,
+            density: nx => 0.45 + (1 - Math.abs(nx-0.5)*2) * 0.55,
+            lum: nx => 170 + (1 - Math.abs(nx-0.5)*2) * 85
+        });
+        return { railH, by, bh };
+    }
+
+    function drawRailBrackets(c, x, w, h, by, bh, f, seedBase) {
+        const bw = h * 0.5;
+        [x, x + w - bw].forEach((bx, i) => scatterDots(c, bx, by, bw, bh, {
+            seed: seedBase + 10 + i, frame: f, density: 0.95, lum: 255, spacing: 2.7
+        }));
+    }
+
+    // 1. 기본 패들
+    function pvSandRail(c, x, y, w, h, f) {
+        const { by, bh } = drawRailShell(c, x, y, w, h, f, 3000);
+        scatterDots(c, x, by, w, bh, {
+            seed: 3002, frame: f, density: 0.88,
+            lum: (nx, ny) => 150 + (1-Math.abs(nx-0.5)*2)*55 + (1-ny)*40
+        });
+        strokeDotRect(c, x, by, w, bh, bh*0.35, { seed: 3003, frame: f, lum: 255, density: 0.95 });
+        drawRailBrackets(c, x, w, h, by, bh, f, 3000);
+        scatterDots(c, x+w/2-2.5, by+bh*0.18, 5, bh*0.64, { seed: 3020, frame: f, density: 1, lum: 255, spacing: 2.2 });
+    }
+
+    // 금속 명암 프로파일 (세로 위치 ny: 0=위, 1=아래)
+    // 위쪽 강한 하이라이트 띠 + 가운데 어두운 반사 + 아래쪽 약한 2차 반사 = 연마된 은색 금속
+    function metalLum(ny) {
+        const hi  = 130 * Math.exp(-Math.pow((ny - 0.26) / 0.11, 2));
+        const sec =  55 * Math.exp(-Math.pow((ny - 0.80) / 0.09, 2));
+        const edge = 40 * Math.min(1, Math.min(ny, 1 - ny) * 6);   // 위아래 끝은 어둡게
+        return Math.min(255, 85 + edge + hi + sec);
+    }
+
+    // 캡슐형 Vaus 실루엣 판정 (로컬 픽셀 좌표). ins만큼 안쪽으로 축소한 형태로 판정
+    // 양끝은 위가 비스듬히 깎이고 아래는 거의 평평한 기수(nose) 형태
+    const VAUS_CAP = 1.1;   // 끝 캡 길이 = 높이 x 1.1
+    function inCapsule(px, py, w, h, ins) {
+        const W = w - ins * 2, H = h - ins * 2;
+        const X = px - ins, Y = py - ins;
+        if (X < 0 || X > W || Y < 0 || Y > H) return false;
+        const capLen = H * VAUS_CAP;
+        const d = Math.min(X, W - X);
+        if (d >= capLen) return true;
+        const t = 1 - d / capLen;
+        const e = Math.sqrt(Math.max(0, 1 - t * t));
+        const top = H * 0.55 * (1 - e);
+        const bot = H - H * 0.25 * (1 - e);
+        return Y >= top && Y <= bot;
+    }
+
+    // 2. Vaus 캡슐형 은색 본체 + 본체 안에 내장된 레이저 포트
+    //    모든 요소가 패들 높이(h) 안에만 그려져 공이 튀어나온 부분에 걸리지 않음
+    function pvRailLaser(c, x, y, w, h, f) {
+        const capLen = h * VAUS_CAP;
+        const inside = (nx, ny, ins) => inCapsule(nx * w, ny * h, w, h, ins);
+
+        // 1) 은색 원통 본체 - 위 하이라이트 / 아래 반사 / 양끝 캡은 살짝 밝게
+        scatterDots(c, x, y, w, h, {
+            seed: 3150, frame: f, spacing: 2.1, jitter: 0.5, density: 0.97,
+            mask: (nx, ny) => inside(nx, ny, 0),
+            lum: (nx, ny) => metalLum(ny) * (Math.min(nx, 1 - nx) * w < capLen ? 1.08 : 1)
+        });
+
+        // 2) 외곽선 - 위쪽은 밝게, 아래쪽은 어둡게 해서 입체감
+        scatterDots(c, x, y, w, h, {
+            seed: 3151, frame: f, spacing: 1.7, jitter: 0.3, density: 1,
+            mask: (nx, ny) => inside(nx, ny, 0) && !inside(nx, ny, 2.2),
+            lum: (nx, ny) => ny < 0.5 ? 255 : 140
+        });
+
+        // 3) 끝 캡과 본체를 나누는 이음새 (어두운 홈 + 안쪽 밝은 모서리)
+        [capLen, w - capLen].forEach((dx, i) => {
+            scatterDots(c, x + dx - 1.2, y + 3, 2.4, h - 6, { seed: 3160 + i, frame: f, spacing: 1.5, jitter: 0.2, density: 1, lum: 30 });
+            scatterDots(c, x + dx + (i === 0 ? 1.8 : -3.4), y + 3, 1.6, h - 6, { seed: 3162 + i, frame: f, spacing: 1.5, jitter: 0.2, density: 0.9, lum: 230 });
+        });
+
+        // 4) 끝 캡 상단 광택 (참고 이미지의 파란 하이라이트를 밝기로 표현)
+        [capLen * 0.55, w - capLen * 0.55].forEach((cx, i) => {
+            const rw = capLen * 0.42, rh = h * 0.14;
+            scatterDots(c, x + cx - rw / 2, y + h * 0.14, rw, rh, {
+                seed: 3165 + i, frame: f, spacing: 1.5, jitter: 0.2, density: 1,
+                mask: (nx, ny) => Math.hypot((nx - 0.5) * 2, (ny - 0.5) * 2) <= 1,
+                lum: 255
+            });
+        });
+
+        // 5) 회로 트레이스 (참고 이미지의 주황 라인) - 하단을 가로지르고 위로 꺾이는 밝은 선
+        const tY = y + h * 0.72;
+        const x0 = x + capLen + 5, x1 = x + w - capLen - 5;
+        scatterDots(c, x0, tY - 1.1, x1 - x0, 2.2, { seed: 3170, frame: f, spacing: 1.5, jitter: 0.15, density: 1, lum: 235 });
+        scatterDots(c, x0, tY + 1.4, x1 - x0, 1.4, { seed: 3171, frame: f, spacing: 1.5, jitter: 0.15, density: 1, lum: 40 });
+        [x0, x + w * 0.4, x + w * 0.6, x1 - 2.2].forEach((tx, i) => {
+            scatterDots(c, tx, y + h * 0.5, 2.2, tY - (y + h * 0.5) + 1, { seed: 3172 + i, frame: f, spacing: 1.5, jitter: 0.15, density: 1, lum: 235 });
+        });
+
+        // 6) 내장형 레이저 포트 - 본체 안에 파묻힌 하우징, 포구는 본체 윗면과 같은 높이
+        [0.28, 0.72].forEach((t, i) => {
+            const hw = h * 0.42, hh = h * 0.5;
+            const hx = x + w * t - hw / 2, hy = y + h * 0.14;
+            // 움푹 들어간 어두운 하우징
+            scatterDots(c, hx, hy, hw, hh, { seed: 3180 + i, frame: f, spacing: 1.6, jitter: 0.2, density: 1, lum: 40 });
+            strokeDotRect(c, hx, hy, hw, hh, 2, { seed: 3185 + i, frame: f, lum: 200, density: 1, spacing: 1.6 });
+            // 원통형 포신 (왼쪽 세로 하이라이트)
+            const bwid = hw * 0.38, bx = hx + (hw - bwid) / 2;
+            scatterDots(c, bx, hy + 2, bwid, hh - 4, {
+                seed: 3190 + i, frame: f, spacing: 1.4, jitter: 0.15, density: 1,
+                lum: (nx) => 120 + 135 * Math.exp(-Math.pow((nx - 0.35) / 0.25, 2))
+            });
+            // 포구 발광 (하우징 안쪽 윗부분)
+            scatterDots(c, bx - 1, hy + 1, bwid + 2, 2.5, { seed: 3195 + i, frame: f, spacing: 1.3, jitter: 0.1, density: 1, lum: 255 });
+        });
+    }
+
+    // 3. 기본 패들을 1.4배 길게 (중심 기준 확장)
+    function pvRailLong(c, x, y, w, h, f) {
+        const lw = w * 1.4;
+        pvSandRail(c, x - (lw - w) / 2, y, lw, h, f);
+    }
+
+    // 4. 기본 패들 내부를 3칸으로 나누고 칸 사이를 전기 아크로 연결
+    function pvRailTriCell(c, x, y, w, h, f) {
+        const { by, bh } = drawRailShell(c, x, y, w, h, f, 3200);
+        const bw = h * 0.5;
+        const gap = h * 0.45;
+        const innerX = x + bw + 3;
+        const innerW = w - (bw + 3) * 2;
+        const cellW = (innerW - gap * 2) / 3;
+
+        // 외곽선은 기본 패들과 동일하게 전체를 감싼다
+        strokeDotRect(c, x, by, w, bh, bh*0.35, { seed: 3203, frame: f, lum: 255, density: 0.95 });
+        drawRailBrackets(c, x, w, h, by, bh, f, 3200);
+
+        for (let i = 0; i < 3; i++) {
+            const cx = innerX + i * (cellW + gap);
+            // 셀 본체 - 가운데 셀이 가장 밝음
+            scatterDots(c, cx, by + 3, cellW, bh - 6, {
+                seed: 3230 + i, frame: f, density: 0.9,
+                lum: (nx, ny) => (i === 1 ? 190 : 160) + (1-ny)*40
+            });
+            strokeDotRect(c, cx, by + 3, cellW, bh - 6, 3, { seed: 3240 + i, frame: f, lum: 230, density: 0.9, spacing: 2.2 });
+        }
+
+        // 셀 사이 전기 아크 - 프레임마다 지그재그 모양이 바뀜
+        const midY = by + bh / 2;
+        for (let g = 0; g < 2; g++) {
+            const gx0 = innerX + cellW + g * (cellW + gap);
+            const steps = Math.max(6, Math.round(gap / 1.6));
+            for (let s = 0; s <= steps; s++) {
+                const t = s / steps;
+                const jitter = (hash3(3300 + g, s, f) - 0.5) * bh * 0.55 * Math.sin(t * Math.PI);
+                const px = gx0 + gap * t;
+                const py = midY + jitter;
+                c.fillStyle = 'rgb(255,255,255)';
+                c.fillRect(px - DOT_SIZE/2, py - DOT_SIZE/2, DOT_SIZE, DOT_SIZE);
+                // 아크 주변 희미한 방전 입자
+                if (hash3(3310 + g, s, f) < 0.35) {
+                    const L = 120 + (hash3(3320 + g, s, f) * 80) | 0;
+                    c.fillStyle = `rgb(${L},${L},${L})`;
+                    c.fillRect(px + (hash3(3330+g, s, f)-0.5)*4, py + (hash3(3340+g, s, f)-0.5)*6, DOT_SIZE, DOT_SIZE);
+                }
+            }
+        }
+
+        // 중앙 코어 마커 (가운데 셀 안)
+        scatterDots(c, x + w/2 - 2.5, by + bh*0.18, 5, bh*0.64, { seed: 3220, frame: f, density: 1, lum: 255, spacing: 2.2 });
+    }
+
+    // 5. 클래식 아케이드 Vaus - 좌우 둥근 엔드캡(원작 빨강) + 가운데 은색 원통, 사이에 검은 틈
+    //    흑백이므로 엔드캡은 더 어둡고 조밀한 도트, 원통은 밝은 금속 반사로 구분
+    function pvClassicVaus(c, x, y, w, h, f) {
+        const gap = 3;                 // 캡과 원통 사이 검은 틈
+        const capW = h * 1.05;         // 엔드캡 길이
+        const bodyX = x + capW + gap;
+        const bodyW = w - (capW + gap) * 2;
+        const bodyY = y + h * 0.12;    // 원통은 캡보다 살짝 얇음
+        const bodyH = h * 0.76;
+
+        // 1) 가운데 은색 원통 - 위 반사띠 + 아래 2차 반사
+        scatterDots(c, bodyX, bodyY, bodyW, bodyH, {
+            seed: 5001, frame: f, spacing: 2.0, jitter: 0.45, density: 0.98,
+            lum: (nx, ny) => metalLum(ny)
+        });
+        // 원통 윗/아랫면 경계선
+        scatterDots(c, bodyX, bodyY, bodyW, 1.8, { seed: 5002, frame: f, spacing: 1.5, jitter: 0.15, density: 1, lum: 255 });
+        scatterDots(c, bodyX, bodyY + bodyH - 1.8, bodyW, 1.8, { seed: 5003, frame: f, spacing: 1.5, jitter: 0.15, density: 1, lum: 110 });
+
+        // 2) 좌우 엔드캡 - 바깥쪽은 반원, 안쪽은 평평한 캡슐 반쪽
+        [0, 1].forEach(side => {
+            const cx0 = side === 0 ? x : x + w - capW;
+            scatterDots(c, cx0, y, capW, h, {
+                seed: 5010 + side, frame: f, spacing: 1.9, jitter: 0.4, density: 1,
+                mask: (nx, ny) => {
+                    // 바깥쪽 절반만 둥글게 깎음
+                    const ox = side === 0 ? nx : 1 - nx;          // 0 = 바깥 끝
+                    if (ox >= 0.5) return true;
+                    const dx = (0.5 - ox) / 0.5;                   // 0~1
+                    const dy = (ny - 0.5) / 0.5;                   // -1~1
+                    return dx * dx + dy * dy <= 1;
+                },
+                // 캡은 원통보다 어둡게(원작 빨강 톤), 위쪽 광택만 밝게
+                lum: (nx, ny) => 70 + metalLum(ny) * 0.45
+            });
+            // 캡 외곽 밝은 테두리 느낌 - 윗부분 광택점
+            const hlx = side === 0 ? cx0 + capW * 0.35 : cx0 + capW * 0.35;
+            scatterDots(c, hlx, y + h * 0.16, capW * 0.32, h * 0.14, {
+                seed: 5020 + side, frame: f, spacing: 1.4, jitter: 0.15, density: 1,
+                mask: (nx, ny) => Math.hypot((nx - 0.5) * 2, (ny - 0.5) * 2) <= 1,
+                lum: 255
+            });
+        });
+    }
+
+    function drawPaddlePreview() {
+        const cv = document.getElementById('dev-paddle-canvas');
+        if (!cv) return;
+        const c = cv.getContext('2d');
+        const f = Math.floor(performance.now() / SAND_INTERVAL) % SAND_FRAMES;
+
+        const rowH = 190;
+        cv.height = rowH * paddleVariants.length;
+        c.fillStyle = '#000';
+        c.fillRect(0, 0, cv.width, cv.height);
+
+        const pw = paddle.width * 2.2;
+        const ph = paddle.height * 1.6;
+        const px = (cv.width - pw) / 2;
+
+        paddleVariants.forEach((v, i) => {
+            const top = i * rowH;
+            c.fillStyle = '#888';
+            c.font = font('22px');
+            c.textAlign = 'left';
+            c.textBaseline = 'top';
+            c.fillText(v.name, 20, top + 14);
+
+            v.fn(c, px, top + 90, pw, ph, f);
+
+            c.strokeStyle = 'rgba(255,255,255,0.12)';
+            c.lineWidth = 1;
+            c.beginPath();
+            c.moveTo(0, top + rowH - 0.5);
+            c.lineTo(cv.width, top + rowH - 0.5);
+            c.stroke();
+        });
+    }
+
+    function drawBrickPreview() {
+        const cv = document.getElementById('dev-brick-canvas');
+        if (!cv) return;
+        const c = cv.getContext('2d');
+        const f = Math.floor(performance.now() / SAND_INTERVAL) % SAND_FRAMES;
+
+        // 실제 게임 벽돌의 2.2배 크기로 확대해서 무늬 식별이 쉽게 함
+        const bw = brickWidth * 2.2, bh = brickHeight * 2.2;
+        const rowH = bh + 64;
+        cv.height = rowH * BRICK_TIERS.length;
+        c.fillStyle = '#000';
+        c.fillRect(0, 0, cv.width, cv.height);
+
+        BRICK_TIERS.forEach((T, i) => {
+            const top = i * rowH;
+            const hpLabel = T.hp === Infinity ? '파괴 불가' : `${T.hp}타`;
+            c.fillStyle = '#aaa';
+            c.font = font('bold 22px');
+            c.textAlign = 'left';
+            c.textBaseline = 'top';
+            c.fillText(`${i + 1}. ${T.name}  [${hpLabel}]`, 20, top + 12);
+            c.fillStyle = '#777';
+            c.font = font('17px');
+            c.fillText(T.desc, 20, top + 40);
+
+            // 왼쪽: 새 벽돌 / 오른쪽: 파괴 직전 상태 (균열 표현 확인용)
+            const bx1 = cv.width * 0.5 - bw - 24, bx2 = cv.width * 0.5 + 24, by = top + 60;
+            drawTierBrick(c, bx1, by, bw, bh, i, 0, f);
+            if (T.hp !== Infinity) {
+                drawTierBrick(c, bx2, by, bw, bh, i, T.hp - 1, f);
+                c.fillStyle = '#555'; c.font = font('15px');
+                c.fillText('← 새 벽돌  |  마지막 1타 남음 →', cv.width * 0.5 - 150, by + bh + 4);
+            } else {
+                drawTierBrick(c, bx2, by, bw, bh, i, 0, f);
+                c.fillStyle = '#555'; c.font = font('15px');
+                c.fillText('공이 튕겨 나감 (체력 표시 없음)', cv.width * 0.5 - 130, by + bh + 4);
+            }
+
+            c.strokeStyle = 'rgba(255,255,255,0.12)';
+            c.lineWidth = 1;
+            c.beginPath(); c.moveTo(0, top + rowH - 0.5); c.lineTo(cv.width, top + rowH - 0.5); c.stroke();
+        });
+    }
+
+    function drawItemPreview() {
+        const cv = document.getElementById('dev-item-canvas');
+        if (!cv) return;
+        const c = cv.getContext('2d');
+        const f = Math.floor(performance.now() / SAND_INTERVAL) % SAND_FRAMES;
+
+        c.fillStyle = '#000';
+        c.fillRect(0, 0, cv.width, cv.height);
+
+        // 실제 크기 85x42, 프리뷰에서는 1.8배로 보여줌
+        const itemW = 85 * 1.8;
+        const itemH = 42 * 1.8;
+        const spacing = cv.width / ITEM_TYPES.length;
+
+        ITEM_TYPES.forEach((item, i) => {
+            const x = spacing * (i + 0.5) - itemW / 2;
+            const y = cv.height * 0.4 - itemH / 2;
+
+            scatterDots(c, x, y, itemW, itemH, {
+                seed: 8100 + i, frame: f, spacing: 2.5 * 1.8, density: 0.95, lum: item.color,
+                mask: (nx, ny) => {
+                    const cx = Math.max(0.25, Math.min(0.75, nx));
+                    return Math.hypot((nx - cx) * 2, ny - 0.5) <= 0.5;
+                }
+            });
+            strokeDotRect(c, x, y, itemW, itemH, itemH / 2, { seed: 8150 + i, frame: f, lum: 255, density: 0.95, spacing: 2.0 * 1.8 });
+            scatterDots(c, x + itemW/2 - 1.5, y, 3, itemH, { seed: 8160 + i, frame: f, density: 1, lum: 0 });
+
+            c.fillStyle = '#000';
+            c.font = font('bold ' + Math.floor(30 * 1.8) + 'px');
+            c.textAlign = 'center'; c.textBaseline = 'middle';
+            c.fillText(item.type, x + itemW/2, y + itemH/2 + 2 * 1.8);
+
+            // 라벨
+            c.fillStyle = '#aaa';
+            c.font = font('24px');
+            c.fillText(`${item.type} : ${item.desc}`, x + itemW/2, y + itemH + 60);
+        });
+    }
+
+    function openDevOverlay() {
+        devOverlay.classList.add('open');
+        devMenuScreen.style.display = 'block';
+        devDetailScreen.style.display = 'none';
+    }
+
+    devEntry.addEventListener('click', openDevOverlay);
+    document.getElementById('dev-close').addEventListener('click', () => devOverlay.classList.remove('open'));
+    document.getElementById('dev-back-btn').addEventListener('click', () => {
+        devDetailScreen.style.display = 'none';
+        devMenuScreen.style.display = 'block';
+    });
+
+    document.querySelectorAll('.dev-menu-btn[data-cat]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const cat = btn.getAttribute('data-cat');
+            const data = devContent[cat];
+            devDetailTitle.textContent = data.title;
+            devDetailBody.innerHTML = data.body;
+            devMenuScreen.style.display = 'none';
+            devDetailScreen.style.display = 'block';
+            if (cat === 'paddle') drawPaddlePreview();
+            if (cat === 'brick') drawBrickPreview();
+            if (cat === 'item') drawItemPreview();
+        });
+    });
+</script>
+</body>
+</html>
