@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>로그라이크 알카노이드 (Roguelike Arkanoid)</title>
+  <style>
+    :root {
+      --bg: #0f111a;
+      --panel: #1a1e2e;
+      --accent: #ff4757;
+      --fire: #ff5252;
+      --water: #38ef7d; /* aqua/cyan-green */
+      --water-blue: #00d2ff;
+      --lightn: #ffeaa7;
+      --nuke: #f39c12;
+      --text: #f1f2f6;
+    }
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+      width: 480px;
+      max-width: 100vw;
+      height: 720px;
+      max-height: 100vh;
+      background: #0a0c14;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Top HUD */
+    #hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: rgba(26, 30, 46, 0.9);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 5;
+    }
+    .hud-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    #exp-bar-container {
+      width: 100%;
+      height: 6px;
+      background: #232738;
+      position: relative;
+      z-index: 5;
+    }
+    #exp-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #38ef7d, #11998e);
+      transition: width 0.2s ease-out;
+    }
+    /* Status banner for Nuclear / Color combos */
+    #status-banner {
+      display: flex;
+      justify-content: space-around;
+      padding: 4px 10px;
+      background: rgba(15, 17, 26, 0.85);
+      font-size: 11px;
+      color: #aaa;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      z-index: 5;
+    }
+    .badge {
+      padding: 2px 7px;
+      border-radius: 10px;
+      background: #2a2e42;
+      color: #fff;
+      font-weight: bold;
+    }
+    .badge-nuke { background: #d35400; color: #fff; }
+    .badge-combo { background: #8e44ad; color: #fff; }
+    .badge-elem { background: #2980b9; color: #fff; }
+
+    canvas {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* Modal overlays: Level Up / Game Over / Start */
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 12, 20, 0.92);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 50;
+      transition: opacity 0.25s ease;
+    }
+    .hidden {
+      display: none !important;
+    }
+    h2 {
+      margin: 0 0 10px 0;
+      font-size: 24px;
+      color: #fff;
+      text-shadow: 0 0 15px rgba(255,255,255,0.3);
+    }
+    p.subtitle {
+      margin: 0 0 20px 0;
+      font-size: 13px;
+      color: #8f9ca7;
+      text-align: center;
+    }
+
+    /* Card Choice (Roguelike Level Up) */
+    .perk-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 380px;
+    }
+    .perk-card {
+      background: #1c2133;
+      border: 1px solid #323a54;
+      border-radius: 10px;
+      padding: 14px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .perk-card:hover, .perk-card:active {
+      transform: translateY(-2px) scale(1.02);
+      border-color: #00d2ff;
+      background: #252b42;
+    }
+    .perk-icon {
+      font-size: 28px;
+      line-height: 1;
+    }
+    .perk-info {
+      flex: 1;
+    }
+    .perk-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .perk-title {
+      font-weight: 700;
+      font-size: 15px;
+      color: #fff;
+    }
+    .perk-type {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+    .type-elem { background: #1976d2; color: #bbdefb; }
+    .type-color { background: #7b1fa2; color: #e1bee7; }
+    .type-nuke { background: #c2185b; color: #f8bbd0; }
+    .type-stat { background: #388e3c; color: #c8e6c9; }
+    .perk-desc {
+      font-size: 12px;
+      color: #9aa7b5;
+      line-height: 1.4;
+      margin: 0;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 12px 32px;
+      background: linear-gradient(135deg, #ff4757, #ff6b81);
+      color: white;
+      border: none;
+      border-radius: 25px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(255, 71, 87, 0.4);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .btn:active {
+      transform: scale(0.96);
+    }
+    .stats-list {
+      background: rgba(255,255,255,0.03);
+      padding: 14px;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 300px;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 6px 0;
+    }
+
+    /* Floating combat text on canvas */
+    #touch-hint {
+      position: absolute;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      pointer-events: none;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-container">
+  <!-- HUD Header -->
+  <div id="hud">
+    <div class="hud-item">❤️ <span id="lives-display">3</span></div>
+    <div class="hud-item">⭐ LV.<span id="lvl-display">1</span></div>
+    <div class="hud-item">🏆 <span id="score-display">0</span></div>
+    <div class="hud-item">STAGE <span id="stage-display">1</span></div>
+  </div>
+  <div id="exp-bar-container">
+    <div id="exp-bar"></div>
+  </div>
+
+  <!-- Status indicators -->
+  <div id="status-banner">
+    <div>속성: <span id="ball-elem-badge" class="badge badge-elem">불 🔥</span></div>
+    <div>색상 콤보: <span id="color-combo-badge" class="badge badge-combo">x0</span></div>
+    <div>핵 충전: <span id="nuke-status-badge" class="badge badge-nuke">0/10 턴</span></div>
+  </div>
+
+  <canvas id="gameCanvas" width="480" height="620"></canvas>
+  <div id="touch-hint">패들을 좌우로 드래그하거나 마우스로 조작하세요</div>
+
+  <!-- Level Up Modal -->
+  <div id="level-modal" class="overlay hidden">
+    <h2>🎉 레벨 업!</h2>
+    <p class="subtitle">새로운 퍽을 선택하여 빌드를 강화하세요</p>
+    <div class="perk-cards" id="perk-cards-container">
+      <!-- Injected by JS -->
+    </div>
+  </div>
+
+  <!-- Start Modal -->
+  <div id="start-modal" class="overlay">
+    <h2>로그라이크 알카노이드</h2>
+    <p class="subtitle">3대 빌드를 조합해 무한 블록을 격파하세요</p>
+    <div style="text-align: left; font-size: 12px; line-height: 1.6; margin-bottom: 20px; color: #a4b0be;">
+      🔥 <b>원소 빌드:</b> 불(지속딜) · 물(빙결) · 번개(체인) 3단 반응<br>
+      🎨 <b>색깔 빌드:</b> 서로 다른 색상의 블록을 연속 파괴하여 배수 콤보<br>
+      ☢️ <b>원자폭탄 빌드:</b> 노란색 최전선 블록을 10턴간 보존하면 전멸기 발동!
+    </div>
+    <button class="btn" id="start-btn">게임 시작</button>
+  </div>
+
+  <!-- Game Over Modal -->
+  <div id="gameover-modal" class="overlay hidden">
+    <h2 id="gameover-title">GAME OVER</h2>
+    <div class="stats-list">
+      <div class="stats-row"><span>도달 스테이지:</span> <b id="final-stage">1</b></div>
+      <div class="stats-row"><span>최종 점수:</span> <b id="final-score">0</b></div>
+      <div class="stats-row"><span>달성 레벨:</span> <b id="final-lvl">1</b></div>
+      <div class="stats-row"><span>핵폭발 발동:</span> <b id="final-nukes">0회</b></div>
+    </div>
+    <button class="btn" id="restart-btn">다시 도전</button>
+  </div>
+</div>
+
+<script>
+// --- Web Audio Synthesizer (BGM / SFX without external files) ---
+const AudioEngine = {
+  ctx: null,
+  init() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioCtx();
+    }
+  },
+  play(type) {
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      if (type === 'hit') {
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(160, now + 0.08);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      } else if (type === 'elemental') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.linearRampToValueAtTime(880, now + 0.15);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } else if (type === 'nuke') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.7);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.7);
+        osc.start(now);
+        osc.stop(now + 0.7);
+      } else if (type === 'levelup') {
+        const notes = [440, 554, 659, 880];
+        notes.forEach((freq, i) => {
+          const o = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          o.connect(g);
+          g.connect(this.ctx.destination);
+          o.frequency.setValueAtTime(freq, now + i * 0.07);
+          g.gain.setValueAtTime(0.15, now + i * 0.07);
+          g.gain.linearRampToValueAtTime(0.01, now + i * 0.07 + 0.15);
+          o.start(now + i * 0.07);
+          o.stop(now + i * 0.07 + 0.15);
+        });
+      } else if (type === 'lose') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.linearRampToValueAtTime(90, now + 0.35);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      }
+    } catch (e) {}
+  }
+};
+
+// --- Game Constants & Palette ---
+const CANVAS = document.getElementById('gameCanvas');
+const CTX = CANVAS.getContext('2d');
+const WIDTH = CANVAS.width;
+const HEIGHT = CANVAS.height;
+
+const COLORS = [
+  { name: 'Red', hex: '#ff4757', complimentary: '#2ed573' },
+  { name: 'Blue', hex: '#1e90ff', complimentary: '#ffa502' },
+  { name: 'Green', hex: '#2ed573', complimentary: '#ff4757' },
+  { name: 'Yellow', hex: '#ffa502', complimentary: '#1e90ff' },
+  { name: 'Purple', hex: '#9b59b6', complimentary: '#2ecc71' }
+];
+
+const ELEMENTS = ['fire', 'water', 'lightning'];
+const ELEMENT_INFO = {
+  fire: { name: '불 🔥', color: '#ff4757' },
+  water: { name: '물 💧', color: '#00d2ff' },
+  lightning: { name: '번개 ⚡', color: '#ffeaa7' }
+};
+
+// --- Roguelike Perks Database ---
+const PERKS_DATABASE = [
+  // 원소 계열
+  {
+    id: 'elem_burn',
+    type: 'elem',
+    name: '발화 코팅',
+    desc: '공이 닿은 블록에 3초간 화상 디버프(초당 지속 피해)를 입힙니다.',
+    icon: '🔥',
+    apply: (state) => { state.perks.burn = (state.perks.burn || 0) + 1; }
+  },
+  {
+    id: 'elem_conduct',
+    type: 'elem',
+    name: '전도체 합금',
+    desc: '번개 속성 타격 시 좌우 인접한 블록에 50%의 연쇄 번개 피해를 입힙니다.',
+    icon: '⚡',
+    apply: (state) => { state.perks.conduct = (state.perks.conduct || 0) + 1; }
+  },
+  {
+    id: 'elem_prism',
+    type: 'elem',
+    name: '삼색 프리즘 볼',
+    desc: '패들에 닿을 때마다 [불 ➔ 물 ➔ 번개]로 자동 순환하며 공 기본 데미지 +30%.',
+    icon: '🔮',
+    apply: (state) => { state.perks.prismBall = true; state.ball.damage *= 1.3; }
+  },
+  {
+    id: 'elem_freeze',
+    type: 'elem',
+    name: '냉각수 순환',
+    desc: '물 속성으로 2회 타격된 블록을 동결시켜 다음 피격 시 즉시 파쇄합니다.',
+    icon: '❄️',
+    apply: (state) => { state.perks.freeze = (state.perks.freeze || 0) + 1; }
+  },
+
+  // 색깔 계열
+  {
+    id: 'color_stack',
+    type: 'color',
+    name: '스펙트럼 스택',
+    desc: '서로 다른 색상의 블록을 연속 파괴할 때마다 공격력 25% 중첩 (최대 5스택).',
+    icon: '🎨',
+    apply: (state) => { state.perks.spectrumStack = true; }
+  },
+  {
+    id: 'color_prism_split',
+    type: 'color',
+    name: '프리즘 분광기',
+    desc: '서로 다른 색 3연속 파괴 시 미니 서브 볼 1개를 즉시 추가 발사합니다.',
+    icon: '✨',
+    apply: (state) => { state.perks.prismSplit = true; }
+  },
+  {
+    id: 'color_rainbow',
+    type: 'color',
+    name: '무지개 붕괴 (전설)',
+    desc: '4연속 이색 파괴 달성 시 5초간 공이 무지개 관통 모드가 됩니다.',
+    icon: '🌈',
+    apply: (state) => { state.perks.rainbowCore = true; }
+  },
+
+  // 원자폭탄 계열
+  {
+    id: 'nuke_angle',
+    type: 'nuke',
+    name: '미세 각도기',
+    desc: '패들 중앙으로 튕기면 공 각도가 수직에 가까워져 앞줄 틈새를 정밀 침투합니다.',
+    icon: '📐',
+    apply: (state) => { state.perks.fineTuner = true; }
+  },
+  {
+    id: 'nuke_shield',
+    type: 'nuke',
+    name: '최전선 차폐 실드',
+    desc: '보존 타겟 블록이 공에 1회 맞아도 카운트다운이 리셋되지 않고 튕겨냅니다.',
+    icon: '🛡️',
+    apply: (state) => { state.perks.targetShield = (state.perks.targetShield || 0) + 1; }
+  },
+  {
+    id: 'nuke_accel',
+    type: 'nuke',
+    name: '후방 공략 가속',
+    desc: '최전선 라인을 통과해 뒷줄로 진입한 공의 속도와 파괴력이 35% 증가합니다.',
+    icon: '🚀',
+    apply: (state) => { state.perks.backlineAccel = true; }
+  },
+  {
+    id: 'nuke_field',
+    type: 'nuke',
+    name: '절대 격리 구역 (전설)',
+    desc: '원자핵 발동 필요 턴이 10턴에서 7턴으로 단축됩니다.',
+    icon: '☢️',
+    apply: (state) => { state.nukeMaxTurns = 7; }
+  },
+
+  // 기본 스탯 유틸
+  {
+    id: 'stat_paddle',
+    type: 'stat',
+    name: '티타늄 패들',
+    desc: '패들의 좌우 너비가 25% 넓어지고 이동 속도가 향상됩니다.',
+    icon: '🏓',
+    apply: (state) => { state.paddle.w = Math.min(180, state.paddle.w * 1.25); }
+  },
+  {
+    id: 'stat_life',
+    type: 'stat',
+    name: '응급 수리 키트',
+    desc: '최대 라이프 +1 회복 및 공 기본 속도 10% 증가.',
+    icon: '❤️',
+    apply: (state) => { state.lives += 1; state.ball.speedBase *= 1.1; }
+  }
+];
+
+// --- Game State ---
+const State = {
+  running: false,
+  paused: false,
+  lives: 3,
+  score: 0,
+  stage: 1,
+  level: 1,
+  exp: 0,
+  expNeeded: 50,
+  nukesTriggered: 0,
+
+  // Nuke build tracking
+  nukeTurnCount: 0,
+  nukeMaxTurns: 10,
+  targetBlock: null, // the front-line block to preserve
+  targetShieldsLeft: 0,
+
+  // Color combo tracking
+  lastDestroyedColor: null,
+  colorComboCount: 0,
+  rainbowModeTimer: 0,
+
+  // Elemental tracking
+  currentElementIdx: 0,
+
+  // Active perks
+  perks: {},
+
+  paddle: {
+    x: WIDTH / 2 - 45,
+    y: HEIGHT - 35,
+    w: 90,
+    h: 12,
+    speed: 12
+  },
+
+  balls: [],
+  blocks: [],
+  particles: [],
+  floatingTexts: []
+};
+
+// --- Initialization / Stage Setup ---
+function initStage() {
+  State.balls = [{
+    x: State.paddle.x + State.paddle.w / 2,
+    y: State.paddle.y - 12,
+    vx: (Math.random() > 0.5 ? 3.5 : -3.5),
+    vy: -4.5,
+    radius: 7,
+    damage: 25,
+    speedBase: 5.5,
+    element: ELEMENTS[State.currentElementIdx]
+  }];
+
+  State.blocks = [];
+  State.nukeTurnCount = 0;
+  State.targetShieldsLeft = State.perks.targetShield || 0;
+  State.colorComboCount = 0;
+  State.lastDestroyedColor = null;
+
+  // Grid layout
+  const rows = 5;
+  const cols = 7;
+  const blockW = 58;
+  const blockH = 20;
+  const padX = 8;
+  const padY = 8;
+  const startX = (WIDTH - (cols * blockW + (cols - 1) * padX)) / 2;
+  const startY = 50;
+
+  let candidateFrontBlocks = [];
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const colorObj = COLORS[(r + c) % COLORS.length];
+      const maxHp = 30 + (State.stage - 1) * 15;
+      const blk = {
+        id: `blk_${r}_${c}`,
+        x: startX + c * (blockW + padX),
+        y: startY + r * (blockH + padY),
+        w: blockW,
+        h: blockH,
+        hp: maxHp,
+        maxHp: maxHp,
+        color: colorObj.hex,
+        colorName: colorObj.name,
+        complimentary: colorObj.complimentary,
+        row: r,
+        col: c,
+        isTarget: false,
+        elementalDebuff: null, // { type, duration }
+        freezeHits: 0
+      };
+      State.blocks.push(blk);
+
+      // Bottom-most row initially is the front line
+      if (r === rows - 1) {
+        candidateFrontBlocks.push(blk);
+      }
+    }
+  }
+
+  // Pick one front-row block as the Nuclear preservation target
+  if (candidateFrontBlocks.length > 0) {
+    const centerIdx = Math.floor(candidateFrontBlocks.length / 2);
+    State.targetBlock = candidateFrontBlocks[centerIdx];
+    State.targetBlock.isTarget = true;
+  }
+
+  updateHUD();
+}
+
+// --- Particles and Floating Combat Text ---
+function createSparks(x, y, color, count = 8) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 4 + 1;
+    State.particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      color,
+      alpha: 1,
+      size: Math.random() * 3 + 1.5,
+      decay: Math.random() * 0.03 + 0.02
+    });
+  }
+}
+
+function addFloatingText(text, x, y, color = '#fff') {
+  State.floatingTexts.push({
+    text, x, y, color,
+    vy: -1.2,
+    alpha: 1
+  });
+}
+
+// --- Ball & Block Collision & Roguelike Logics ---
+function triggerNuclearExplosion() {
+  AudioEngine.play('nuke');
+  State.nukesTriggered++;
+  addFloatingText('☢️ 원자폭탄 폭발! ☢️', WIDTH / 2 - 60, HEIGHT / 2, '#f39c12');
+
+  // Big screen flash & destroy all blocks
+  for (let i = 0; i < 40; i++) {
+    createSparks(Math.random() * WIDTH, Math.random() * (HEIGHT / 2) + 50, '#f39c12', 4);
+  }
+
+  State.blocks.forEach(b => {
+    gainExp(15);
+    State.score += 50;
+  });
+  State.blocks = [];
+  State.nukeTurnCount = 0;
+}
+
+function handleBlockHit(block, ball) {
+  let dmg = ball.damage;
+
+  // 1. Check if it's the Nuke Target Block!
+  if (block.isTarget) {
+    if (State.targetShieldsLeft > 0) {
+      State.targetShieldsLeft--;
+      addFloatingText('🛡️ 실드 방어!', block.x + 10, block.y - 10, '#3498db');
+      createSparks(block.x + block.w / 2, block.y + block.h / 2, '#3498db', 10);
+      return; // Protected!
+    } else {
+      // Failed preservation!
+      addFloatingText('⚠️ 핵 카운트 실패!', block.x, block.y - 10, '#e74c3c');
+      State.nukeTurnCount = 0;
+      updateHUD();
+    }
+  }
+
+  // 2. Color mechanics
+  if (State.perks.spectrumStack) {
+    if (State.lastDestroyedColor && State.lastDestroyedColor !== block.colorName) {
+      State.colorComboCount = Math.min(5, State.colorComboCount + 1);
+      dmg *= (1 + State.colorComboCount * 0.25);
+      addFloatingText(`🎨 +${State.colorComboCount * 25}% 콤보!`, block.x, block.y - 12, '#9b59b6');
+    }
+  }
+
+  // Rainbow core overdrive
+  if (State.rainbowModeTimer > 0) {
+    dmg = 9999; // Instakill
+    createSparks(block.x + block.w / 2, block.y + block.h / 2, '#e056fd', 12);
+  }
+
+  // 3. Elemental mechanics
+  if (ball.element === 'fire') {
+    if (State.perks.burn) {
+      block.elementalDebuff = { type: 'burn', timer: 180 };
+    }
+  } else if (ball.element === 'lightning') {
+    if (State.perks.conduct) {
+      // Damage adjacent horizontal blocks
+      State.blocks.forEach(adj => {
+        if (adj !== block && adj.row === block.row && Math.abs(adj.col - block.col) === 1) {
+          adj.hp -= dmg * 0.5;
+          createSparks(adj.x + adj.w/2, adj.y + adj.h/2, '#ffeaa7', 5);
+        }
+      });
+      AudioEngine.play('elemental');
+    }
+  } else if (ball.element === 'water') {
+    if (State.perks.freeze) {
+      block.freezeHits = (block.freezeHits || 0) + 1;
+      if (block.freezeHits >= 2) {
+        dmg = 9999; // shatter
+        addFloatingText('❄️ 동결 분쇄!', block.x, block.y - 10, '#00d2ff');
+      }
+    }
+  }
+
+  block.hp -= dmg;
+  createSparks(block.x + block.w / 2, block.y + block.h / 2, block.color, 6);
+  AudioEngine.play('hit');
+
+  // Block Destroyed
+  if (block.hp <= 0) {
+    const idx = State.blocks.indexOf(block);
+    if (idx > -1) {
+      State.blocks.splice(idx, 1);
+      State.score += 100;
+      gainExp(20);
+
+      // Spectrum color combo check
+      if (State.lastDestroyedColor !== block.colorName) {
+        State.colorComboCount++;
+        if (State.perks.prismSplit && State.colorComboCount === 3) {
+          spawnSubBall(ball.x, ball.y);
+          addFloatingText('✨ 서브 볼 분열!', ball.x, ball.y - 20, '#f1c40f');
+        }
+        if (State.perks.rainbowCore && State.colorComboCount >= 4) {
+          State.rainbowModeTimer = 300; // 5 seconds at 60fps
+          addFloatingText('🌈 무지개 붕괴 발동!', WIDTH/2 - 50, HEIGHT/2, '#ff9ff3');
+        }
+      } else {
+        State.colorComboCount = 0;
+      }
+      State.lastDestroyedColor = block.colorName;
+
+      // If target block was destroyed, pick another front-line target or clear
+      if (block.isTarget) {
+        findNewTargetBlock();
+      }
+    }
+  }
+
+  updateHUD();
+}
+
+function findNewTargetBlock() {
+  State.targetBlock = null;
+  State.nukeTurnCount = 0;
+  // Find highest row index currently remaining (closest to paddle)
+  let maxRow = -1;
+  State.blocks.forEach(b => {
+    if (b.row > maxRow) maxRow = b.row;
+  });
+  if (maxRow !== -1) {
+    const rowBlocks = State.blocks.filter(b => b.row === maxRow);
+    const chosen = rowBlocks[Math.floor(rowBlocks.length / 2)];
+    if (chosen) {
+      chosen.isTarget = true;
+      State.targetBlock = chosen;
+      State.targetShieldsLeft = State.perks.targetShield || 0;
+      addFloatingText('☢️ 새로운 핵 표적!', chosen.x, chosen.y - 10, '#f39c12');
+    }
+  }
+}
+
+function spawnSubBall(x, y) {
+  State.balls.push({
+    x, y,
+    vx: (Math.random() - 0.5) * 6,
+    vy: -5,
+    radius: 5,
+    damage: 15,
+    speedBase: 5,
+    element: ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)]
+  });
+}
+
+function gainExp(amount) {
+  State.exp += amount;
+  if (State.exp >= State.expNeeded) {
+    State.exp -= State.expNeeded;
+    State.expNeeded = Math.floor(State.expNeeded * 1.35);
+    State.level++;
+    triggerLevelUp();
+  }
+  updateHUD();
+}
+
+function triggerLevelUp() {
+  State.paused = true;
+  AudioEngine.play('levelup');
+  const modal = document.getElementById('level-modal');
+  const container = document.getElementById('perk-cards-container');
+  container.innerHTML = '';
+
+  // Pick 3 random distinct perks
+  const shuffled = [...PERKS_DATABASE].sort(() => 0.5 - Math.random());
+  const choices = shuffled.slice(0, 3);
+
+  choices.forEach(perk => {
+    const card = document.createElement('div');
+    card.className = 'perk-card';
+    card.innerHTML = `
+      <div class="perk-icon">${perk.icon}</div>
+      <div class="perk-info">
+        <div class="perk-header">
+          <span class="perk-title">${perk.name}</span>
+          <span class="perk-type type-${perk.type}">${perk.type}</span>
+        </div>
+        <p class="perk-desc">${perk.desc}</p>
+      </div>
+    `;
+    card.onclick = () => {
+      perk.apply(State);
+      modal.classList.add('hidden');
+      State.paused = false;
+      updateHUD();
+    };
+    container.appendChild(card);
+  });
+
+  modal.classList.remove('hidden');
+}
+
+// --- Paddle Bounce & Nuke Turn Counting ---
+function handlePaddleHit(ball) {
+  // Angle deflection based on hit position
+  const hitPoint = (ball.x - (State.paddle.x + State.paddle.w / 2)) / (State.paddle.w / 2);
+  let speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+  speed = Math.max(speed, ball.speedBase);
+
+  let angleFactor = hitPoint * (Math.PI / 3); // max 60 deg
+
+  // Fine-tuner perk: narrow deflection angle in the center
+  if (State.perks.fineTuner && Math.abs(hitPoint) < 0.35) {
+    angleFactor *= 0.4; // shoot straight up!
+  }
+
+  ball.vx = speed * Math.sin(angleFactor);
+  ball.vy = -Math.abs(speed * Math.cos(angleFactor));
+
+  // Cycle prism ball element
+  if (State.perks.prismBall) {
+    State.currentElementIdx = (State.currentElementIdx + 1) % ELEMENTS.length;
+    ball.element = ELEMENTS[State.currentElementIdx];
+  }
+
+  // Nuclear turn count increment on paddle bounce (1 turn = 1 bounce)
+  if (State.targetBlock && State.targetBlock.hp > 0) {
+    State.nukeTurnCount++;
+    addFloatingText(`☢️ 턴 ${State.nukeTurnCount}/${State.nukeMaxTurns}`, State.paddle.x + State.paddle.w / 2, State.paddle.y - 15, '#f1c40f');
+    if (State.nukeTurnCount >= State.nukeMaxTurns) {
+      triggerNuclearExplosion();
+    }
+  }
+
+  AudioEngine.play('hit');
+  updateHUD();
+}
+
+// --- Game Loop ---
+function update() {
+  if (!State.running || State.paused) return;
+
+  // Rainbow mode countdown
+  if (State.rainbowModeTimer > 0) {
+    State.rainbowModeTimer--;
+  }
+
+  // Update debuffs on blocks (burn)
+  State.blocks.forEach(b => {
+    if (b.elementalDebuff && b.elementalDebuff.type === 'burn') {
+      b.elementalDebuff.timer--;
+      if (b.elementalDebuff.timer % 30 === 0) {
+        b.hp -= 4;
+        createSparks(b.x + b.w / 2, b.y + b.h / 2, '#ff7675', 2);
+      }
+      if (b.elementalDebuff.timer <= 0) b.elementalDebuff = null;
+    }
+  });
+
+  // Clean dead blocks from burn
+  for (let i = State.blocks.length - 1; i >= 0; i--) {
+    if (State.blocks[i].hp <= 0) {
+      const b = State.blocks[i];
+      gainExp(15);
+      State.blocks.splice(i, 1);
+      if (b.isTarget) findNewTargetBlock();
+    }
+  }
+
+  // Check stage clear
+  if (State.blocks.length === 0) {
+    State.stage++;
+    addFloatingText(`STAGE ${State.stage} START!`, WIDTH / 2 - 50, HEIGHT / 2, '#2ed573');
+    initStage();
+    return;
+  }
+
+  // Update Balls
+  for (let i = State.balls.length - 1; i >= 0; i--) {
+    const ball = State.balls[i];
+
+    // Backline Acceleration perk
+    if (State.perks.backlineAccel && ball.y < 150) {
+      ball.x += ball.vx * 1.3;
+      ball.y += ball.vy * 1.3;
+    } else {
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+    }
+
+    // Wall bounces
+    if (ball.x - ball.radius < 0) {
+      ball.x = ball.radius;
+      ball.vx = Math.abs(ball.vx);
+    } else if (ball.x + ball.radius > WIDTH) {
+      ball.x = WIDTH - ball.radius;
+      ball.vx = -Math.abs(ball.vx);
+    }
+    if (ball.y - ball.radius < 0) {
+      ball.y = ball.radius;
+      ball.vy = Math.abs(ball.vy);
+    }
+
+    // Paddle collision
+    if (
+      ball.y + ball.radius >= State.paddle.y &&
+      ball.y - ball.radius <= State.paddle.y + State.paddle.h &&
+      ball.x >= State.paddle.x &&
+      ball.x <= State.paddle.x + State.paddle.w &&
+      ball.vy > 0
+    ) {
+      handlePaddleHit(ball);
+    }
+
+    // Block collision
+    for (let b of State.blocks) {
+      if (
+        ball.x + ball.radius > b.x &&
+        ball.x - ball.radius < b.x + b.w &&
+        ball.y + ball.radius > b.y &&
+        ball.y - ball.radius < b.y + b.h
+      ) {
+        // If not rainbow piercing, bounce back
+        if (State.rainbowModeTimer <= 0) {
+          // Check collision edge
+          const prevX = ball.x - ball.vx;
+          if (prevX < b.x || prevX > b.x + b.w) {
+            ball.vx = -ball.vx;
+          } else {
+            ball.vy = -ball.vy;
+          }
+        }
+        handleBlockHit(b, ball);
+        break;
+      }
+    }
+
+    // Fall out of bottom
+    if (ball.y > HEIGHT) {
+      State.balls.splice(i, 1);
+    }
+  }
+
+  // If all balls lost
+  if (State.balls.length === 0) {
+    State.lives--;
+    AudioEngine.play('lose');
+    if (State.lives <= 0) {
+      gameOver();
+      return;
+    } else {
+      // Respawn main ball
+      State.balls.push({
+        x: State.paddle.x + State.paddle.w / 2,
+        y: State.paddle.y - 12,
+        vx: 3.5,
+        vy: -4.5,
+        radius: 7,
+        damage: 25,
+        speedBase: 5.5,
+        element: ELEMENTS[State.currentElementIdx]
+      });
+      State.nukeTurnCount = 0;
+      updateHUD();
+    }
+  }
+
+  // Particles
+  for (let i = State.particles.length - 1; i >= 0; i--) {
+    const p = State.particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.alpha -= p.decay;
+    if (p.alpha <= 0) State.particles.splice(i, 1);
+  }
+
+  // Floating text
+  for (let i = State.floatingTexts.length - 1; i >= 0; i--) {
+    const t = State.floatingTexts[i];
+    t.y += t.vy;
+    t.alpha -= 0.02;
+    if (t.alpha <= 0) State.floatingTexts.splice(i, 1);
+  }
+}
+
+function draw() {
+  CTX.clearRect(0, 0, WIDTH, HEIGHT);
+
+  // Background grid pattern
+  CTX.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+  CTX.lineWidth = 1;
+  for (let x = 0; x < WIDTH; x += 30) {
+    CTX.beginPath(); CTX.moveTo(x, 0); CTX.lineTo(x, HEIGHT); CTX.stroke();
+  }
+  for (let y = 0; y < HEIGHT; y += 30) {
+    CTX.beginPath(); CTX.moveTo(0, y); CTX.lineTo(WIDTH, y); CTX.stroke();
+  }
+
+  // Draw Blocks
+  State.blocks.forEach(b => {
+    CTX.save();
+    CTX.fillStyle = b.color;
+    CTX.shadowColor = b.color;
+    CTX.shadowBlur = b.isTarget ? 15 : 6;
+
+    // Nuclear Target block highlight
+    if (b.isTarget) {
+      CTX.fillStyle = '#f39c12';
+      CTX.shadowColor = '#f1c40f';
+    }
+
+    // Render rounded block
+    roundRect(CTX, b.x, b.y, b.w, b.h, 4, true, false);
+
+    // Target crosshair / icon
+    if (b.isTarget) {
+      CTX.strokeStyle = '#ffffff';
+      CTX.lineWidth = 2;
+      CTX.strokeRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4);
+      CTX.fillStyle = '#ffffff';
+      CTX.font = 'bold 10px sans-serif';
+      CTX.textAlign = 'center';
+      CTX.fillText('☢️ 보존', b.x + b.w / 2, b.y + b.h / 2 + 3);
+    } else {
+      // HP bar inside block
+      const hpRatio = Math.max(0, b.hp / b.maxHp);
+      CTX.fillStyle = 'rgba(255,255,255,0.25)';
+      CTX.fillRect(b.x, b.y + b.h - 3, b.w * hpRatio, 3);
+    }
+    CTX.restore();
+  });
+
+  // Draw Paddle
+  CTX.save();
+  const paddleGrad = CTX.createLinearGradient(State.paddle.x, State.paddle.y, State.paddle.x, State.paddle.y + State.paddle.h);
+  paddleGrad.addColorStop(0, '#ffffff');
+  paddleGrad.addColorStop(1, '#a4b0be');
+  CTX.fillStyle = paddleGrad;
+  CTX.shadowColor = '#00d2ff';
+  CTX.shadowBlur = 10;
+  roundRect(CTX, State.paddle.x, State.paddle.y, State.paddle.w, State.paddle.h, 6, true, false);
+  CTX.restore();
+
+  // Draw Balls
+  State.balls.forEach(ball => {
+    CTX.save();
+    let ballColor = ELEMENT_INFO[ball.element] ? ELEMENT_INFO[ball.element].color : '#fff';
+    if (State.rainbowModeTimer > 0) {
+      const hue = (Date.now() / 4) % 360;
+      ballColor = `hsl(${hue}, 100%, 65%)`;
+    }
+
+    CTX.fillStyle = ballColor;
+    CTX.shadowColor = ballColor;
+    CTX.shadowBlur = 12;
+    CTX.beginPath();
+    CTX.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+    CTX.fill();
+    CTX.restore();
+  });
+
+  // Draw Particles
+  State.particles.forEach(p => {
+    CTX.save();
+    CTX.globalAlpha = p.alpha;
+    CTX.fillStyle = p.color;
+    CTX.beginPath();
+    CTX.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    CTX.fill();
+    CTX.restore();
+  });
+
+  // Draw Floating Texts
+  State.floatingTexts.forEach(t => {
+    CTX.save();
+    CTX.globalAlpha = t.alpha;
+    CTX.fillStyle = t.color;
+    CTX.font = 'bold 12px sans-serif';
+    CTX.fillText(t.text, t.x, t.y);
+    CTX.restore();
+  });
+}
+
+function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+function updateHUD() {
+  document.getElementById('lives-display').innerText = State.lives;
+  document.getElementById('lvl-display').innerText = State.level;
+  document.getElementById('score-display').innerText = State.score;
+  document.getElementById('stage-display').innerText = State.stage;
+
+  // Exp bar
+  const expPercent = Math.min(100, (State.exp / State.expNeeded) * 100);
+  document.getElementById('exp-bar').style.width = `${expPercent}%`;
+
+  // Status badges
+  const currentElem = ELEMENTS[State.currentElementIdx];
+  const badgeElem = document.getElementById('ball-elem-badge');
+  badgeElem.innerText = ELEMENT_INFO[currentElem].name;
+  badgeElem.style.background = ELEMENT_INFO[currentElem].color;
+
+  const comboBadge = document.getElementById('color-combo-badge');
+  comboBadge.innerText = `x${State.colorComboCount} (연속)`;
+
+  const nukeBadge = document.getElementById('nuke-status-badge');
+  nukeBadge.innerText = `${State.nukeTurnCount}/${State.nukeMaxTurns} 턴`;
+  if (State.nukeTurnCount >= State.nukeMaxTurns - 2) {
+    nukeBadge.style.background = '#e74c3c';
+  } else {
+    nukeBadge.style.background = '#d35400';
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function gameOver() {
+  State.running = false;
+  document.getElementById('final-stage').innerText = State.stage;
+  document.getElementById('final-score').innerText = State.score;
+  document.getElementById('final-lvl').innerText = State.level;
+  document.getElementById('final-nukes').innerText = `${State.nukesTriggered}회`;
+  document.getElementById('gameover-modal').classList.remove('hidden');
+}
+
+// --- Controls (Mouse & Touch) ---
+function movePaddle(clientX) {
+  const rect = CANVAS.getBoundingClientRect();
+  const scaleX = CANVAS.width / rect.width;
+  const canvasX = (clientX - rect.left) * scaleX;
+  State.paddle.x = Math.max(0, Math.min(WIDTH - State.paddle.w, canvasX - State.paddle.w / 2));
+}
+
+CANVAS.addEventListener('mousemove', (e) => movePaddle(e.clientX));
+CANVAS.addEventListener('touchmove', (e) => {
+  if (e.touches.length > 0) {
+    movePaddle(e.touches[0].clientX);
+  }
+  e.preventDefault();
+}, { passive: false });
+
+// Keyboard Controls
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') {
+    State.paddle.x = Math.max(0, State.paddle.x - 25);
+  } else if (e.key === 'ArrowRight') {
+    State.paddle.x = Math.min(WIDTH - State.paddle.w, State.paddle.x + 25);
+  }
+});
+
+// Start & Restart Listeners
+document.getElementById('start-btn').onclick = () => {
+  AudioEngine.init();
+  document.getElementById('start-modal').classList.add('hidden');
+  State.running = true;
+  initStage();
+};
+
+document.getElementById('restart-btn').onclick = () => {
+  document.getElementById('gameover-modal').classList.add('hidden');
+  State.lives = 3;
+  State.score = 0;
+  State.stage = 1;
+  State.level = 1;
+  State.exp = 0;
+  State.expNeeded = 50;
+  State.nukesTriggered = 0;
+  State.perks = {};
+  State.paddle.w = 90;
+  State.running = true;
+  initStage();
+};
+
+// Start animation loop
+loop();
+</script>
+</body>
+</html>
