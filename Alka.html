@@ -755,6 +755,7 @@ const State = {
   nukeTurnCount: 0,
   nukeMaxTurns: 10,
   nukeShields: 0,
+  nukeRelocationsLeft: 3, // 보존 칸 파괴 시 다음 칸으로 이동 가능한 횟수 제한 (최대 3회)
 
   paddle: {
     x: V_WIDTH / 2 - 38,
@@ -791,9 +792,10 @@ function spawnExpGem(x, y, forcedTier = null) {
   State.fallingGems.push({
     x: x,
     y: y,
-    vx: (Math.random() - 0.5) * 2.2,
-    vy: -(Math.random() * 2.2 + 1.2),
-    gravity: 0.12,
+    vx: (Math.random() - 0.5) * 1.5,
+    vy: -(Math.random() * 0.8 + 0.5), // 살짝 위로 솟아오름
+    gravity: 0.045, // 느긋하게 낙하하도록 중력 대폭 완화 (기존 0.12)
+    maxVy: 1.8, // 최대 낙하 속도 상한선 설정
     tier: tierKey,
     value: tierInfo.value,
     size: tierInfo.size,
@@ -834,6 +836,7 @@ function startGame() {
   State.nukeTurnCount = 0;
   State.nukeMaxTurns = 10;
   State.nukeShields = 0;
+  State.nukeRelocationsLeft = 3;
 
   State.fallingGems = [];
   State.paddle.w = 76;
@@ -899,6 +902,14 @@ function initStage() {
 }
 
 function spawnNuclearTarget() {
+  if (State.nukeRelocationsLeft <= 0) {
+    State.targetBlock = null;
+    State.nukeTurnCount = 0;
+    addPixelText('☢️ 보존 기회 소진! (0/3)', V_WIDTH / 2 - 65, V_HEIGHT / 2, '#ff3838');
+    updateHUD();
+    return;
+  }
+
   let maxRow = -1;
   State.blocks.forEach(b => { if (b.row > maxRow) maxRow = b.row; });
   if (maxRow !== -1) {
@@ -908,6 +919,7 @@ function spawnNuclearTarget() {
       chosen.isTarget = true;
       State.targetBlock = chosen;
       State.nukeTurnCount = 0;
+      addPixelText(`☢️ 타겟 이동 (${State.nukeRelocationsLeft}/3 남음)`, chosen.x, chosen.y - 12, '#f39c12');
     }
   }
 }
@@ -1000,6 +1012,7 @@ function handleBlockHit(blk, ball) {
       }
 
       if (State.nukeActive && blk.isTarget) {
+        State.nukeRelocationsLeft--; // 이전 기회 1회 차감
         spawnNuclearTarget();
       }
     }
@@ -1174,7 +1187,11 @@ function updateHUD() {
   const bNuke = document.getElementById('badge-nuke');
   if (State.builds.nuke > 0) {
     bNuke.className = 'build-badge active-nuke';
-    bNuke.innerText = `☢️핵 LV.${State.builds.nuke}(${State.nukeTurnCount}/${State.nukeMaxTurns})`;
+    if (State.targetBlock) {
+      bNuke.innerText = `☢️핵 LV.${State.builds.nuke}(${State.nukeTurnCount}/${State.nukeMaxTurns}턴 | 기회 ${State.nukeRelocationsLeft}/3)`;
+    } else {
+      bNuke.innerText = `☢️핵 기회소진(0/3)`;
+    }
   } else {
     bNuke.className = 'build-badge';
     bNuke.innerText = '☢️ 핵: 미습득';
@@ -1202,7 +1219,10 @@ function update() {
       const b = State.blocks[i];
       spawnExpGem(b.x + b.w / 2, b.y + b.h / 2);
       State.blocks.splice(i, 1);
-      if (State.nukeActive && b.isTarget) spawnNuclearTarget();
+      if (State.nukeActive && b.isTarget) {
+        State.nukeRelocationsLeft--;
+        spawnNuclearTarget();
+      }
     }
   }
 
@@ -1222,10 +1242,24 @@ function update() {
     }
 
     gem.vy += gem.gravity;
+    // 낙하 속도 제한 (너무 빠르게 떨어지지 않도록 캡 적용)
+    if (gem.vy > (gem.maxVy || 1.8)) {
+      gem.vy = gem.maxVy || 1.8;
+    }
+
     gem.x += gem.vx;
     gem.y += gem.vy;
 
     const halfSize = gem.size / 2;
+
+    // 좌우 벽 바운스 (화면 밖으로 넘어가지 않도록 충돌 반사)
+    if (gem.x - halfSize < 4) {
+      gem.x = 4 + halfSize;
+      gem.vx = Math.abs(gem.vx) * 0.8;
+    } else if (gem.x + halfSize > V_WIDTH - 4) {
+      gem.x = V_WIDTH - 4 - halfSize;
+      gem.vx = -Math.abs(gem.vx) * 0.8;
+    }
     if (
       gem.y + halfSize >= State.paddle.y &&
       gem.y - halfSize <= State.paddle.y + State.paddle.h &&
