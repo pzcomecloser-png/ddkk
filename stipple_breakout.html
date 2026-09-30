@@ -573,7 +573,7 @@
     const CLONE_CHANCE = [0, 0.10, 0.12, 0.14, 0.16, 0.18];   // 볼 복제 확률 (패들에 튕길 때)
     const CLONE_MAX_BALLS = [1, 2, 3, 4, 5, 6];               // 볼 복제 단계별 최대 공 개수 (1단계 2개 ~ 5단계 6개)
     const CLONE_SPREAD = 0.35;                                 // 복제 볼 좌우 벌어짐 (rad, 약 20도)
-    const START_LIVES = 1;                                     // 시작 목숨 (최대는 MAX_LIVES = 3)
+    const START_LIVES = 2;                                     // 시작 목숨 = 쓰는 패들 1 + 여분 1 (최대는 MAX_LIVES = 3)
     const ballPower = () => Math.min(MAX_BALL_POWER, 1 + cardLevel('power'));   // 파워: 기본 1 + 단계
     // 보호막: 패들 아래 고정 위치, 가운데 정렬. 단계 + 1 개 (1단계 2개 ~ 5단계 6개). 스테이지마다 다시 채워짐
     const SHIELD_W = 88, SHIELD_H = 28, SHIELD_GAP = 8;
@@ -586,7 +586,9 @@
         for (let i = 0; i < n; i++) shields.push({ x: x0 + i * (SHIELD_W + SHIELD_GAP), y: SHIELD_Y, w: SHIELD_W, h: SHIELD_H, alive: true });
     }
     // 자석: 1단계 기준값, 단계마다 약 10%씩 강화. 떨어지는 보석만 패들 쪽으로 끌어당김
-    const MAGNET_RANGE = 320, MAGNET_PULL = 3.5, MAGNET_STEP = 1.1;
+    const MAGNET_RANGES = [0, 100, 140, 200];             // 단계별 끌어당기는 거리 (px)
+    const MAGNET_PULL = 3.5;
+    const MAGNET_MUL = [0, 1, 1.1, 1.2];                  // 단계별 힘 배율: 2단계 +10%, 3단계 +20% (1단계 대비)
     // 이자: 스테이지 종료 시 보유 보석의 10% (내림), 상한 10 (임시값)
     const INTEREST_RATE = 0.1, INTEREST_CAP = 10;
     // 조준: 부술 수 있는 블럭이 이 개수 이하이면 패들이 남은 블럭을 향해 공을 튕김
@@ -889,6 +891,8 @@
 
     let currentStage = 0;
     let lives = 1;
+    let lostAt = -1e9;              // 공을 다 놓친 시각 (화면을 바로 넘기지 않게)
+    const LOST_HOLD_MS = 1000;      // 이 시간 동안은 터치해도 다음으로 안 넘어감
     let score = 0;
     const STAGES = [
         // Stage 1 (연습): 체력 1 블럭 14개, 노 아이템 시뮬레이션 중앙값 약 1분, 90% 2분 이내
@@ -1318,6 +1322,18 @@
     }
 
     // ===== 물리 =====
+    // 블럭의 한 면에 다른 살아 있는 블럭이 딱 붙어 있으면 true (공이 그 면에 닿을 수 없음)
+    function sealedSide(b, side) {
+        const E = 1;
+        for (const q of bricks) {
+            if (q === b || !q.alive) continue;
+            if (side === 'left'   && Math.abs(q.x + q.w - b.x) < E && Math.abs(q.y - b.y) < E) return true;
+            if (side === 'right'  && Math.abs(b.x + b.w - q.x) < E && Math.abs(q.y - b.y) < E) return true;
+            if (side === 'top'    && Math.abs(q.y + q.h - b.y) < E && Math.abs(q.x - b.x) < E) return true;
+            if (side === 'bottom' && Math.abs(b.y + b.h - q.y) < E && Math.abs(q.x - b.x) < E) return true;
+        }
+        return false;
+    }
     function checkCollision(b, rect) {
         return b.x + b.radius > rect.x &&
                b.x - b.radius < rect.x + rect.w &&
@@ -1347,8 +1363,8 @@
 
     function updateGems(speedMul = 1) {
         // 보석 낙하 및 패들로 받기
-        const magLv = cardLevel('magnet'), magMul = Math.pow(MAGNET_STEP, magLv - 1);
-        const magR = MAGNET_RANGE * magMul, magPull = MAGNET_PULL * magMul, pcx = paddle.x + paddle.width / 2;
+        const magLv = cardLevel('magnet'), magMul = MAGNET_MUL[Math.min(magLv, MAGNET_MUL.length - 1)];
+        const magR = MAGNET_RANGES[Math.min(magLv, MAGNET_RANGES.length - 1)], magPull = MAGNET_PULL * magMul, pcx = paddle.x + paddle.width / 2;
         for (let i = gems.length - 1; i >= 0; i--) {
             const g = gems[i], r = GEM_SIZE / 2;
             g.y += GEM_FALL_SPEED * speedMul;
@@ -1453,7 +1469,7 @@
         power:    [25, 50, 80, 110],
         shield:   [15, 25, 35, 45, 55],
         life:     [30, 45, 60],
-        magnet:   [10, 25, 40, 55, 70],
+        magnet:   [10, 25, 40],
         interest: [100],
         shard:    [150],
         aim:      [200]
@@ -1475,10 +1491,10 @@
             case 'power':  return Array.from({ length: MAX_BALL_POWER }, (_, lv) =>
                                `볼 파워 ${1 + lv} (한 번에 체력 ${1 + lv}칸)` + (1 + lv === MAX_BALL_POWER ? ' · 최대' : ''));
             case 'shield': return Array.from({ length: 6 }, (_, lv) => lv ? `패들 아래 막이 블럭 ${lv + 1}개 (스테이지마다 다시 채움)` : '보호막 없음');
-            case 'magnet': return Array.from({ length: 6 }, (_, lv) => {
+            case 'magnet': return MAGNET_MUL.map((_, lv) => {
                 if (!lv) return '자석 없음';
-                const m = Math.pow(MAGNET_STEP, lv - 1);
-                return `끌어당기는 거리 ${Math.round(MAGNET_RANGE * m)}px · 힘 ${(MAGNET_PULL * m).toFixed(1)}${lv > 1 ? ` (1단계 대비 +${Math.round((m - 1) * 100)}%)` : ''}`;
+                const m = MAGNET_MUL[lv];
+                return `끌어당기는 거리 ${MAGNET_RANGES[lv]}px${lv > 1 ? ` (1단계 대비 +${Math.round((MAGNET_RANGES[lv] / MAGNET_RANGES[1] - 1) * 100)}%)` : ''} · 힘 ${(MAGNET_PULL * m).toFixed(1)}`;
             });
             case 'life':   return Array.from({ length: MAX_LIVES + 1 }, (_, n) => n ? `목숨 +1 (최대 ${MAX_LIVES})` : `시작 목숨 ${START_LIVES}`);
         }
@@ -1504,10 +1520,15 @@
         if (card.id === 'life') return lives < MAX_LIVES;
         return cardLevel(card.id) < card.max;          // 1회/5단계 카드는 최대 단계면 제외
     }
+    const LASER_GUARANTEE_STAGES = 5;   // 1~5스테이지 클리어 뒤 상점
     function rollShopCards() {
         const pool = SHOP_CARDS.filter(canOffer).map(c => c.id);
         for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
         shopCards = pool.slice(0, 3);
+        // 레이저 보장: 레이저가 없으면 1~5스테이지 클리어 뒤 상점(리롤 포함)에 레이저를 꼭 넣음 (자리는 무작위)
+        if (currentStage < LASER_GUARANTEE_STAGES && cardLevel('laser') === 0 && !shopCards.includes('laser')) {
+            shopCards[Math.floor(Math.random() * shopCards.length)] = 'laser';
+        }
         shopSel = -1;
         shopOpenT = performance.now();
     }
@@ -1827,10 +1848,13 @@
                     const oR = (brick.x + brick.w) - (ball.x - ball.radius);
                     const oT = (ball.y + ball.radius) - brick.y;
                     const oB = (brick.y + brick.h) - (ball.y - ball.radius);
-                    const m = Math.min(oL, oR, oT, oB);
+                    // 옆 블럭에 붙어 있는 면(이음새)은 공이 닿을 수 없으므로 후보에서 뺌
+                    const cand = [['left', oL], ['right', oR], ['top', oT], ['bottom', oB]].filter(([side]) => !sealedSide(brick, side));
+                    const list = cand.length ? cand : [['left', oL], ['right', oR], ['top', oT], ['bottom', oB]];
+                    let m = Infinity, axis = null;
+                    for (const [side, v] of list) if (v < m) { m = v; axis = side; }
                     if (m < hitMin) {
-                        hitMin = m; hit = brick;
-                        hitAxis = (m === oL) ? 'left' : (m === oR) ? 'right' : (m === oT) ? 'top' : 'bottom';
+                        hitMin = m; hit = brick; hitAxis = axis;
                     }
                 }
 
@@ -1877,6 +1901,7 @@
         if (balls.length === 0) {
             lives--;
             gameState = lives > 0 ? 'LIFE_LOST' : 'GAME_OVER';
+            lostAt = performance.now();
         }
 
         updateBurst();
@@ -2092,7 +2117,7 @@
                 ctx.font = font('40px');
                 ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);
                 ctx.font = font('28px');
-                ctx.fillText('V4.11.1', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.11.7', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER') {
                 ctx.font = font('bold 100px');
                 ctx.fillText('SYSTEM_FAILURE', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 - 100);
@@ -2351,9 +2376,9 @@
         // 우측 하단: 볼륨 버튼 (이모지 대신 도형으로 그려 iPhone/Mac 동일하게)
         drawVolumeButton();
 
-        // 좌측 하단: 남은 패들 (미니 패들 아이콘)
+        // 좌측 하단: 여분 패들 (지금 쓰는 패들은 빼고 표시. 0개면 다음에 놓치면 게임 오버)
         const mw = 64, mh = 18, gap = 14, my = LOGIC_HEIGHT - HUD_BOTTOM_H / 2 - mh / 2;
-        for (let i = 0; i < lives; i++) {
+        for (let i = 0; i < lives - 1; i++) {
             const mx = 24 + i * (mw + gap);
             ctx.fillStyle = HUD_COLOR;
             ctx.beginPath(); ctx.roundRect(mx, my, mw, mh, mh / 2); ctx.fill();
@@ -2502,6 +2527,7 @@
 
     // 게임 시작/재시작 - iOS에서 touchstart가 click을 막으므로 양쪽 모두 연결
     function tryStart() {
+        if ((gameState === 'GAME_OVER' || gameState === 'LIFE_LOST') && performance.now() - lostAt < LOST_HOLD_MS) return;
         if (gameState === 'START' || gameState === 'GAME_OVER') {
             lives = START_LIVES;
             score = 0;
@@ -3063,7 +3089,7 @@
         { id: 'power',   name: '파워',      cat: '공격', max: 4, desc: ['볼 파워', '+1'] },
         { id: 'shield',  name: '보호막',    cat: '방어', max: 5, desc: ['패들 아래 블럭이', '공을 막아 준다'] },
         { id: 'life',    name: '여분 패들', cat: '방어', max: 0, desc: ['목숨', '+1'] },
-        { id: 'magnet',  name: '자석',      cat: '돈',   max: 5, desc: ['돈이 패들로', '끌려온다'] },
+        { id: 'magnet',  name: '자석',      cat: '돈',   max: 3, desc: ['돈이 패들로', '끌려온다'] },
         { id: 'interest',name: '이자',      cat: '돈',   max: 1, desc: ['스테이지 종료 시', '보유 돈 +10%'] },
         { id: 'shard',   name: '파편',      cat: '공격', max: 1, desc: ['깨질 때 좌우', '블럭에 데미지'] },
         { id: 'aim',     name: '조준',      cat: '공격', max: 1, desc: ['블럭 5개 이하면', '남은 블럭 조준'] }
