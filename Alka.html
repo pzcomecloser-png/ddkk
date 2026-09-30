@@ -172,6 +172,44 @@
       background: #d35400;
       box-shadow: 1px 1px 0 #000;
     }
+    .build-badge.active-normal {
+      border-color: #bdc3c7;
+      color: #fff;
+      background: #2c3e50;
+      box-shadow: 1px 1px 0 #000;
+    }
+
+    /* Relic Card for Stage Clear */
+    .relic-card {
+      background: linear-gradient(135deg, #241c0e, #1a1628);
+      border: 3px solid #f1c40f !important;
+      box-shadow: 4px 4px 0 #000;
+      padding: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: relative;
+      min-height: 64px;
+      transition: transform 0.08s, border-color 0.08s;
+    }
+    .relic-card:active {
+      transform: scale(0.98);
+      border-color: #fff !important;
+      background: #332814;
+    }
+    .relic-icon-box {
+      width: 44px;
+      height: 44px;
+      background: #110e05;
+      border: 2px solid #f39c12;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+      box-shadow: 2px 2px 0 #000;
+    }
 
     /* Canvas wraps full remaining height */
     #canvas-container {
@@ -349,6 +387,7 @@
 
   <!-- Dynamic Build Indicator -->
   <div id="build-status-bar">
+    <div id="badge-normal" class="build-badge">⚪ 일반: 미습득</div>
     <div id="badge-elem" class="build-badge">🔥 원소: 미습득</div>
     <div id="badge-color" class="build-badge">🎨 색깔: 미습득</div>
     <div id="badge-nuke" class="build-badge">☢️ 핵: 미습득</div>
@@ -391,6 +430,15 @@
     </div>
   </div>
 
+  <!-- 2.5 STAGE CLEAR RELIC MODAL -->
+  <div id="stage-modal" class="overlay hidden">
+    <h1 class="pixel-title" style="color:#f1c40f;">👑 STAGE CLEAR! 👑</h1>
+    <p class="pixel-sub" id="stage-clear-subtitle">보스 격파 완료! 전설의 아티팩트/계약을 1개 획득하세요</p>
+    <div class="perk-list" id="relic-list-container">
+      <!-- Injected dynamically -->
+    </div>
+  </div>
+
   <!-- 3. GAME OVER MODAL -->
   <div id="gameover-modal" class="overlay hidden">
     <h1 class="pixel-title" style="color:#ff3838;">GAME OVER</h1>
@@ -399,6 +447,7 @@
       <div style="display:flex; justify-content:space-between; margin:4px 0;"><span style="color:#888;">최종 점수</span> <b id="res-score">0</b></div>
       <div style="display:flex; justify-content:space-between; margin:4px 0;"><span style="color:#888;">최종 레벨</span> <b id="res-level">1</b></div>
       <div style="display:flex; justify-content:space-between; margin:4px 0;"><span style="color:#888;">완성된 빌드</span> <b id="res-build-summary" style="color:#ffee55;">-</b></div>
+      <div style="display:flex; justify-content:space-between; margin:4px 0;"><span style="color:#888;">보유 아티팩트</span> <b id="res-relics-summary" style="color:#f1c40f;">-</b></div>
     </div>
     <button class="pixel-btn" onclick="resetToTitle()">다시 도전</button>
   </div>
@@ -690,7 +739,84 @@ const ALL_PERKS = [
     apply: (s) => { s.builds.nuke++; s.perks.fineAngle = true; }
   },
 
-  // 4. COMMON UTILITY PERKS
+  // 4. NORMAL / KINETIC BUILD PERKS (일반/물리 속성)
+  {
+    id: 'normal_unlock',
+    build: 'normal',
+    name: '헤비 스틸 볼 (입문)',
+    desc: '일반 속성 해금! 공이 묵직한 강철 픽셀로 변하며 기본 공격력 +35% 증가.',
+    icon: '⚪',
+    tagColor: '#7f8c8d',
+    canAppear: (s) => s.builds.normal === 0,
+    apply: (s) => {
+      s.builds.normal = 1;
+      s.normalActive = true;
+      s.ballDmgMult *= 1.35;
+      addPixelText('⚪ 일반 빌드 해금!', V_WIDTH/2 - 50, V_HEIGHT/2, '#ecf0f1');
+    }
+  },
+  {
+    id: 'normal_kinetic',
+    build: 'normal',
+    name: '가속도 역학',
+    desc: '패들에 닿지 않고 벽/블록에 연속 바운스될 때마다 대미지 +12% 누적 (최대 120%).',
+    icon: '⚡',
+    tagColor: '#7f8c8d',
+    canAppear: (s) => s.builds.normal >= 1,
+    apply: (s) => { s.builds.normal++; s.perks.kineticAccel = true; }
+  },
+  {
+    id: 'normal_pierce',
+    build: 'normal',
+    name: '아머 브레이커',
+    desc: '블록 타격 시 대상 최대 체력의 20%를 방어 무시 추가 고정 피해로 분쇄합니다.',
+    icon: '🔨',
+    tagColor: '#7f8c8d',
+    canAppear: (s) => s.builds.normal >= 1,
+    apply: (s) => { s.builds.normal++; s.perks.armorPierce = true; }
+  },
+  {
+    id: 'normal_shockwave',
+    build: 'normal',
+    name: '탄성 충격파',
+    desc: '블록 타격 시 도트 충격파가 터져 반경 1칸 내 인접 블록들에 15 스플래시 피해.',
+    icon: '💥',
+    tagColor: '#7f8c8d',
+    canAppear: (s) => s.builds.normal >= 1,
+    apply: (s) => { s.builds.normal++; s.perks.shockwave = (s.perks.shockwave || 0) + 1; }
+  },
+  {
+    id: 'normal_smash',
+    build: 'normal',
+    name: '스매시 드라이브',
+    desc: '패들을 좌우로 움직이며 공을 치면 1.4배 초고속 발사 및 1회 블록 관통 획득.',
+    icon: '💨',
+    tagColor: '#7f8c8d',
+    canAppear: (s) => s.builds.normal >= 1,
+    apply: (s) => { s.builds.normal++; s.perks.smashDrive = true; }
+  },
+  {
+    id: 'normal_crit',
+    build: 'normal',
+    name: '탄도학 크리티컬',
+    desc: '공이 4회 이상 바운스된 상태에서 블록을 치면 100% 확률로 2.5배 치명타 발동!',
+    icon: '🎯',
+    tagColor: '#7f8c8d',
+    canAppear: (s) => s.builds.normal >= 1,
+    apply: (s) => { s.builds.normal++; s.perks.ballisticsCrit = true; }
+  },
+  {
+    id: 'normal_heavy',
+    build: 'normal',
+    name: '헤비 임팩트',
+    desc: '블록 파괴 시 드롭되는 모든 경험치 구슬의 획득 가치가 +25% 증가합니다.',
+    icon: '🔩',
+    tagColor: '#7f8c8d',
+    canAppear: (s) => s.builds.normal >= 1,
+    apply: (s) => { s.builds.normal++; s.perks.gemValueMult = (s.perks.gemValueMult || 1.0) * 1.25; }
+  },
+
+  // 5. COMMON UTILITY PERKS
   {
     id: 'stat_magnet',
     build: 'stat',
@@ -723,12 +849,112 @@ const ALL_PERKS = [
   }
 ];
 
+// --- STAGE CLEAR REWARDS (전설 아티팩트 / 계약 목록) ---
+const STAGE_RELICS = [
+  {
+    id: 'relic_laser_net',
+    name: '세이프티 레이저 네트',
+    desc: '바닥에 레이저 안전망 설치! 공이 아래로 떨어질 때 스테이지당 1회 강제 반사 구원.',
+    icon: '⚡',
+    apply: (s) => {
+      s.relics.push('세이프티 네트');
+      s.hasSafetyNet = true;
+      s.safetyNetCharges = (s.safetyNetCharges || 0) + 1;
+    }
+  },
+  {
+    id: 'relic_nano_magnet',
+    name: '나노 자력장 코어',
+    desc: '패들로 공을 칠 때마다 1.8초간 전장의 모든 경험치 구슬을 패들로 초고속 흡입!',
+    icon: '🧲',
+    apply: (s) => {
+      s.relics.push('나노 자력장');
+      s.hasNanoMagnet = true;
+    }
+  },
+  {
+    id: 'relic_berserk',
+    name: '광전사의 핏빛 계약',
+    desc: '패들 폭 -15% 감소(리스크), 대신 볼 대미지 +60% 및 구슬 경험치 획득량 2배!',
+    icon: '⚖️',
+    apply: (s) => {
+      s.relics.push('광전사 계약');
+      s.paddle.w = Math.max(50, s.paddle.w * 0.85);
+      s.ballDmgMult *= 1.6;
+      s.expGainMult = (s.expGainMult || 1.0) * 2.0;
+    }
+  },
+  {
+    id: 'relic_slowmo',
+    name: '불릿 타임 크로노',
+    desc: '공이 패들에 닿을 때마다 0.8초간 50% 슬로우모션 발동! 정밀한 궤도 조준 가능.',
+    icon: '⏳',
+    apply: (s) => {
+      s.relics.push('불릿 타임');
+      s.hasBulletTime = true;
+    }
+  },
+  {
+    id: 'relic_extra_life',
+    name: '오버차지 에어로겔 하트',
+    desc: '최대 라이프 +1 증가 및 현재 손실된 모든 라이프를 즉시 전량 회복!',
+    icon: '💖',
+    apply: (s) => {
+      s.relics.push('오버차지 하트');
+      s.maxLives = (s.maxLives || 3) + 1;
+      s.lives = s.maxLives;
+    }
+  },
+  {
+    id: 'relic_gem_doubler',
+    name: '연금술사의 손길',
+    desc: '블록 파괴 시 40% 확률로 경험치 구슬이 2개씩 복제되어 대량 드롭!',
+    icon: '💎',
+    apply: (s) => {
+      s.relics.push('구슬 복제기');
+      s.gemDupeChance = (s.gemDupeChance || 0) + 0.4;
+    }
+  },
+  {
+    id: 'relic_paddle_blaster',
+    name: '오토 플라즈마 터렛',
+    desc: '2.5초마다 패들 좌우에서 전방으로 2발의 도트 미사일을 자동 연사하여 블록 요격!',
+    icon: '🔫',
+    apply: (s) => {
+      s.relics.push('플라즈마 터렛');
+      s.hasTurret = true;
+    }
+  },
+  {
+    id: 'relic_bouncy_shield',
+    name: '운동에너지 흡수벽',
+    desc: '공이 좌우/상단 벽에 튕길 때마다 공격력 +15% 충전 (최대 3스택 중첩)!',
+    icon: '🛡️',
+    apply: (s) => {
+      s.relics.push('에너지 흡수벽');
+      s.hasWallCharge = true;
+    }
+  },
+  {
+    id: 'relic_nuke_refill',
+    name: '방사능 예비 콘솔',
+    desc: '원자폭탄 보존 이전 기회 +2회 충전 및 폭발에 필요한 보존 턴수 -1 감소!',
+    icon: '☢️',
+    apply: (s) => {
+      s.relics.push('핵 예비 콘솔');
+      s.nukeRelocationsLeft = (s.nukeRelocationsLeft || 0) + 2;
+      s.nukeMaxTurns = Math.max(5, s.nukeMaxTurns - 1);
+    }
+  }
+];
+
 // --- GAME STATE ---
 const State = {
   running: false,
   paused: false,
 
   lives: 3,
+  maxLives: 3,
   score: 0,
   stage: 1,
   level: 1,
@@ -738,11 +964,33 @@ const State = {
 
   ballDmgMult: 1.0,
   perks: {},
+  relics: [], // 스테이지 클리어로 얻은 전설 아티팩트 목록
 
-  builds: { elem: 0, color: 0, nuke: 0 },
+  builds: { normal: 0, elem: 0, color: 0, nuke: 0 },
+  normalActive: false,
   elementActive: false,
   colorActive: false,
   nukeActive: false,
+
+  // Relic mechanics
+  hasSafetyNet: false,
+  safetyNetCharges: 0,
+  hasNanoMagnet: false,
+  nanoMagnetTimer: 0,
+  hasBulletTime: false,
+  bulletTimeTimer: 0,
+  hasTurret: false,
+  turretTimer: 0,
+  turretBullets: [],
+  hasWallCharge: false,
+  wallChargeStacks: 0,
+  gemDupeChance: 0,
+  expGainMult: 1.0,
+
+  // Normal build kinetic mechanics
+  consecutiveBounces: 0,
+  paddleMoveDir: 0,
+  lastPaddleX: 0,
 
   elementCycle: ['fire', 'water', 'lightning'],
   elementIdx: 0,
@@ -788,22 +1036,27 @@ function spawnExpGem(x, y, forcedTier = null) {
   }
 
   const tierInfo = GEM_TIERS[tierKey];
+  const mult = (State.perks && State.perks.gemValueMult) ? State.perks.gemValueMult : 1.0;
+  const gemVal = Math.round(tierInfo.value * mult);
 
-  State.fallingGems.push({
-    x: x,
-    y: y,
-    vx: (Math.random() - 0.5) * 1.5,
-    vy: -(Math.random() * 0.8 + 0.5), // 살짝 위로 솟아오름
-    gravity: 0.045, // 느긋하게 낙하하도록 중력 대폭 완화 (기존 0.12)
-    maxVy: 1.8, // 최대 낙하 속도 상한선 설정
-    tier: tierKey,
-    value: tierInfo.value,
-    size: tierInfo.size,
-    color: tierInfo.color,
-    light: tierInfo.light,
-    dark: tierInfo.dark,
-    shape: tierInfo.shape
-  });
+  const count = (State.gemDupeChance && Math.random() < State.gemDupeChance) ? 2 : 1;
+  for (let c = 0; c < count; c++) {
+    State.fallingGems.push({
+      x: x + (c * 6 - 3),
+      y: y,
+      vx: (Math.random() - 0.5) * 1.5,
+      vy: -(Math.random() * 0.8 + 0.5),
+      gravity: 0.045,
+      maxVy: 1.8,
+      tier: tierKey,
+      value: gemVal,
+      size: tierInfo.size,
+      color: tierInfo.color,
+      light: tierInfo.light,
+      dark: tierInfo.dark,
+      shape: tierInfo.shape
+    });
+  }
 }
 
 // --- START GAME ---
@@ -814,6 +1067,7 @@ function startGame() {
   document.getElementById('start-modal').classList.add('hidden');
 
   State.lives = 3;
+  State.maxLives = 3;
   State.score = 0;
   State.stage = 1;
   State.level = 1;
@@ -821,11 +1075,28 @@ function startGame() {
   State.expNeeded = 100;
   State.ballDmgMult = 1.0;
   State.perks = {};
+  State.relics = [];
 
-  State.builds = { elem: 0, color: 0, nuke: 0 };
+  State.builds = { normal: 0, elem: 0, color: 0, nuke: 0 };
+  State.normalActive = false;
   State.elementActive = false;
   State.colorActive = false;
   State.nukeActive = false;
+
+  State.hasSafetyNet = false;
+  State.safetyNetCharges = 0;
+  State.hasNanoMagnet = false;
+  State.nanoMagnetTimer = 0;
+  State.hasBulletTime = false;
+  State.bulletTimeTimer = 0;
+  State.hasTurret = false;
+  State.turretTimer = 0;
+  State.turretBullets = [];
+  State.hasWallCharge = false;
+  State.wallChargeStacks = 0;
+  State.gemDupeChance = 0;
+  State.expGainMult = 1.0;
+  State.consecutiveBounces = 0;
 
   State.elementIdx = 0;
   State.colorComboCount = 0;
@@ -845,8 +1116,93 @@ function startGame() {
   initStage();
 }
 
+// --- DYNAMIC STAGE BLOCK LAYOUT GENERATOR ---
+function generateStageLayout(stage) {
+  const layouts = [
+    // 1. V-Formation (역삼각형 쐐기형: 아래로 깊숙이 내려오는 형태)
+    {
+      rows: 9, cols: 7,
+      isSolid: (r, c) => {
+        const mid = 3;
+        const dist = Math.abs(c - mid);
+        return (r >= dist && (r - dist) % 2 === 0) || (r === 8 && c === 3) || (r === 7 && (c === 2 || c === 4));
+      }
+    },
+    // 2. Twin Pillars (좌우 기둥이 9행 아래까지 깊숙이 내려오고 중앙에 관문)
+    {
+      rows: 9, cols: 7,
+      isSolid: (r, c) => {
+        if (c === 0 || c === 6) return r < 8; // 좌우 최외곽 깊은 기둥
+        if (c === 1 || c === 5) return r >= 1 && r < 7;
+        if (c === 2 || c === 4) return r < 4;
+        return r === 0 || r === 1 || r === 4; // 중앙 관문
+      }
+    },
+    // 3. Diamond Core (다이아몬드 능선 & 중앙 코어)
+    {
+      rows: 8, cols: 7,
+      isSolid: (r, c) => {
+        const midR = 3.5, midC = 3;
+        const dist = Math.abs(r - midR) + Math.abs(c - midC);
+        return dist <= 3.8 && dist >= 0.8;
+      }
+    },
+    // 4. Invader Skull (아케이드 침략자/해골 형태)
+    {
+      rows: 8, cols: 7,
+      isSolid: (r, c) => {
+        if (r === 0) return c >= 1 && c <= 5;
+        if (r === 1) return true;
+        if (r === 2) return c !== 2 && c !== 4; // 눈
+        if (r === 3) return true;
+        if (r === 4) return c >= 1 && c <= 5;
+        if (r === 5) return c === 1 || c === 3 || c === 5; // 이빨
+        if (r === 6) return c === 2 || c === 4;
+        return r === 7 && (c === 0 || c === 6); // 턱/돌출
+      }
+    },
+    // 5. Stalactite Cave (종유석 동굴: 톱니처럼 아래로 깊게 뻗어내림)
+    {
+      rows: 9, cols: 7,
+      isSolid: (r, c) => {
+        const heights = [8, 4, 9, 3, 9, 5, 8];
+        return r < heights[c];
+      }
+    },
+    // 6. Hourglass Tunnel (모래시계 & 중앙 침투 터널)
+    {
+      rows: 9, cols: 7,
+      isSolid: (r, c) => {
+        if (r <= 2) return Math.abs(c - 3) >= r;
+        if (r >= 6) return Math.abs(c - 3) >= (8 - r);
+        return c === 0 || c === 6 || (r === 4 && (c === 2 || c === 4));
+      }
+    },
+    // 7. Checker Labyrinth (체스판 군집 미로 형태)
+    {
+      rows: 8, cols: 7,
+      isSolid: (r, c) => {
+        return (r + c) % 2 === 0 && !(r === 3 && c === 3) && !(r === 4 && c === 3);
+      }
+    }
+  ];
+
+  const layoutIdx = (stage - 1) % layouts.length;
+  return layouts[layoutIdx];
+}
+
 function initStage() {
   State.paddle.y = V_HEIGHT - 38;
+
+  // 세이프티 넷 유물이 있으면 스테이지 시작 시 충전 1회 지급
+  if (State.hasSafetyNet) {
+    State.safetyNetCharges = 1;
+  }
+  State.wallChargeStacks = 0;
+  State.consecutiveBounces = 0;
+  State.turretBullets = [];
+  State.nanoMagnetTimer = 0;
+  State.bulletTimeTimer = 0;
 
   State.balls = [{
     x: State.paddle.x + State.paddle.w / 2,
@@ -856,27 +1212,40 @@ function initStage() {
     size: 8,
     baseDmg: 25,
     speed: 5.2,
-    element: 'fire'
+    element: 'fire',
+    pierceCount: 0,
+    isSteel: State.normalActive
   }];
 
   State.blocks = [];
   State.nukeTurnCount = 0;
   State.targetBlock = null;
 
-  // Responsive block layout for mobile width 400
-  const rows = 5;
-  const cols = 6;
-  const blockW = 52;
-  const blockH = 17;
-  const gapX = 8;
-  const gapY = 8;
+  // --- DYNAMIC STAGE BLOCK LAYOUT GENERATION ---
+  const layout = generateStageLayout(State.stage);
+  const rows = layout.rows;
+  const cols = layout.cols;
+  const blockW = 48;
+  const blockH = 16;
+  const gapX = 6;
+  const gapY = 6;
   const startX = Math.floor((V_WIDTH - (cols * blockW + (cols - 1) * gapX)) / 2);
-  const startY = 40;
+  const startY = 36;
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
+      if (!layout.isSolid(r, c)) continue;
+
       const colorData = PIXEL_COLORS[(r + c) % PIXEL_COLORS.length];
       const maxHp = 25 + (State.stage - 1) * 12;
+
+      // 무작위 원소 속성을 지닌 블록 (불/얼음/번개) 25% 확률
+      let elemType = null;
+      const elemRoll = Math.random();
+      if (elemRoll < 0.08) elemType = 'fire';
+      else if (elemRoll < 0.16) elemType = 'ice';
+      else if (elemRoll < 0.24) elemType = 'lightning';
+
       State.blocks.push({
         x: startX + c * (blockW + gapX),
         y: startY + r * (blockH + gapY),
@@ -888,6 +1257,28 @@ function initStage() {
         row: r,
         col: c,
         isTarget: false,
+        elemType: elemType, // 고유 원소 속성
+        burnTick: 0,
+        isFrozen: false
+      });
+    }
+  }
+
+  // 만약 블록 수가 너무 적으면 기본 십자형 추가 배치
+  if (State.blocks.length < 8) {
+    for (let c = 1; c <= 5; c++) {
+      State.blocks.push({
+        x: startX + c * (blockW + gapX),
+        y: startY + 2 * (blockH + gapY),
+        w: blockW,
+        h: blockH,
+        hp: 25,
+        maxHp: 25,
+        color: PIXEL_COLORS[c % PIXEL_COLORS.length],
+        row: 2,
+        col: c,
+        isTarget: false,
+        elemType: null,
         burnTick: 0,
         isFrozen: false
       });
@@ -927,6 +1318,42 @@ function spawnNuclearTarget() {
 // --- HIT HANDLING ---
 function handleBlockHit(blk, ball) {
   let dmg = ball.baseDmg * State.ballDmgMult;
+
+  // === 0. NORMAL / KINETIC & RELIC BUFFS ===
+  // 벽 충전 유물 버프
+  if (State.hasWallCharge && State.wallChargeStacks > 0) {
+    dmg *= (1 + State.wallChargeStacks * 0.15);
+  }
+
+  // 가속도 역학 (패들에 닿기 전 벽/블록에 연속 바운스된 횟수 비례)
+  if (State.perks && State.perks.kineticAccel && State.consecutiveBounces > 0) {
+    const kMult = Math.min(1.2, State.consecutiveBounces * 0.12);
+    dmg *= (1 + kMult);
+  }
+
+  // 탄도학 크리티컬 (바운스 4회 이상 시 2.5배)
+  if (State.perks && State.perks.ballisticsCrit && State.consecutiveBounces >= 4) {
+    dmg *= 2.5;
+    addPixelText('CRITICAL! 2.5x', blk.x, blk.y - 12, '#f1c40f');
+    Chiptune.play('combo');
+  }
+
+  // 아머 브레이커 (적 최대 체력의 20% 추가 고정 관통 피해)
+  if (State.perks && State.perks.armorPierce) {
+    const bonusFlat = blk.maxHp * 0.20;
+    dmg += bonusFlat;
+  }
+
+  // 탄성 충격파 (주변 1칸 인접 블록 스플래시 피해)
+  if (State.perks && State.perks.shockwave) {
+    const splash = 15 * State.perks.shockwave;
+    State.blocks.forEach(adj => {
+      if (adj !== blk && Math.abs(adj.row - blk.row) <= 1 && Math.abs(adj.col - blk.col) <= 1) {
+        adj.hp -= splash;
+        addPixelDebris(adj.x + adj.w / 2, adj.y + adj.h / 2, '#bdc3c7', 3);
+      }
+    });
+  }
 
   if (State.nukeActive && blk.isTarget) {
     if (State.nukeShields > 0) {
@@ -1067,6 +1494,30 @@ function handlePaddleHit(ball) {
   ball.vx = spd * Math.sin(angle);
   ball.vy = -Math.abs(spd * Math.cos(angle));
 
+  // 연속 바운스 및 벽 충전 버프 리셋
+  State.consecutiveBounces = 0;
+  State.wallChargeStacks = 0;
+
+  // 일반 속성: 스매시 드라이브 (패들을 이동하며 타격 시 1.4배 가속 & 1회 관통)
+  if (State.perks && State.perks.smashDrive && Math.abs(State.paddleMoveDir) > 0.3) {
+    ball.vx *= 1.35;
+    ball.vy *= 1.35;
+    ball.pierceCount = 1;
+    addPixelText('💥 SMASH DRIVE!', paddleCenter - 35, State.paddle.y - 20, '#ecf0f1');
+    Chiptune.play('combo');
+  }
+
+  // 스테이지 유물: 나노 자력장 (패들 튕김 시 1.8초간 구슬 전체 흡입)
+  if (State.hasNanoMagnet) {
+    State.nanoMagnetTimer = 110;
+    addPixelText('🧲 나노 자력장!', paddleCenter - 25, State.paddle.y - 12, '#2980b9');
+  }
+
+  // 스테이지 유물: 불릿 타임 (패들 튕김 시 0.8초간 슬로우 모션)
+  if (State.hasBulletTime) {
+    State.bulletTimeTimer = 50;
+  }
+
   if (State.elementActive) {
     State.elementIdx = (State.elementIdx + 1) % State.elementCycle.length;
     ball.element = State.elementCycle[State.elementIdx];
@@ -1086,10 +1537,11 @@ function handlePaddleHit(ball) {
 // --- COLLECT GEM & LEVEL UP ---
 function collectGem(gem) {
   Chiptune.play('gem_pickup');
-  State.exp += gem.value;
-  State.score += gem.value * 2;
+  const gainedExp = Math.round(gem.value * (State.expGainMult || 1.0));
+  State.exp += gainedExp;
+  State.score += gainedExp * 2;
 
-  addPixelText(`+${gem.value} EXP`, gem.x - 10, State.paddle.y - 8, gem.color);
+  addPixelText(`+${gainedExp} EXP`, gem.x - 10, State.paddle.y - 8, gem.color);
   addPixelDebris(gem.x, State.paddle.y, gem.color, 4);
 
   if (State.exp >= State.expNeeded) {
@@ -1118,6 +1570,7 @@ function openLevelUpModal() {
     card.className = 'pixel-card';
 
     let tagLabel = '공용 유틸';
+    if (perk.build === 'normal') tagLabel = '일반 속성';
     if (perk.build === 'elem') tagLabel = '원소 계열';
     if (perk.build === 'color') tagLabel = '색깔 계열';
     if (perk.build === 'nuke') tagLabel = '원자폭탄';
@@ -1146,6 +1599,52 @@ function openLevelUpModal() {
   document.getElementById('levelup-modal').classList.remove('hidden');
 }
 
+// --- STAGE CLEAR REWARD (RELIC MODAL) ---
+function openStageRewardModal() {
+  State.paused = true;
+  Chiptune.play('levelup');
+
+  document.getElementById('stage-clear-subtitle').innerText = `STAGE ${State.stage} 격파 완료! 전설의 아티팩트/계약을 1개 획득하세요`;
+
+  const container = document.getElementById('relic-list-container');
+  container.innerHTML = '';
+
+  // 아직 안 뽑힌 유물 우선 추첨
+  const availableRelics = STAGE_RELICS.filter(r => !State.relics.includes(r.name));
+  const pool = availableRelics.length >= 3 ? availableRelics : STAGE_RELICS;
+  const shuffled = [...pool].sort(() => 0.5 - Math.random());
+  const choices = shuffled.slice(0, 3);
+
+  choices.forEach(relic => {
+    const card = document.createElement('div');
+    card.className = 'relic-card';
+    card.innerHTML = `
+      <div class="relic-icon-box">${relic.icon}</div>
+      <div class="card-body">
+        <div class="card-title-row">
+          <span class="card-title" style="color:#ffee55;">${relic.name}</span>
+          <span class="card-tag" style="background:#d35400; border-color:#f1c40f;">ARTIFACT</span>
+        </div>
+        <p class="card-desc" style="color:#ecf0f1;">${relic.desc}</p>
+      </div>
+    `;
+
+    card.onclick = () => {
+      relic.apply(State);
+      document.getElementById('stage-modal').classList.add('hidden');
+      State.stage++;
+      addPixelText(`★ STAGE ${State.stage} START! ★`, V_WIDTH / 2 - 55, V_HEIGHT / 2, '#2ed573');
+      initStage();
+      State.paused = false;
+      updateHUD();
+    };
+
+    container.appendChild(card);
+  });
+
+  document.getElementById('stage-modal').classList.remove('hidden');
+}
+
 // --- HUD UPDATE ---
 function updateHUD() {
   let heartStr = '';
@@ -1159,6 +1658,19 @@ function updateHUD() {
   const pct = Math.min(100, Math.floor((State.exp / State.expNeeded) * 100));
   document.getElementById('exp-fill').style.width = `${pct}%`;
   document.getElementById('exp-text-overlay').innerText = `EXP ${State.exp} / ${State.expNeeded}`;
+
+  const bNormal = document.getElementById('badge-normal');
+  if (bNormal) {
+    if (State.builds.normal > 0) {
+      bNormal.className = 'build-badge active-normal';
+      let extraText = '';
+      if (State.consecutiveBounces > 0) extraText = ` (${State.consecutiveBounces}B)`;
+      bNormal.innerText = `⚪일반 LV.${State.builds.normal}${extraText}`;
+    } else {
+      bNormal.className = 'build-badge';
+      bNormal.innerText = '⚪ 일반: 미습득';
+    }
+  }
 
   const bElem = document.getElementById('badge-elem');
   if (State.builds.elem > 0) {
@@ -1231,7 +1743,16 @@ function update() {
   for (let i = State.fallingGems.length - 1; i >= 0; i--) {
     const gem = State.fallingGems[i];
 
-    if (State.perks.magnet) {
+    // 나노 자력장 (전 화면 초강력 흡입) or 일반 자력 코일
+    if (State.nanoMagnetTimer > 0) {
+      const dx = paddleCenter - gem.x;
+      const dy = State.paddle.y - gem.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 1) {
+        gem.x += (dx / dist) * 7.0;
+        gem.y += (dy / dist) * 7.0;
+      }
+    } else if (State.perks.magnet) {
       const dx = paddleCenter - gem.x;
       const dy = State.paddle.y - gem.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1276,24 +1797,97 @@ function update() {
     }
   }
 
-  // Stage Clear
+  // === STAGE CLEAR -> OPEN RELIC REWARD MODAL! ===
   if (State.blocks.length === 0) {
-    State.stage++;
-    addPixelText(`★ STAGE ${State.stage} ★`, V_WIDTH / 2 - 45, V_HEIGHT / 2, '#2ed573');
-    initStage();
+    openStageRewardModal();
     return;
   }
+
+  // === TURRET UPDATE (플라즈마 오토 터렛 유물) ===
+  if (State.hasTurret) {
+    State.turretTimer = (State.turretTimer || 0) + 1;
+    if (State.turretTimer >= 140) { // 약 2.3초마다 2발 발사
+      State.turretTimer = 0;
+      State.turretBullets.push(
+        { x: State.paddle.x + 4, y: State.paddle.y - 4, vy: -6.5, dmg: 20 },
+        { x: State.paddle.x + State.paddle.w - 4, y: State.paddle.y - 4, vy: -6.5, dmg: 20 }
+      );
+      Chiptune.play('hit');
+    }
+  }
+
+  for (let tbIdx = State.turretBullets.length - 1; tbIdx >= 0; tbIdx--) {
+    const tb = State.turretBullets[tbIdx];
+    tb.y += tb.vy;
+    // 블록 충돌
+    let hit = false;
+    for (let b of State.blocks) {
+      if (tb.x >= b.x && tb.x <= b.x + b.w && tb.y >= b.y && tb.y <= b.y + b.h) {
+        b.hp -= tb.dmg;
+        addPixelDebris(tb.x, tb.y, '#00d2ff', 4);
+        Chiptune.play('hit');
+        hit = true;
+        if (b.hp <= 0) {
+          const idx = State.blocks.indexOf(b);
+          if (idx !== -1) {
+            State.blocks.splice(idx, 1);
+            spawnExpGem(b.x + b.w/2, b.y + b.h/2);
+            State.score += 50;
+            if (State.nukeActive && b.isTarget) {
+              State.nukeRelocationsLeft--;
+              spawnNuclearTarget();
+            }
+          }
+        }
+        break;
+      }
+    }
+    if (hit || tb.y < 0) {
+      State.turretBullets.splice(tbIdx, 1);
+    }
+  }
+
+  // 패들 이동 방향 계산
+  State.paddleMoveDir = State.paddle.x - (State.lastPaddleX || State.paddle.x);
+  State.lastPaddleX = State.paddle.x;
+
+  // 불릿 타임 감속 배율
+  const timeScale = (State.bulletTimeTimer > 0) ? 0.5 : 1.0;
+  if (State.bulletTimeTimer > 0) State.bulletTimeTimer--;
+  if (State.nanoMagnetTimer > 0) State.nanoMagnetTimer--;
 
   // Ball movement
   for (let i = State.balls.length - 1; i >= 0; i--) {
     const ball = State.balls[i];
 
-    ball.x += ball.vx;
-    ball.y += ball.vy;
+    ball.x += ball.vx * timeScale;
+    ball.y += ball.vy * timeScale;
 
-    if (ball.x < 0) { ball.x = 0; ball.vx = Math.abs(ball.vx); }
-    if (ball.x + ball.size > V_WIDTH) { ball.x = V_WIDTH - ball.size; ball.vx = -Math.abs(ball.vx); }
-    if (ball.y < 0) { ball.y = 0; ball.vy = Math.abs(ball.vy); }
+    // 좌우 벽 바운스
+    if (ball.x < 0) {
+      ball.x = 0;
+      ball.vx = Math.abs(ball.vx);
+      State.consecutiveBounces = (State.consecutiveBounces || 0) + 1;
+      if (State.hasWallCharge) {
+        State.wallChargeStacks = Math.min(3, (State.wallChargeStacks || 0) + 1);
+        addPixelText(`충전! +${State.wallChargeStacks * 15}%`, ball.x + 8, ball.y, '#f1c40f');
+      }
+    }
+    if (ball.x + ball.size > V_WIDTH) {
+      ball.x = V_WIDTH - ball.size;
+      ball.vx = -Math.abs(ball.vx);
+      State.consecutiveBounces = (State.consecutiveBounces || 0) + 1;
+      if (State.hasWallCharge) {
+        State.wallChargeStacks = Math.min(3, (State.wallChargeStacks || 0) + 1);
+        addPixelText(`충전! +${State.wallChargeStacks * 15}%`, ball.x - 40, ball.y, '#f1c40f');
+      }
+    }
+    // 천장 바운스
+    if (ball.y < 0) {
+      ball.y = 0;
+      ball.vy = Math.abs(ball.vy);
+      State.consecutiveBounces = (State.consecutiveBounces || 0) + 1;
+    }
 
     // Paddle collision
     if (
@@ -1314,12 +1908,20 @@ function update() {
         ball.y + ball.size > b.y &&
         ball.y < b.y + b.h
       ) {
+        State.consecutiveBounces = (State.consecutiveBounces || 0) + 1;
+
         if (State.rainbowTimer <= 0) {
-          const prevX = ball.x - ball.vx;
-          if (prevX + ball.size <= b.x || prevX >= b.x + b.w) {
-            ball.vx = -ball.vx;
+          // 스매시 드라이브 관통 횟수 체크
+          if (ball.pierceCount && ball.pierceCount > 0) {
+            ball.pierceCount--;
+            addPixelText('PIERCE!', b.x, b.y - 12, '#ffffff');
           } else {
-            ball.vy = -ball.vy;
+            const prevX = ball.x - ball.vx;
+            if (prevX + ball.size <= b.x || prevX >= b.x + b.w) {
+              ball.vx = -ball.vx;
+            } else {
+              ball.vy = -ball.vy;
+            }
           }
         }
         handleBlockHit(b, ball);
@@ -1327,7 +1929,18 @@ function update() {
       }
     }
 
-    if (ball.y > V_HEIGHT) {
+    // 공이 바닥으로 추락 시
+    if (ball.y > V_HEIGHT - 6) {
+      // 스테이지 유물: 세이프티 레이저 네트 구원!
+      if (State.hasSafetyNet && State.safetyNetCharges > 0) {
+        State.safetyNetCharges--;
+        ball.y = State.paddle.y + 4;
+        ball.vy = -Math.abs(ball.vy || 4.5);
+        addPixelText('⚡ 레이저 네트 구원! ⚡', ball.x - 30, V_HEIGHT - 35, '#00d2ff');
+        Chiptune.play('hit');
+        for (let p = 0; p < 14; p++) addPixelDebris(ball.x, V_HEIGHT - 12, '#00d2ff', 3);
+        continue;
+      }
       State.balls.splice(i, 1);
     }
   }
@@ -1411,9 +2024,54 @@ function draw() {
     CTX.fillStyle = b.color.hex;
     CTX.fillRect(b.x + 5, b.y + 5, b.w - 10, b.h - 10);
 
-    if (b.isFrozen) {
-      CTX.fillStyle = 'rgba(120, 224, 255, 0.6)';
+    // === ELEMENTAL BLOCK AURA & BORDER EFFECTS ===
+    const t = Date.now() / 80;
+
+    // 1. 불꽃 속성 블록 테두리 (화염 오라 & 불티)
+    if (b.elemType === 'fire' || b.burnTick > 0) {
+      CTX.strokeStyle = (Date.now() % 200 < 100) ? '#ff4757' : '#ffa502';
+      CTX.lineWidth = 1;
+      CTX.strokeRect(b.x - 1, b.y - 1, b.w + 2, b.h + 2);
+
+      // 상단에서 피어오르는 불꽃 픽셀들
+      for (let f = 0; f < 3; f++) {
+        const fx = b.x + 4 + f * ((b.w - 8) / 2) + Math.sin(t + f) * 2;
+        const fy = b.y - 1 - ((Math.floor(t * 2 + f * 5) % 4));
+        CTX.fillStyle = (f % 2 === 0) ? '#ff5252' : '#f1c40f';
+        CTX.fillRect(Math.floor(fx), Math.floor(fy), 2, 2);
+      }
+    }
+
+    // 2. 얼음 속성 블록 테두리 (서리 결정 & 고드름)
+    if (b.elemType === 'ice' || b.isFrozen) {
+      CTX.fillStyle = 'rgba(0, 210, 255, 0.45)';
       CTX.fillRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4);
+
+      // 네 모서리 얼음 결정 스파이크
+      CTX.fillStyle = '#ffffff';
+      CTX.fillRect(b.x - 1, b.y - 1, 3, 3);
+      CTX.fillRect(b.x + b.w - 2, b.y - 1, 3, 3);
+      CTX.fillRect(b.x - 1, b.y + b.h - 2, 3, 3);
+      CTX.fillRect(b.x + b.w - 2, b.y + b.h - 2, 3, 3);
+
+      CTX.strokeStyle = '#70a1ff';
+      CTX.lineWidth = 1;
+      CTX.strokeRect(b.x - 1, b.y - 1, b.w + 2, b.h + 2);
+    }
+
+    // 3. 전기 속성 블록 테두리 (지그재그 전격 아크)
+    if (b.elemType === 'lightning') {
+      const sparkSeed = Math.floor(Date.now() / 60);
+      CTX.strokeStyle = (sparkSeed % 2 === 0) ? '#ffeaa7' : '#feca57';
+      CTX.lineWidth = 1;
+      CTX.strokeRect(b.x - 1, b.y - 1, b.w + 2, b.h + 2);
+
+      const sx = b.x + ((sparkSeed * 13) % b.w);
+      const sy = b.y + ((sparkSeed * 7) % b.h);
+      CTX.fillStyle = '#ffffff';
+      CTX.fillRect(sx, sy, 2, 2);
+      CTX.fillStyle = '#ffeaa7';
+      CTX.fillRect(sx + 1, sy - 2, 2, 1);
     }
   });
 
@@ -1464,6 +2122,29 @@ function draw() {
     CTX.restore();
   });
 
+  // 2.7 Draw Safety Laser Net (유물 보유 & 충전 시 바닥 레이저)
+  if (State.hasSafetyNet && State.safetyNetCharges > 0) {
+    CTX.strokeStyle = (Date.now() % 200 < 100) ? '#00d2ff' : '#70a1ff';
+    CTX.lineWidth = 3;
+    CTX.beginPath();
+    CTX.moveTo(0, V_HEIGHT - 6);
+    CTX.lineTo(V_WIDTH, V_HEIGHT - 6);
+    CTX.stroke();
+    CTX.fillStyle = '#00d2ff';
+    CTX.font = 'bold 8px monospace';
+    CTX.fillText('⚡ SAFETY NET READY ⚡', V_WIDTH / 2 - 55, V_HEIGHT - 10);
+  }
+
+  // 2.8 Draw Turret Bullets (오토 플라즈마 터렛 탄환)
+  if (State.turretBullets) {
+    State.turretBullets.forEach(tb => {
+      CTX.fillStyle = '#ffffff';
+      CTX.fillRect(tb.x - 1, tb.y - 4, 2, 8);
+      CTX.fillStyle = '#00d2ff';
+      CTX.fillRect(tb.x - 2, tb.y - 2, 4, 4);
+    });
+  }
+
   // 3. Draw Paddle
   CTX.fillStyle = '#000000';
   CTX.fillRect(State.paddle.x, State.paddle.y, State.paddle.w, State.paddle.h);
@@ -1475,12 +2156,23 @@ function draw() {
   CTX.fillStyle = '#2f3542';
   CTX.fillRect(State.paddle.x + 2, State.paddle.y + State.paddle.h - 2, State.paddle.w - 4, 2);
 
-  // 4. Draw Balls
+  // 패들 터렛 노즐 렌더링
+  if (State.hasTurret) {
+    CTX.fillStyle = '#f39c12';
+    CTX.fillRect(State.paddle.x + 3, State.paddle.y - 3, 3, 4);
+    CTX.fillRect(State.paddle.x + State.paddle.w - 6, State.paddle.y - 3, 3, 4);
+  }
+
+  // 4. Draw Balls (with dynamic elemental aura rims)
   State.balls.forEach(ball => {
     let col = '#ffffff';
+    let curElem = null;
 
+    if (State.normalActive) {
+      col = '#d2dae2'; // 묵직한 강철 볼
+    }
     if (State.elementActive) {
-      const curElem = State.elementCycle[State.elementIdx];
+      curElem = State.elementCycle[State.elementIdx];
       if (curElem === 'fire') col = '#ff4757';
       if (curElem === 'water') col = '#00d2ff';
       if (curElem === 'lightning') col = '#ffeaa7';
@@ -1494,11 +2186,70 @@ function draw() {
       col = '#f39c12';
     }
 
+    const bx = Math.floor(ball.x);
+    const by = Math.floor(ball.y);
+    const bs = ball.size;
+    const cx = bx + bs / 2;
+    const cy = by + bs / 2;
+    const t = Date.now() / 60;
+
+    // === ELEMENTAL AURA EFFECTS WRAPPING THE BALL ===
+    if (State.elementActive && curElem) {
+      if (curElem === 'fire') {
+        // 🔥 불꽃 테두리: 공 주위를 감싸며 위로 솟구쳐 일렁이는 화염 림
+        for (let a = 0; a < 6; a++) {
+          const ang = (a / 6) * Math.PI * 2 + Math.sin(t * 0.8 + a) * 0.3;
+          const rad = (bs / 2 + 2) + Math.abs(Math.sin(t * 1.5 + a * 1.8) * 3);
+          const fx = cx + Math.cos(ang) * rad;
+          const fy = cy + Math.sin(ang) * rad - 2; // 불길 상승
+          CTX.fillStyle = (a % 2 === 0) ? '#ff3838' : '#f39c12';
+          CTX.fillRect(Math.floor(fx) - 1, Math.floor(fy) - 1, 2, 2);
+        }
+        CTX.fillStyle = '#fffa65';
+        CTX.fillRect(cx - 1, by - 3 - (Math.floor(t) % 2), 2, 2);
+      } else if (curElem === 'water') {
+        // ❄️ 얼음/서리 테두리: 날카로운 4각 크리스탈 결정이 회전하며 감쌈
+        const rot = Date.now() / 200;
+        for (let a = 0; a < 4; a++) {
+          const ang = rot + (a * Math.PI / 2);
+          const dist = bs / 2 + 3.5;
+          const ix = cx + Math.cos(ang) * dist;
+          const iy = cy + Math.sin(ang) * dist;
+          CTX.fillStyle = (a % 2 === 0) ? '#ffffff' : '#00d2ff';
+          CTX.fillRect(Math.floor(ix) - 1, Math.floor(iy) - 1, 3, 3);
+        }
+        // 얼음 보호막 사각 림
+        CTX.strokeStyle = (Date.now() % 300 < 150) ? '#70a1ff' : 'rgba(255,255,255,0.8)';
+        CTX.lineWidth = 1;
+        CTX.strokeRect(bx - 2, by - 2, bs + 4, bs + 4);
+      } else if (curElem === 'lightning') {
+        // ⚡ 번개 테두리: 공 테두리에 지지직 튀는 전격 아크 스파크
+        const seed = Math.floor(Date.now() / 45);
+        for (let a = 0; a < 5; a++) {
+          const ang = (a / 5) * Math.PI * 2 + ((seed * 19 + a * 37) % 8) / 8;
+          const dist = bs / 2 + 2.5 + ((seed * 11 + a * 17) % 3);
+          const lx = cx + Math.cos(ang) * dist;
+          const ly = cy + Math.sin(ang) * dist;
+          CTX.fillStyle = (a % 2 === 0) ? '#ffffff' : '#ffeaa7';
+          CTX.fillRect(Math.floor(lx) - 1, Math.floor(ly) - 1, 2, 2);
+          if (a % 2 === 1) {
+            CTX.fillStyle = '#feca57';
+            CTX.fillRect(Math.floor(lx) - 1, Math.floor(ly) + 1, 2, 1);
+          }
+        }
+      }
+    }
+
+    // Ball Base Pixel Render
     CTX.fillStyle = '#000000';
-    CTX.fillRect(ball.x - 1, ball.y - 1, ball.size + 2, ball.size + 2);
+    CTX.fillRect(bx - 1, by - 1, bs + 2, bs + 2);
 
     CTX.fillStyle = col;
-    CTX.fillRect(ball.x, ball.y, ball.size, ball.size);
+    CTX.fillRect(bx, by, bs, bs);
+
+    // Ball Inner Core Gleam
+    CTX.fillStyle = '#ffffff';
+    CTX.fillRect(bx + 1, by + 1, 2, 2);
   });
 
   // 5. Draw Particles
@@ -1552,10 +2303,16 @@ function gameOver() {
   document.getElementById('res-level').innerText = State.level;
 
   let summary = [];
+  if (State.builds.normal > 0) summary.push(`⚪일반 Lv.${State.builds.normal}`);
   if (State.builds.elem > 0) summary.push(`🔥원소 Lv.${State.builds.elem}`);
   if (State.builds.color > 0) summary.push(`🎨색깔 Lv.${State.builds.color}`);
   if (State.builds.nuke > 0) summary.push(`☢️핵 Lv.${State.builds.nuke}`);
   document.getElementById('res-build-summary').innerText = summary.join(' / ') || '기본(노말)';
+
+  const relicElem = document.getElementById('res-relics-summary');
+  if (relicElem) {
+    relicElem.innerText = State.relics.join(', ') || '없음';
+  }
 
   document.getElementById('gameover-modal').classList.remove('hidden');
 }
