@@ -298,6 +298,16 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 16. 왕창부셔다부셔! (NEW) -->
+    <a class="game-card" href="games/16/Alka.html">
+      <div class="icon-frame"><canvas id="iconAlka" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">왕창부셔다부셔!</div>
+        <div class="card-desc">로그라이크 알카노이드</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -885,6 +895,51 @@ function draw3SecIcon(id) {
   ctx.fillRect(11, 15, 2, 2);
 }
 
+// 16. 왕창부셔다부셔!
+function drawAlkaIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // Background
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, 0, 24, 24);
+
+  // Blocks
+  ctx.fillStyle = '#ef4444'; // Red
+  ctx.fillRect(3, 4, 5, 3);
+  ctx.fillStyle = '#eab308'; // Yellow
+  ctx.fillRect(9, 4, 6, 3);
+  ctx.fillStyle = '#3b82f6'; // Blue
+  ctx.fillRect(16, 4, 5, 3);
+
+  ctx.fillStyle = '#10b981'; // Green
+  ctx.fillRect(6, 8, 5, 3);
+  ctx.fillStyle = '#a855f7'; // Purple
+  ctx.fillRect(12, 8, 6, 3);
+
+  // Block highlights
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillRect(3, 4, 5, 1); ctx.fillRect(9, 4, 6, 1); ctx.fillRect(16, 4, 5, 1);
+  ctx.fillRect(6, 8, 5, 1); ctx.fillRect(12, 8, 6, 1);
+
+  // Ball & Trail
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.fillRect(11, 16, 2, 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(12, 14, 2, 2);
+
+  // Paddle
+  ctx.fillStyle = '#94a3b8'; // Silver base
+  ctx.fillRect(5, 20, 14, 3);
+  ctx.fillStyle = '#f87171'; // Red center
+  ctx.fillRect(8, 20, 8, 3);
+  ctx.fillStyle = '#ffffff'; // Top highlight
+  ctx.fillRect(6, 20, 12, 1);
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -902,6 +957,7 @@ drawNobodyIcon('iconNobody');
 drawAirFightIcon('iconAirFight');
 drawFireIcon('iconFire');
 draw3SecIcon('icon3Sec');
+drawAlkaIcon('iconAlka');
 </script>
 </body>
 </html>
