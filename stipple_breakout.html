@@ -167,6 +167,13 @@
                 <button class="dev-menu-btn" data-cat="paddle">5. 패들</button>
                 <button class="dev-menu-btn" data-cat="money">6. 보석</button>
                 <button class="dev-menu-btn" data-cat="price">7. 카드 가격</button>
+                <button class="dev-menu-btn" data-cat="enemy">8. 적 디자인</button>
+                <button class="dev-menu-btn" data-cat="prologue">9. 프롤로그</button>
+                <div id="dev-menu-nav" style="display:flex; gap:10px; align-items:center; margin-top:14px;">
+                    <button class="dev-mn-nav" data-nav="prev" style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; background:#000; color:#fff; border:1px solid #fff; cursor:pointer;">◀</button>
+                    <div id="dev-menu-page" style="flex:1; text-align:center; font:bold 22px Menlo, monospace;">1 / 2</div>
+                    <button class="dev-mn-nav" data-nav="next" style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; background:#000; color:#fff; border:1px solid #fff; cursor:pointer;">▶</button>
+                </div>
             </div>
             <div id="dev-detail-screen" style="display:none;">
                 <h2 id="dev-detail-title"></h2>
@@ -186,6 +193,10 @@
     const LOGIC_WIDTH = 1170;
     const LOGIC_HEIGHT = 2080;
 
+    // 충격 흡수 상태 (initGame 이 시작할 때 쓰므로 앞쪽에 둠)
+    const ABSORB_RECHARGE_MS = 30000;
+    let absorbCharge = 0, absorbTimer = 0, paddleStun = 0, absorbFlash = 0;
+    function absorbMax() { return cardLevel('absorb'); }
     let gameState = 'START'; // START, PLAY, GAME_OVER, CLEAR
 
     // 캔버스 폰트 스택 - CSS와 동일하게 실명 지정.
@@ -891,7 +902,7 @@
 
     let currentStage = 0;
     let lives = 1;
-    let lostAt = -1e9;              // 공을 다 놓친 시각 (화면을 바로 넘기지 않게)
+    let lostAt = -1e9, prologueStartT = 0;              // 공을 다 놓친 시각 (화면을 바로 넘기지 않게)
     const LOST_HOLD_MS = 1000;      // 이 시간 동안은 터치해도 다음으로 안 넘어감
     let score = 0;
     const STAGES = [
@@ -1228,6 +1239,7 @@
         if (resetBricks) {
             stageGems = 0;
             buildShields();
+            resetAbsorb();
             bricks.length = 0;
             const layout = STAGES[currentStage];
             const layoutRows = layout.length;
@@ -1354,6 +1366,8 @@
     }
 
     function movePaddle() {
+        updateAbsorb(STEP_MS);
+        if (paddleStun > 0) { paddle.targetX = paddle.x; return; }   // 마비 중에는 못 움직임
         if (keys['ArrowLeft']) paddle.targetX -= paddle.speed;
         if (keys['ArrowRight']) paddle.targetX += paddle.speed;
         paddle.targetX = Math.max(0, Math.min(paddle.targetX, LOGIC_WIDTH - paddle.width));
@@ -1469,10 +1483,11 @@
         power:    [25, 50, 80, 110],
         shield:   [15, 25, 35, 45, 55],
         life:     [30, 45, 60],
-        magnet:   [10, 25, 40],
-        interest: [100],
-        shard:    [150],
-        aim:      [200]
+        magnet:   [20, 25, 40],
+        interest: [70],
+        shard:    [80],
+        aim:      [80],
+        absorb:   [40, 60, 80]
     };
     const PRICE_KEY = 'sb_shop_prices';
     // 업그레이드 카드 단계별 효과 (개발자 모드 7번 표시용). [0] = 카드 없음, [1] = 1단계 ...
@@ -1496,6 +1511,7 @@
                 const m = MAGNET_MUL[lv];
                 return `끌어당기는 거리 ${MAGNET_RANGES[lv]}px${lv > 1 ? ` (1단계 대비 +${Math.round((MAGNET_RANGES[lv] / MAGNET_RANGES[1] - 1) * 100)}%)` : ''} · 힘 ${(MAGNET_PULL * m).toFixed(1)}`;
             });
+            case 'absorb': return [0, 1, 2, 3].map(lv => lv ? `방어력 ${lv} · ${ABSORB_RECHARGE_MS / 1000}초마다 1 충전 · 적 공격 1번에 1 소모하고 마비를 막음` : '충격 흡수 없음');
             case 'life':   return Array.from({ length: MAX_LIVES + 1 }, (_, n) => n ? `목숨 +1 (최대 ${MAX_LIVES})` : `시작 목숨 ${START_LIVES}`);
         }
         return null;
@@ -1516,8 +1532,10 @@
     const cardById = id => SHOP_CARDS.find(c => c.id === id);
     const cardLevel = id => upgrades[id] || 0;
     function cardPrice(id) { const a = SHOP_PRICES[id]; return a[Math.min(cardLevel(id), a.length - 1)]; }
+    const ABSORB_FROM_STAGE = 10;   // 10스테이지 클리어 뒤 상점부터 등장 (그 상점에는 꼭 나옴)
     function canOffer(card) {
         if (card.id === 'life') return lives < MAX_LIVES;
+        if (card.id === 'absorb' && currentStage + 1 < ABSORB_FROM_STAGE) return false;
         return cardLevel(card.id) < card.max;          // 1회/5단계 카드는 최대 단계면 제외
     }
     const LASER_GUARANTEE_STAGES = 5;   // 1~5스테이지 클리어 뒤 상점
@@ -1528,6 +1546,10 @@
         // 레이저 보장: 레이저가 없으면 1~5스테이지 클리어 뒤 상점(리롤 포함)에 레이저를 꼭 넣음 (자리는 무작위)
         if (currentStage < LASER_GUARANTEE_STAGES && cardLevel('laser') === 0 && !shopCards.includes('laser')) {
             shopCards[Math.floor(Math.random() * shopCards.length)] = 'laser';
+        }
+        if (currentStage + 1 === ABSORB_FROM_STAGE && cardLevel('absorb') === 0 && !shopCards.includes('absorb')) {
+            const free = shopCards.map((id, i) => i).filter(i => shopCards[i] !== 'laser');
+            shopCards[free[Math.floor(Math.random() * free.length)]] = 'absorb';
         }
         shopSel = -1;
         shopOpenT = performance.now();
@@ -1656,6 +1678,7 @@
             sfx('buy');
             upgrades[id] = cardLevel(id) + 1;
             if (id === 'life') lives = Math.min(MAX_LIVES, lives + 1);
+            if (id === 'absorb') absorbCharge = absorbMax();
             shopBought = id;
             lastPurchase = id;
             return;
@@ -2069,6 +2092,21 @@
 
     // ===== 메인 드로우 =====
     function draw() {
+        if (gameState === 'PROLOGUE') {
+            const t = performance.now() - prologueStartT;
+            if (t >= PRO_LOOP) {
+                gameState = 'PLAY';
+                // tryStart 에서 이미 initGame(0) 을 했고, 여기서 다시 하면 플레이어가 스킵했을 때와 상태가 다름
+            } else {
+                ctx.fillStyle = '#000'; ctx.fillRect(0, 0, LOGIC_WIDTH, LOGIC_HEIGHT);
+                ctx.save(); ctx.translate(0, (LOGIC_HEIGHT - PRO_H) / 2); drawPrologue(ctx, t); ctx.restore();
+                ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.roundRect(LOGIC_WIDTH - 180, 40, 140, 50, 25); ctx.fill();
+                ctx.fillStyle = '#fff'; ctx.font = font('bold 24px'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('SKIP ⏭', LOGIC_WIDTH - 110, 65);
+                drawVolumeButton();
+                return;
+            }
+        }
+
         ctx.fillStyle = '#020202';
         ctx.fillRect(0, 0, LOGIC_WIDTH, LOGIC_HEIGHT);
 
@@ -2117,7 +2155,7 @@
                 ctx.font = font('40px');
                 ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);
                 ctx.font = font('28px');
-                ctx.fillText('V4.11.7', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.15.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER') {
                 ctx.font = font('bold 100px');
                 ctx.fillText('SYSTEM_FAILURE', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 - 100);
@@ -2376,6 +2414,21 @@
         // 우측 하단: 볼륨 버튼 (이모지 대신 도형으로 그려 iPhone/Mac 동일하게)
         drawVolumeButton();
 
+        // 충격 흡수 방어력: 패들 위 작은 칸 (꽉 찬 칸 = 남은 방어력, 다음 칸은 충전 정도만큼 차오름)
+        if (absorbMax() > 0 && (gameState === 'PLAY' || gameState === 'LIFE_LOST')) {
+            const n = absorbMax(), cw = 22, ch = 8, cg = 6, tw = n * cw + (n - 1) * cg, bx = paddle.x + paddle.width / 2 - tw / 2, byy = paddle.y - 18;
+            for (let i = 0; i < n; i++) {
+                const x0 = bx + i * (cw + cg);
+                ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1.5; ctx.strokeRect(x0, byy, cw, ch);
+                const fill = i < absorbCharge ? 1 : i === absorbCharge ? absorbTimer / ABSORB_RECHARGE_MS : 0;
+                if (fill > 0) { ctx.fillStyle = i < absorbCharge ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)'; ctx.fillRect(x0 + 1, byy + 1, (cw - 2) * fill, ch - 2); }
+            }
+            if (absorbFlash > 0) {   // 막은 순간 패들 둘레가 번쩍
+                ctx.strokeStyle = `rgba(255,255,255,${absorbFlash / 400})`; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.roundRect(paddle.x - 8, paddle.y - 8, paddle.width + 16, paddle.height + 16, (paddle.height + 16) / 2); ctx.stroke();
+            }
+        }
+
         // 좌측 하단: 여분 패들 (지금 쓰는 패들은 빼고 표시. 0개면 다음에 놓치면 게임 오버)
         const mw = 64, mh = 18, gap = 14, my = LOGIC_HEIGHT - HUD_BOTTOM_H / 2 - mh / 2;
         for (let i = 0; i < lives - 1; i++) {
@@ -2534,7 +2587,8 @@
             gemCount = 0;
             for (const k in upgrades) delete upgrades[k];
             initGame(0);
-            gameState = 'PLAY';
+            gameState = 'PROLOGUE';
+            prologueStartT = performance.now();
         } else if (gameState === 'NEXT_STAGE') {
             initGame(currentStage + 1);
             gameState = 'PLAY';
@@ -2551,6 +2605,13 @@
         unlockAudio();
         if (hitVolumeButton(clientX, clientY)) return;
         const p = toLogic(clientX, clientY);
+        if (gameState === 'PROLOGUE') {
+            if (p.x > LOGIC_WIDTH - 250 && p.y < 120) {
+                gameState = 'PLAY';
+                if (!AC || AC.state !== 'running') unlockAudio();   // 스킵 버튼으로 시작해도 소리 켜짐
+            }
+            return;
+        }
         if (gameState === 'SHOP') { handleShopTap(p.x, p.y); return; }
         if (gameState === 'UPG_VIEW') { handleUpgViewTap(p.x, p.y); return; }
         if (gameState === 'PLAY' && inRect({ x: UPG_BTN.x - 16, y: UPG_BTN.y - 16, w: UPG_BTN.w + 32, h: UPG_BTN.h + 32 }, p.x, p.y)) { openUpgradeView(); return; }
@@ -2610,7 +2671,10 @@
             title: '3. 상점 카드',
             get body() {
                 if (shopDetailId) return priceDetailBody(shopDetailId, 'dev-shop-back');
-                return `<canvas id="dev-shop-canvas" width="1170" height="1600" style="width:100%; background:#000; border:1px solid #444; cursor:pointer;"></canvas>`;
+                const n = shopPageCount(), p = shopPage;
+                const nav = (k, label, off) => `<button class="dev-shop-nav" data-nav="${k}" ${off ? 'disabled' : ''} style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; cursor:${off ? 'default' : 'pointer'}; border:1px solid ${off ? '#333' : '#fff'}; background:#000; color:${off ? '#444' : '#fff'};">${label}</button>`;
+                return `<canvas id="dev-shop-canvas" width="1170" height="1600" style="width:100%; display:block; background:#000; border:1px solid #444; cursor:pointer;"></canvas>
+<div style="display:flex; gap:10px; align-items:center; margin-top:10px;">${nav('prev', '◀', p === 0)}<div style="flex:1; text-align:center; font:bold 22px Menlo, monospace;">${p + 1} / ${n}</div>${nav('next', '▶', p === n - 1)}</div>`;
             }
         },
         brick: {
@@ -2619,7 +2683,14 @@
         },
         paddle: {
             title: '5. 패들',
-            body: `<canvas id="dev-paddle-canvas" width="1170" height="1500" style="width:100%; background:#000; border:1px solid #444;"></canvas>`
+            get body() {
+                const V = PADDLE_VIEWS[paddlePage], n = PADDLE_VIEWS.length, i = paddlePage;
+                const nav = (k, label, off) => `<button class="dev-pd-nav" data-nav="${k}" ${off ? 'disabled' : ''} style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; cursor:${off ? 'default' : 'pointer'}; border:1px solid ${off ? '#333' : '#fff'}; background:#000; color:${off ? '#444' : '#fff'};">${label}</button>`;
+                return `<div style="font:bold 24px Menlo, monospace;">${V.name}</div>
+<div style="font-size:14px; color:#888; margin:2px 0 6px;">${V.note} · 게임 화면과 같은 크기</div>
+<canvas id="dev-paddle-canvas" width="1170" height="1500" style="width:100%; display:block; background:#000; border:1px solid #444;"></canvas>
+<div style="display:flex; gap:10px; align-items:center; margin-top:10px;">${nav('prev', '◀', i === 0)}<div style="flex:1; text-align:center; font:bold 22px Menlo, monospace;">${i + 1} / ${n}</div>${nav('next', '▶', i === n - 1)}</div>`;
+            }
         },
         price: {
             title: '7. 카드 가격',
@@ -2648,6 +2719,24 @@
 <div id="dev-price-total" style="margin-top:8px; font-size:15px;">전부 최대: <b>${total}</b> · 29스테이지까지 모이는 수정 약 985</div>
 <div style="display:flex; gap:8px; margin-top:10px;">${btn('default', '기본값', false)}${btn('save', '저장', true)}</div>
 <div id="dev-price-msg" style="min-height:20px; margin-top:6px; font-size:14px; text-align:center; color:#aaa;"></div>`;
+            }
+        },
+        enemy: {
+            title: '8. 적 디자인',
+            get body() {
+                const D = ENEMY_DESIGNS[enemyPage], n = ENEMY_DESIGNS.length, i = enemyPage;
+                const nav = (k, label, off) => `<button class="dev-en-nav" data-nav="${k}" ${off ? 'disabled' : ''} style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; cursor:${off ? 'default' : 'pointer'}; border:1px solid ${off ? '#333' : '#fff'}; background:#000; color:${off ? '#444' : '#fff'};">${label}</button>`;
+                return `<div style="font:bold 24px Menlo, monospace;">${D.type} ${D.name}</div>
+<div style="font:15px Menlo, monospace; color:#aaa; margin:2px 0 8px;">${D.ref} · ${D.desc}</div>
+<canvas id="dev-enemy-canvas" width="1170" height="980" style="width:100%; display:block; background:#000; border:1px solid #444;"></canvas>
+<div style="display:flex; gap:10px; align-items:center; margin-top:10px;">${nav('prev', '◀', i === 0)}<div style="flex:1; text-align:center; font:bold 22px Menlo, monospace;">${i + 1} / ${n}</div>${nav('next', '▶', i === n - 1)}</div>`;
+            }
+        },
+        prologue: {
+            title: '9. 프롤로그',
+            get body() {
+                return `<div style="font-size:14px; color:#888; margin-bottom:6px;">원작 알카노이드 인트로 구성 · 장면 그림 + 타자 자막 · ${PRO_LOOP / 1000}초 반복</div>
+<canvas id="dev-prologue-canvas" width="${PRO_W}" height="${PRO_H}" style="width:100%; display:block; background:#000; border:1px solid #444;"></canvas>`;
             }
         },
         money: {
@@ -2707,6 +2796,7 @@
     // 캡슐형 Vaus 실루엣 판정 (로컬 픽셀 좌표). ins만큼 안쪽으로 축소한 형태로 판정
     // 양끝은 위가 비스듬히 깎이고 아래는 거의 평평한 기수(nose) 형태
     const VAUS_CAP = 1.1;   // 끝 캡 길이 = 높이 x 1.1
+    const VAUS_TRAP_TOP = 0.42, VAUS_TRAP_BOT = 0.2;   // 맨 끝에서 위 / 아래가 깎이는 비율 (끝면 높이 = 38%)
     function inCapsule(px, py, w, h, ins) {
         const W = w - ins * 2, H = h - ins * 2;
         const X = px - ins, Y = py - ins;
@@ -2714,10 +2804,10 @@
         const capLen = H * VAUS_CAP;
         const d = Math.min(X, W - X);
         if (d >= capLen) return true;
-        const t = 1 - d / capLen;
-        const e = Math.sqrt(Math.max(0, 1 - t * t));
-        const top = H * 0.55 * (1 - e);
-        const bot = H - H * 0.25 * (1 - e);
+        // 사다리꼴 끝: 둥근 곡선 대신 곧은 사선. 끝면(세로 평평한 부분)을 남겨서 각진 느낌
+        const t = 1 - d / capLen;                       // 0 = 캡 안쪽 시작, 1 = 맨 끝
+        const top = H * VAUS_TRAP_TOP * t;              // 위는 크게 깎임
+        const bot = H - H * VAUS_TRAP_BOT * t;          // 아래는 조금 깎임
         return Y >= top && Y <= bot;
     }
 
@@ -2946,26 +3036,126 @@
         c.strokeRect(F.x + 1, F.y + 1, F.w - 2, F.h - 2);
     }
 
+    // ===== 패들 마비 (적에게 부딪히거나 미사일에 맞으면 1초 동안 못 움직임) =====
+    const PADDLE_STUN_MS = 1000;
+    // 충격 흡수: 방어력 최대 = 단계, 30초마다 1 충전, 적 공격 1번에 1 소모하고 마비를 막음 (상태 변수는 파일 앞쪽)
+    function resetAbsorb() { absorbCharge = cardLevel('absorb'); absorbTimer = 0; paddleStun = 0; absorbFlash = 0; }
+    function updateAbsorb(dt) {
+        if (paddleStun > 0) paddleStun = Math.max(0, paddleStun - dt);
+        if (absorbFlash > 0) absorbFlash = Math.max(0, absorbFlash - dt);
+        if (absorbCharge >= cardLevel('absorb')) { absorbTimer = 0; return; }
+        absorbTimer += dt;
+        if (absorbTimer >= ABSORB_RECHARGE_MS) { absorbTimer -= ABSORB_RECHARGE_MS; absorbCharge++; }
+    }
+    // 적(돌격형 몸통 / 원거리형 미사일) 이 패들에 맞았을 때 부름. true = 마비됨
+    function hitPaddleByEnemy() {
+        if (absorbCharge > 0) { absorbCharge--; absorbFlash = 400; if (absorbCharge === cardLevel('absorb') - 1) absorbTimer = 0; return false; }
+        paddleStun = PADDLE_STUN_MS;
+        return true;
+    }
+    // k = 남은 마비 비율 (1 = 막 맞음, 0 = 풀림). 패들 위에 덧그림
+    function drawPaddleStun(c, x, y, w, h, t, k, f) {
+        if (k <= 0) return;
+        const age = 1 - k;
+        // 1) 맞은 순간 흰 번쩍임 (0.12초)
+        if (age < 0.12) { c.fillStyle = `rgba(255,255,255,${0.85 * (1 - age / 0.12)})`; c.beginPath(); c.roundRect(x - 4, y - 4, w + 8, h + 8, h / 2); c.fill(); }
+        // 2) 몸체를 어둡게 + 지지직 가로줄 (TV 잡음)
+        c.fillStyle = `rgba(0,0,0,${0.45 * Math.min(1, k * 3)})`; c.beginPath(); c.roundRect(x, y, w, h, h / 2); c.fill();
+        const tick = Math.floor(t / 45);
+        for (let i = 0; i < 4; i++) {
+            if (hash3(tick, i, 77) > 0.55) continue;
+            const ly = y + hash3(tick, i, 78) * h, lw = w * (0.2 + 0.6 * hash3(tick, i, 79)), lx = x + (w - lw) * hash3(tick, i, 80);
+            c.fillStyle = `rgba(255,255,255,${0.35 + 0.4 * k})`; c.fillRect(lx, ly, lw, 2);
+        }
+        // 3) 전기: 패들 위를 기어다니는 지그재그 모래 번개 3줄
+        for (let j = 0; j < 3; j++) {
+            if (hash3(tick, j, 90) > 0.35 + 0.6 * k) continue;   // 풀릴수록 드문드문
+            const sx = x + w * (0.1 + 0.8 * hash3(tick, j, 91)), seg = 5, len = h * (1.2 + hash3(tick, j, 92));
+            let px = sx, py = y - len * 0.35;
+            for (let q = 0; q < seg; q++) {
+                const nx = px + (hash3(tick, j * 10 + q, 93) - 0.5) * h * 1.4, ny = py + len / seg;
+                const steps = 6;
+                for (let m = 0; m <= steps; m++) {
+                    const bx = px + (nx - px) * m / steps, by = py + (ny - py) * m / steps;
+                    c.fillStyle = `rgba(255,255,255,${0.6 + 0.4 * hash3(j, q * 7 + m, tick)})`;
+                    c.fillRect(bx - 1, by - 1, 2.4, 2.4);
+                }
+                px = nx; py = ny;
+            }
+        }
+        // 4) 튀는 불꽃 점 (위로 튀었다 떨어짐)
+        for (let i = 0; i < 10; i++) {
+            const life = ((t / 600 + hash3(i, 3, 5)) % 1), sx = x + w * hash3(i, 4, 6), vx = (hash3(i, 5, 7) - 0.5) * 60;
+            const px = sx + vx * life, py = y - 26 * Math.sin(life * Math.PI) + h * 0.3;
+            if (hash3(i, tick, 8) < k * 0.9) { c.fillStyle = `rgba(255,255,255,${(1 - life) * 0.9})`; c.fillRect(px - 1, py - 1, 2, 2); }
+        }
+        // 5) 남은 시간 줄 (패들 아래, 줄어듦)
+        c.fillStyle = 'rgba(255,255,255,0.75)'; c.fillRect(x + w * (1 - k) / 2, y + h + 6, w * k, 3);
+    }
+    // 마비 중 패들 흔들림 (좌우로 떨림, 끝날수록 약해짐)
+    const paddleStunShake = (t, k) => k > 0 ? Math.sin(t * 0.09) * 3 * k + (hash3(Math.floor(t / 40), 1, 2) - 0.5) * 3 * k : 0;
+
+    // 개발자 화면 캔버스 1px 이 게임 화면 몇 px 인지 (패들을 게임과 같은 크기로 보이게)
+    function devCanvasScale(cv) {
+        const gw = canvas.getBoundingClientRect().width, cw = cv.clientWidth;
+        if (!gw || !cw) return 1;
+        return (cv.width / cw) * (gw / LOGIC_WIDTH);
+    }
+    let paddleRAF = 0, paddlePage = 0;
+    // 개발자 모드 5번에서 넘겨 보는 패들 디자인 (게임에는 기본만 쓰는 중)
+    const PADDLE_VIEWS = [
+        { name: '기본 패들', note: '게임에서 쓰는 중', fn: pvClassicVaus },
+        { name: '레이저 패들', note: '레이저 카드용 후보 (게임에는 아직 안 씀)', fn: pvRailLaser }
+    ];
+    const STUN_DEMO_MS = 2600;   // 미리보기 반복: 0.8초 정상 -> 맞음 -> 1초 마비 -> 0.8초 정상
     function drawPaddlePreview() {
         const cv = document.getElementById('dev-paddle-canvas');
         if (!cv) return;
-        const c = cv.getContext('2d');
-        const f = Math.floor(performance.now() / SAND_INTERVAL) % SAND_FRAMES;
-        const rowH = 190, sc = 1.6;
-        cv.height = rowH * PADDLE_SIZES.length;
-        c.fillStyle = '#000';
-        c.fillRect(0, 0, cv.width, cv.height);
+        const c = cv.getContext('2d'), t = performance.now();
+        const f = Math.floor(t / SAND_INTERVAL) % SAND_FRAMES;
+        const sc = devCanvasScale(cv), ph = paddle.height * sc, draw = PADDLE_VIEWS[paddlePage].fn;
+        const stunH = 300, rowH = Math.max(110, ph + 80);
+        const h = stunH + rowH * PADDLE_SIZES.length;
+        if (cv.height !== h) cv.height = h;
+        c.fillStyle = '#000'; c.fillRect(0, 0, cv.width, cv.height);
+        // 맨 위: 마비 모션
+        const u = t % STUN_DEMO_MS, hitAt = 800, k = u >= hitAt && u < hitAt + PADDLE_STUN_MS ? 1 - (u - hitAt) / PADDLE_STUN_MS : 0;
+        c.fillStyle = '#ddd'; c.font = font('bold 40px'); c.textAlign = 'left'; c.textBaseline = 'top';
+        c.fillText('마비 (1초)', 24, 20);
+        c.fillStyle = '#888'; c.font = font('30px'); c.textAlign = 'right';
+        c.fillText(k > 0 ? `마비 ${(k * PADDLE_STUN_MS / 1000).toFixed(1)}초` : '정상', cv.width - 24, 24);
+        const pw0 = PADDLE_SIZES[0] * sc;
+        const moving = k > 0 ? 0 : Math.sin(t * 0.004) * 140 * sc;     // 정상일 때는 좌우로 움직이고, 마비 중에는 멈춤
+        const px = (cv.width - pw0) / 2 + moving + paddleStunShake(t, k) * sc, py = 170;
+        if (u >= hitAt - 260 && u < hitAt) {                             // 맞기 직전: 위에서 미사일이 내려옴
+            const m = (u - (hitAt - 260)) / 260;
+            drawEnemyMissile(c, cv.width / 2, py - 140 * (1 - m), sc, f);
+        }
+        PADDLE_VIEWS[paddlePage].fn(c, px, py, pw0, ph, f);
+        drawPaddleStun(c, px, py, pw0, ph, t, k, f);
+        c.strokeStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(0, stunH - 0.5); c.lineTo(cv.width, stunH - 0.5); c.stroke();
+        // 크기 단계별 (게임과 같은 크기)
         PADDLE_SIZES.forEach((w, i) => {
-            const top = i * rowH, pw = w * sc, ph = paddle.height * sc;
-            c.fillStyle = '#ddd'; c.font = font('bold 40px');
-            c.textAlign = 'left'; c.textBaseline = 'top';
-            c.fillText(i === 0 ? '기본' : `크기 ${i}단계`, 24, top + 20);
-            c.fillStyle = '#888'; c.font = font('32px'); c.textAlign = 'right';
-            c.fillText(`폭 ${w}`, cv.width - 24, top + 24);
-            pvClassicVaus(c, (cv.width - pw) / 2, top + 90, pw, ph, f);
+            const top = stunH + i * rowH, pw = w * sc;
+            c.fillStyle = '#ddd'; c.font = font('bold 34px'); c.textAlign = 'left'; c.textBaseline = 'top';
+            c.fillText(i === 0 ? '기본' : `크기 ${i}단계`, 24, top + 16);
+            c.fillStyle = '#888'; c.font = font('28px'); c.textAlign = 'right';
+            c.fillText(`폭 ${w}`, cv.width - 24, top + 20);
+            PADDLE_VIEWS[paddlePage].fn(c, (cv.width - pw) / 2, top + rowH - ph - 18, pw, ph, f);
             c.strokeStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 1;
             c.beginPath(); c.moveTo(0, top + rowH - 0.5); c.lineTo(cv.width, top + rowH - 0.5); c.stroke();
         });
+    }
+    function startPaddlePreview() {
+        cancelAnimationFrame(paddleRAF);
+        const step = () => {
+            const cv = document.getElementById('dev-paddle-canvas');
+            if (!cv || devDetailScreen.style.display === 'none') { paddleRAF = 0; return; }
+            drawPaddlePreview();
+            paddleRAF = requestAnimationFrame(step);
+        };
+        paddleRAF = requestAnimationFrame(step);
     }
 
     // 개발자 모드 2번 배치 (그리기와 테스트가 같은 값을 사용)
@@ -3092,7 +3282,8 @@
         { id: 'magnet',  name: '자석',      cat: '돈',   max: 3, desc: ['돈이 패들로', '끌려온다'] },
         { id: 'interest',name: '이자',      cat: '돈',   max: 1, desc: ['스테이지 종료 시', '보유 돈 +10%'] },
         { id: 'shard',   name: '파편',      cat: '공격', max: 1, desc: ['깨질 때 좌우', '블럭에 데미지'] },
-        { id: 'aim',     name: '조준',      cat: '공격', max: 1, desc: ['블럭 5개 이하면', '남은 블럭 조준'] }
+        { id: 'aim',     name: '조준',      cat: '공격', max: 1, desc: ['블럭 5개 이하면', '남은 블럭 조준'] },
+        { id: 'absorb',  name: '충격 흡수', cat: '방어', max: 3, desc: ['적 공격을 막아', '마비 방지'] }
     ];
 
     // 아이콘 영역(cx, cy 중심, s = 한 변)에 카드별 그림을 도트로 그림
@@ -3208,6 +3399,15 @@
                 disc(cx - h * 0.35, cy - h * 0.7, h * 0.12, { density: 1 });
                 disc(cx + h * 0.35, cy - h * 0.2, h * 0.12, { density: 1 });
                 for (let t = 0; t <= 1; t += 0.08) disc(cx + h * 0.45 - t * h * 0.9, cy - h * 0.85 + t * h * 0.8, 2.2, { lum: 255, density: 1 });
+                break;
+            }
+            case 'absorb': {    // 패들 위로 둥근 방패 막, 위에서 내려온 미사일이 부딪혀 흩어짐
+                miniPaddle(cx - h * 0.62, cy + h * 0.55, h * 1.24, h * 0.24);
+                const R = h * 0.95;
+                dot(cx - R, cy + h * 0.5 - R, R * 2, R, { mask: (nx, ny) => { const d = Math.hypot(nx - 0.5, (ny - 1) * 0.5 / 0.5 * 0.5); return d <= 0.5 && d >= 0.42; }, lum: 245, spacing: 1.8 });
+                dot(cx - R * 0.8, cy + h * 0.5 - R * 0.8, R * 1.6, R * 0.8, { mask: (nx, ny) => Math.hypot(nx - 0.5, (ny - 1) * 0.5) <= 0.5, density: 0.25, lum: 200 });
+                dot(cx - 4, cy - h * 0.95, 8, h * 0.32, { lum: 255, density: 1, spacing: 1.4 });
+                for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + (i - 3) * 0.32; disc(cx + Math.cos(a) * h * 0.52, cy - h * 0.38 + Math.sin(a) * h * 0.22, 2.4, { lum: 255, density: 1 }); }
                 break;
             }
             case 'aim': {       // 조준경: 원 + 십자선, 가운데 블럭, 아래에서 올라오는 공 궤적
@@ -3419,6 +3619,434 @@
 
     // 개발자 모드: 선택된 보석 애니메이션 미리보기 (화면이 열려 있는 동안만 동작)
     let gemPreviewRAF = 0;
+    // ===== 적 디자인 후보 (개발자 모드 8번, 게임에는 아직 없음) =====
+    // 모든 적은 모래 점(scatterDots)으로만 그림. S = 적 크기 (px), t = 시간 (ms), f = 모래 프레임
+    function inPoly(x, y, P) {
+        let ins = false;
+        for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+            const [xi, yi] = P[i], [xj, yj] = P[j];
+            if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) ins = !ins;
+        }
+        return ins;
+    }
+    function enSphere(c, cx, cy, r, f, seed, lum = 255) {
+        scatterDots(c, cx - r, cy - r, r * 2, r * 2, { frame: f, seed,
+            mask: (nx, ny) => (nx - 0.5) ** 2 + (ny - 0.5) ** 2 < 0.25,
+            density: (nx, ny) => Math.max(0.2, 1 - Math.hypot(nx - 0.35, ny - 0.35) * 1.1), lum });
+    }
+    const EN_FIRE_MS = 1200;   // 원거리형 발사 주기 (미리보기)
+    function enMuzzle(c, mx, my, S, t, f, seed) {
+        const p = (t % EN_FIRE_MS) / EN_FIRE_MS, glow = p > 0.75 ? (p - 0.75) / 0.25 : 0;   // 쏘기 직전에 밝아짐
+        enSphere(c, mx, my, S * (0.05 + 0.05 * glow), f, seed, 140 + 115 * glow);
+    }
+    // 돌격형 A: 회전 원뿔 (원작 Cone) - 끝이 아래, 사선 줄무늬가 흘러 도는 느낌
+    function enCone(c, cx, cy, S, t, f) {
+        const x = cx - S / 2, y = cy - S / 2, ph = t * 0.003;
+        scatterDots(c, x, y, S, S, { frame: f, seed: 501,
+            mask: (nx, ny) => ny > 0.1 && ny < 0.98 && Math.abs(nx - 0.5) < 0.48 * (1 - ny) / 0.9,
+            density: (nx, ny) => { const w = 0.48 * (1 - ny) / 0.9, e = w > 0 ? Math.abs(nx - 0.5) / w : 1; return 0.95 - e * e * 0.5; },
+            lum: (nx, ny) => ((((ny * 5 + (nx - 0.5) * 2 - ph) % 1) + 1) % 1) < 0.5 ? 245 : 110 });
+        scatterDots(c, x + S * 0.02, y + S * 0.03, S * 0.96, S * 0.14, { frame: f, seed: 502,
+            mask: (nx, ny) => ((nx - 0.5) / 0.5) ** 2 + ((ny - 0.5) / 0.5) ** 2 < 1, lum: 255, density: 0.9 });
+    }
+    // 돌격형 B: 분자 덩어리 (원작 Molecule) - 구슬 4개가 가운데 구슬 둘레를 3축으로 굴러 돎 (좌우 + 위아래 + 비틀림)
+    // 구슬 위치 = 정사면체 꼭짓점. 앞으로 온 구슬은 크고 밝게, 뒤로 간 구슬은 작고 어둡게 + 가운데 구슬에 가려짐
+    const MOLECULE_TETRA = [[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]].map(v => v.map(k => k / Math.sqrt(3)));
+    function enMolecule(c, cx, cy, S, t, f) {
+        const ay = t * 0.0021, ax = t * 0.0013, az = t * 0.0008;   // 세 축 속도를 다르게 해서 같은 자세가 잘 반복되지 않게
+        const R = S * 0.3, r = S * 0.15;
+        const rot = ([x, y, z]) => {
+            let X = x * Math.cos(ay) + z * Math.sin(ay), Z = -x * Math.sin(ay) + z * Math.cos(ay), Y = y;      // 좌우로 돎
+            const Y2 = Y * Math.cos(ax) - Z * Math.sin(ax); Z = Y * Math.sin(ax) + Z * Math.cos(ax); Y = Y2;   // 위아래로 굴러감
+            const X2 = X * Math.cos(az) - Y * Math.sin(az); Y = X * Math.sin(az) + Y * Math.cos(az); X = X2;   // 화면 안에서 비틀림
+            return [X, Y, Z];
+        };
+        const bs = MOLECULE_TETRA.map((v, k) => { const [x, y, z] = rot(v); return { x: x * R, y: y * R, z, k }; }).sort((p, q) => p.z - q.z);
+        const one = b => { const d = (b.z + 1) / 2; enSphere(c, cx + b.x, cy + b.y, r * (0.7 + 0.35 * d), f, 600 + b.k, 110 + 145 * d); };
+        bs.filter(b => b.z < 0).forEach(one);
+        enSphere(c, cx, cy, S * 0.19, f, 610, 230);
+        bs.filter(b => b.z >= 0).forEach(one);
+    }
+    // 돌격형 C: 화살촉 드론 (새 디자인) - V자 몸체, 가운데 심장이 뜀, 뒤로 모래 꼬리
+    function enArrow(c, cx, cy, S, t, f) {
+        const x = cx - S / 2, y = cy - S / 2;
+        const P = [[0.5, 0.98], [0.02, 0.2], [0.27, 0.2], [0.5, 0.56], [0.73, 0.2], [0.98, 0.2]];
+        for (let i = 1; i <= 5; i++) scatterDots(c, cx - S * 0.16, y + S * 0.2 - i * S * 0.11, S * 0.32, S * 0.09, { frame: (f + i) % SAND_FRAMES, seed: 710 + i, density: 0.4 / i, lum: 200 });
+        scatterDots(c, x, y, S, S, { frame: f, seed: 701, mask: (nx, ny) => inPoly(nx, ny, P),
+            density: (nx, ny) => 0.55 + 0.45 * ny, lum: (nx, ny) => 130 + 125 * ny });
+        const p = 0.5 + 0.5 * Math.sin(t * 0.009);
+        enSphere(c, cx, cy + S * 0.24, S * (0.06 + 0.03 * p), f, 702, 180 + 75 * p);
+    }
+    // 원거리형 A: 피라미드 포대 (원작 Pyramid) - 밝은 면과 어두운 면의 경계가 움직여 도는 느낌
+    function enPyramid(c, cx, cy, S, t, f) {
+        const x = cx - S / 2, y = cy - S / 2, split = 0.5 + 0.32 * Math.sin(t * 0.0025);
+        scatterDots(c, x, y, S, S, { frame: f, seed: 801,
+            mask: (nx, ny) => ny > 0.06 && ny < 0.84 && Math.abs(nx - 0.5) < 0.5 * (ny - 0.06) / 0.78,
+            density: (nx) => nx < split ? 0.95 : 0.5, lum: (nx) => nx < split ? 245 : 120 });
+        enMuzzle(c, cx, y + S * 0.9, S, t, f, 802);
+    }
+    // 원거리형 B: 눈알 위성 (새 디자인) - 끊긴 고리가 돌고, 쏠 때 가운데 눈이 뜸
+    function enEye(c, cx, cy, S, t, f) {
+        const a = t * 0.0015, seg = Math.PI * 2 / 3;
+        scatterDots(c, cx - S / 2, cy - S / 2, S, S, { frame: f, seed: 901, lum: 210, density: 0.85,
+            mask: (nx, ny) => { const d = Math.hypot(nx - 0.5, ny - 0.5); if (d < 0.38 || d > 0.48) return false;
+                const g = Math.atan2(ny - 0.5, nx - 0.5) - a; return ((g % seg) + seg) % seg > 0.4; } });
+        const p = (t % EN_FIRE_MS) / EN_FIRE_MS, open = p > 0.55 ? Math.max(0.1, Math.sin((p - 0.55) / 0.45 * Math.PI)) : 0.1;
+        const e = S * 0.52;
+        scatterDots(c, cx - e / 2, cy - e / 2, e, e, { frame: f, seed: 902, density: 0.9,
+            mask: (nx, ny) => ((nx - 0.5) / 0.5) ** 2 + ((ny - 0.5) / (0.5 * open)) ** 2 < 1,
+            lum: (nx, ny) => Math.hypot(nx - 0.5, ny - 0.5) < 0.13 ? 255 : 140 });
+    }
+    // 원거리형 C: 숨 쉬는 큐브 - 가운데에서 8개 꼭짓점으로 뼈대가 뻗어 있고, 부피는 꼭짓점에 붙어 있음
+    // 부피가 빠지면 면 가운데와 모서리 가운데가 가운데 쪽으로 꺼져서 8개 가시 별이 되고, 다시 차오르면 정육면체로 돌아옴
+    // 각 면을 3x3 점(꼭짓점 4, 모서리 가운데 4, 면 가운데 1)으로 나눠 삼각형 8개씩 = 48개
+    const CUBE_BREATH_MS = 6400;               // 정육면체 -> 별 -> 정육면체 한 번 (이전 3200의 2배)
+    const CUBE_FIRE_AT = 0.5;                  // 별이 완성되는 순간 (한 주기 중 위치) 에 미사일 발사
+    const CUBE_EDGE_IN = 0.62, CUBE_FACE_IN = 0.85;   // 별일 때 모서리 가운데 / 면 가운데가 꺼지는 정도
+    const CUBE_TRIS = (() => {
+        const tris = [];
+        for (let axis = 0; axis < 3; axis++) for (const sg of [-1, 1]) {
+            const pt = (i, j) => { const v = [0, 0, 0]; v[axis] = sg; v[(axis + 1) % 3] = i; v[(axis + 2) % 3] = j; return { v, kind: Math.abs(i) + Math.abs(j) }; };
+            for (const [i0, j0] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) {
+                const A = pt(i0, j0), B = pt(i0 + 1, j0), C = pt(i0 + 1, j0 + 1), D = pt(i0, j0 + 1);
+                for (const T of [[A, B, C], [A, C, D]]) {
+                    // 바깥을 보게 감기 방향 맞춤 (정육면체 상태에서 면 법선과 같은 쪽)
+                    const [p, q, r] = T.map(o => o.v), e1 = q.map((x, k) => x - p[k]), e2 = r.map((x, k) => x - p[k]);
+                    const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+                    tris.push(n[axis] * sg > 0 ? T : [T[0], T[2], T[1]]);
+                }
+            }
+        }
+        return tris;   // kind: 2 = 꼭짓점, 1 = 모서리 가운데, 0 = 면 가운데
+    })();
+    function cubeBreath(t) {
+        const p = (t % CUBE_BREATH_MS) / CUBE_BREATH_MS, ss = x => x * x * (3 - 2 * x);
+        if (p < 0.2) return 0;                      // 정육면체로 멈춤
+        if (p < 0.5) return ss((p - 0.2) / 0.3);    // 부피가 빠짐
+        if (p < 0.7) return 1;                      // 별로 멈춤
+        return 1 - ss((p - 0.7) / 0.3);             // 다시 차오름
+    }
+    function enCube(c, cx, cy, S, t, f) {
+        const d = cubeBreath(t), ax = 0.55 + Math.sin(t * 0.0007) * 0.3, ay = t * 0.0018, k = 0.26;
+        const scale = kind => kind === 2 ? 1 : kind === 1 ? 1 - CUBE_EDGE_IN * d : 1 - CUBE_FACE_IN * d;
+        const rot = ([x, y, z]) => {
+            const X = x * Math.cos(ay) + z * Math.sin(ay); let Z = -x * Math.sin(ay) + z * Math.cos(ay);
+            const Y = y * Math.cos(ax) - Z * Math.sin(ax); Z = y * Math.sin(ax) + Z * Math.cos(ax);
+            return [X, Y, Z];
+        };
+        const L = [-0.42, -0.5, 0.76];   // 왼쪽 위 앞에서 오는 빛
+        const vis = [];
+        for (const T of CUBE_TRIS) {
+            const P = T.map(o => rot(o.v.map(x => x * scale(o.kind))));
+            const e1 = P[1].map((x, i) => x - P[0][i]), e2 = P[2].map((x, i) => x - P[0][i]);
+            let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+            const len = Math.hypot(...n) || 1; n = n.map(x => x / len);
+            if (n[2] <= 0.01) continue;                                      // 뒤를 보는 삼각형은 안 보임
+            const q = P.map(([x, y]) => [0.5 + x * k, 0.5 + y * k]);
+            vis.push({ q, z: (P[0][2] + P[1][2] + P[2][2]) / 3, lum: 70 + 185 * Math.max(0, n[0] * L[0] + n[1] * L[1] + n[2] * L[2]),
+                x0: Math.min(q[0][0], q[1][0], q[2][0]), x1: Math.max(q[0][0], q[1][0], q[2][0]), y0: Math.min(q[0][1], q[1][1], q[2][1]), y1: Math.max(q[0][1], q[1][1], q[2][1]) });
+        }
+        vis.sort((u, v) => v.z - u.z);   // 가까운 것부터
+        let lx = -1, ly = -1, lh = null;
+        const at = (nx, ny) => {
+            if (nx === lx && ny === ly) return lh;
+            lx = nx; ly = ny; lh = null;
+            for (const T of vis) {
+                if (nx < T.x0 || nx > T.x1 || ny < T.y0 || ny > T.y1) continue;
+                if (inPoly(nx, ny, T.q)) { lh = T; break; }
+            }
+            return lh;
+        };
+        scatterDots(c, cx - S / 2, cy - S / 2, S, S, { frame: f, seed: 1000,
+            mask: (nx, ny) => !!at(nx, ny), density: (nx, ny) => 0.4 + 0.55 * (at(nx, ny).lum / 255), lum: (nx, ny) => at(nx, ny).lum });
+        enSphere(c, cx, cy + S * 0.5, S * (0.05 + 0.05 * d), f, 1090, 140 + 115 * d);   // 포구: 별이 될수록 밝아짐
+    }
+    // 적 미사일: 아래로 떨어지는 모래 캡슐 + 위로 꼬리
+    function drawEnemyMissile(c, x, y, s, f) {
+        scatterDots(c, x - 3 * s, y - 30 * s, 6 * s, 16 * s, { frame: (f + 1) % SAND_FRAMES, seed: 1102, density: 0.3, lum: 170 });
+        scatterDots(c, x - 6 * s, y - 14 * s, 12 * s, 28 * s, { frame: f, seed: 1101, density: 0.95,
+            mask: (nx, ny) => (nx - 0.5) ** 2 * 4 + ((ny - 0.5) * 2) ** 4 < 1, lum: (nx, ny) => 255 - ny * 70 });
+    }
+    const ENEMY_DESIGNS = [
+        { type: '돌격형', name: 'A. 회전 원뿔',   ref: '원작 Cone',      role: 'rush',  fn: enCone,     desc: '끝을 아래로 돌며 패들을 향해 돌진. 사선 줄무늬가 흘러 회전하는 느낌' },
+        { type: '돌격형', name: 'B. 분자 덩어리', ref: '원작 Molecule · 확정',  role: 'rush',  fn: enMolecule, desc: '구슬 4개가 가운데 구슬 둘레를 좌우 · 위아래 360도로 굴러 돌다가 돌진' },
+        { type: '돌격형', name: 'C. 화살촉 드론', ref: '새 디자인',      role: 'rush',  fn: enArrow,    desc: 'V자 몸체, 심장이 뛰고 뒤로 모래 꼬리를 남김' },
+        { type: '원거리형', name: 'A. 피라미드 포대', ref: '원작 Pyramid', role: 'shoot', fn: enPyramid, desc: '면이 돌아가는 삼각뿔. 아래 포구가 밝아지면 미사일' },
+        { type: '원거리형', name: 'B. 눈알 위성', ref: '새 디자인',      role: 'shoot', fn: enEye,      desc: '끊긴 고리가 돌고, 가운데 눈이 뜰 때 미사일' },
+        { type: '원거리형', name: 'C. 숨 쉬는 큐브', ref: '원작 회전체 참고 · 확정', role: 'shoot', fn: enCube, fireMs: CUBE_BREATH_MS, fireAt: CUBE_FIRE_AT, desc: '부피가 빠져 8개 가시 별이 되는 순간 미사일, 다시 차올라 정육면체로 (한 번 6.4초)' }
+    ];
+    let enemyPage = 0, enemyRAF = 0;
+    // 미리보기 한 장: 왼쪽 = 확대 + 실제 크기, 오른쪽 = 움직임 예시 (패들 포함)
+    function drawEnemyPreview(c, W, H, t) {
+        const D = ENEMY_DESIGNS[enemyPage], f = Math.floor(t / SAND_INTERVAL) % SAND_FRAMES;
+        c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+        c.textAlign = 'center'; c.textBaseline = 'top'; c.fillStyle = 'rgb(150,150,150)'; c.font = font('30px');
+        c.fillText('확대', 320, 24); c.fillText('실제 크기 (80px)', 320, 760); c.fillText('움직임', 900, 24);
+        D.fn(c, 320, 400, 420, t, f);
+        D.fn(c, 320, 870, 80, t, f);
+        // 움직임 예시 칸
+        const fx = 680, fy = 70, fw = 440, fh = 880, mid = fx + fw / 2;
+        c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 2; c.strokeRect(fx, fy, fw, fh);
+        const padW = 120, padX = mid + Math.sin(t * 0.0011) * 130 - padW / 2, padY = fy + fh - 50;
+        c.fillStyle = 'rgb(200,200,200)'; c.beginPath(); c.roundRect(padX, padY, padW, 20, 10); c.fill();
+        const S = 64;
+        if (D.role === 'rush') {
+            const P = 3600, u = (t % P) / P, hx = mid + Math.sin(t * 0.0013) * 110, hy = fy + 120;
+            let ex = hx, ey = hy;
+            if (u > 0.45) {   // 패들 쪽으로 돌진 (가속)
+                const e = Math.min(1, (u - 0.45) / 0.45) ** 2, tx = padX + padW / 2;
+                ex = hx + (tx - hx) * e; ey = hy + (padY - 30 - hy) * e;
+            }
+            D.fn(c, ex, ey, S, t, f);
+        } else {
+            const exAt = tt => mid + Math.sin(tt * 0.0008) * 140, ey = fy + 130;
+            const FP = D.fireMs || EN_FIRE_MS, off = (D.fireAt || 0) * FP;
+            for (let k = Math.floor((t - off) / FP); k > Math.floor((t - off) / FP) - 4; k--) {
+                const ft = k * FP + off, age = t - ft, my = ey + S * 0.5 + age * 0.4;
+                if (age >= 0 && my < padY + 10) drawEnemyMissile(c, exAt(ft), my, 1.4, f);
+            }
+            D.fn(c, exAt(t), ey, S, t, f);
+        }
+    }
+    function startEnemyPreview() {
+        cancelAnimationFrame(enemyRAF);
+        const step = () => {
+            const cv = document.getElementById('dev-enemy-canvas');
+            if (!cv || devDetailScreen.style.display === 'none') { enemyRAF = 0; return; }
+            drawEnemyPreview(cv.getContext('2d'), cv.width, cv.height, performance.now());
+            enemyRAF = requestAnimationFrame(step);
+        };
+        enemyRAF = requestAnimationFrame(step);
+    }
+
+    // ===== 프롤로그 (개발자 모드 9번) =====
+    // 원작 알카노이드 인트로 구성을 따름: 위에는 장면 그림, 아래 검은 칸에 자막이 한 글자씩 타자 치듯 나오고, 장면이 바뀔 때마다 한 줄씩 쌓임
+    // 장면: 1 모선 / 2 해골 함선 등장 / 3 공격 · 폭발 · 코어 빼앗김 / 4 탈출선 (원작처럼 플레이어 패들 = 바우스) / 5 암전 + 마지막 두 줄
+    const PROLOGUE_LINES = [
+        '그날, 모선은 공격받았다.',
+        '공격자는 행성 크기의 거대한 기계 요새였다.',
+        '모선은 파괴되었고, 코어는 빼앗겼다.',
+        '단 하나의 탈출선만이 살아남았다. 우리는 그것을 쫓고 있다.'
+    ];
+    const PRO_W = 1170, PRO_H = 1300, PRO_PIC_H = 900, PRO_LOOP = 10000, PRO_CHAR_MS = 30;
+    const PRO_T = { skull: 2000, eyes: 3250, attack: 4000, broken: 4600, pull: 5000, pulled: 6300, escape: 6500, dark: 9250 };
+    const PRO_LINE_AT = [150, 2150, 4150, 6650];
+    const PRO_MS = { x: 10, y: 300, w: 640, h: 260 };          // 모선 위치 / 크기
+    const PRO_CORE0 = [370, 430];                              // 모선 가운데 코어
+    const SK = { w: 820, h: 860, cx: 160, cy: 40, cw: 560, ch: 740 };
+    const SK_X = 470, SK_Y = 30;
+    const CRATER = [SK_X + SK.w * 0.7 - 550 * 0.72, SK_Y + SK.h * 0.5 - 550 * 0.35];   // 데스스타 분화구 위치 (화면에 그려지는 위치)
+        function vnoise(x, y, s) {
+        const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+        const a = hash3(xi, yi, s), b = hash3(xi + 1, yi, s), c = hash3(xi, yi + 1, s), d = hash3(xi + 1, yi + 1, s);
+        return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+    }
+    const proCache = {};
+    // --- 배경: 별 + 옅은 성운 ---
+    function proStars(f) {
+        const key = 's' + f; if (proCache[key]) return proCache[key];
+        const cv = document.createElement('canvas'); cv.width = PRO_W; cv.height = PRO_PIC_H; const c = cv.getContext('2d');
+        c.fillStyle = '#000'; c.fillRect(0, 0, PRO_W, PRO_PIC_H);
+        for (let i = 0; i < 260; i++) {
+            const x = hash3(i, 1, 3) * PRO_W, y = hash3(i, 2, 3) * PRO_PIC_H, b = hash3(i, 3, f), big = hash3(i, 4, 3) > 0.93;
+            c.fillStyle = `rgba(255,255,255,${0.25 + 0.6 * b})`;
+            c.fillRect(x, y, big ? 2.6 : 1.4, big ? 2.6 : 1.4);
+        }
+        scatterDots(c, 0, 480, PRO_W, 320, { frame: f, seed: 5101, spacing: 6, lum: 120, density: (nx, ny) => 0.22 * Math.exp(-((ny - 0.5 - (nx - 0.5) * 0.35) ** 2) / 0.04) });
+        return (proCache[key] = cv);
+    }
+    // --- 모선: 긴 선체 + 탑 + 엔진. broken = 오른쪽 끝이 부서진 모습 ---
+    function proMother(f, broken) {
+        const key = 'm' + f + (broken ? 'b' : 'a'); if (proCache[key]) return proCache[key];
+        const { w: MW, h: MH } = PRO_MS, ox = 40, cv = document.createElement('canvas'); cv.width = MW + ox; cv.height = MH; const c = cv.getContext('2d');
+        const hull = (nx, ny) => {
+            const body = Math.abs(ny - 0.52) < 0.2 * (1 - Math.max(0, nx - 0.15) * 0.25) && nx > 0.04;
+            const tower = nx > 0.3 && nx < 0.5 && ny > 0.18 && ny < 0.36 && Math.abs(nx - 0.4) < 0.1 - (0.36 - ny) * 0.25;
+            const fin = nx > 0.08 && nx < 0.24 && ny > 0.7 && ny < 0.82 - (nx - 0.08) * 0.5;
+            const engine = nx < 0.06 && Math.abs(ny - 0.52) < 0.12;
+            const cut = broken ? nx > 0.8 + 0.06 * Math.sin(ny * 40) + 0.04 * Math.sin(ny * 97) : nx > 0.97;
+            return (body || tower || fin || engine) && !cut;
+        };
+        scatterDots(c, ox, 0, MW, MH, { frame: f, seed: 5201, spacing: 3.2, mask: hull,
+            density: (nx, ny) => 0.55 + 0.4 * (1 - Math.abs(ny - 0.42) * 2.2),
+            lum: (nx, ny) => 110 + 120 * Math.max(0, 1 - Math.abs(ny - 0.4) * 3) + 25 * Math.sin(nx * 60) * (ny > 0.45 ? 1 : 0) });
+        for (let i = 0; i < 26; i++) {
+            if (broken && i > 20) continue;
+            const x = ox + MW * (0.1 + i * 0.026), y = MH * 0.56;
+            if (hash3(i, 9, 1) > 0.25) { c.fillStyle = `rgba(255,255,255,${0.5 + 0.5 * hash3(i, f, 2)})`; c.fillRect(x, y, 4, 2); }
+        }
+        const sx = ox + PRO_CORE0[0] - PRO_MS.x, sy = PRO_CORE0[1] - PRO_MS.y;
+        scatterDots(c, sx - 46, sy - 46, 92, 92, { frame: f, seed: 5202, spacing: 2.2, density: 0.9, lum: 210, mask: (nx, ny) => { const d = Math.hypot(nx - 0.5, ny - 0.5); return d < 0.5 && d > 0.4; } });
+        scatterDots(c, 0, MH * 0.42, 70, MH * 0.2, { frame: f, seed: 5203, spacing: 2.4, density: nx => nx, lum: 255 });
+        return (proCache[key] = cv);
+    }
+    // --- 적 함선: 데스스타 스타일의 거대한 기계 행성 ---
+    // 화면 오른쪽을 꽉 채우는 거대한 구. 왼쪽(모선 쪽)에서 빛을 받고 오른쪽은 어둠에 잠김
+    function proDeathStar(f) {
+        const key = 'd' + f; if (proCache[key]) return proCache[key];
+        const cv = document.createElement('canvas'); cv.width = SK.w; cv.height = SK.h; const c = cv.getContext('2d');
+        const cx = SK.w * 0.7, cy = SK.h * 0.5, R = 550;   // 중심을 훨씬 오른쪽에 두어 둥근 표면만 화면에 들어옴
+        // 슈퍼레이저 분화구 (약간 위쪽)
+        const crX = cx - R * 0.72, crY = cy - R * 0.35, crR = R * 0.28;
+        
+        const dsMask = (nx, ny) => {
+            const x = nx * SK.w - cx, y = ny * SK.h - cy;
+            return x * x + y * y < R * R;
+        };
+        const dsLum = (nx, ny) => {
+            const x = nx * SK.w - cx, y = ny * SK.h - cy;
+            const r2 = x * x + y * y; if (r2 >= R * R) return 0;
+            const z = Math.sqrt(R * R - r2);
+            const n = [x / R, y / R, z / R];
+            const L = [-0.8, -0.2, 0.5];   // 왼쪽 위에서 오는 빛
+            let dot = n[0] * L[0] + n[1] * L[1] + n[2] * L[2];
+            // 분화구 음영
+            const dx = nx * SK.w - crX, dy = ny * SK.h - crY, d2 = dx * dx + dy * dy;
+            if (d2 < crR * crR) {
+                const e = Math.sqrt(crR * crR - d2);
+                const cn = [-dx / crR, -dy / crR, e / crR];  // 안으로 파인 노멀
+                dot = cn[0] * L[0] + cn[1] * L[1] + cn[2] * L[2];
+                dot *= 0.7;   // 분화구 안은 조금 더 어둡게
+            }
+            // 적도 해자 (가로선)
+            if (Math.abs(y - R * 0.05) < 8) dot *= 0.3;
+            // 세로선 / 가로선 무늬 (위압감)
+            if (Math.sin(nx * 120) > 0.8 || Math.sin(ny * 120) > 0.8) dot *= 0.85;
+            
+            return Math.max(0, 30 + 225 * dot);
+        };
+        const dsDens = (nx, ny) => {
+            const L = dsLum(nx, ny) / 255;
+            return 0.3 + 0.7 * L + 0.1 * vnoise(nx * 30, ny * 30, 81);
+        };
+        
+        scatterDots(c, 0, 0, SK.w, SK.h, { frame: f, seed: 5301, spacing: 3, mask: dsMask, density: dsDens, lum: dsLum });
+        // 분화구 가운데 초점
+        scatterDots(c, crX - 16, crY - 16, 32, 32, { frame: f, seed: 5302, spacing: 2, lum: 200, mask: (nx, ny) => Math.hypot(nx - 0.5, ny - 0.5) < 0.5 });
+        return (proCache[key] = cv);
+    }
+    // 빛나는 구슬 (눈 · 손 · 코어): 퍼지는 빛 + 도는 고리 + 밝은 심
+    function proOrb(c, x, y, r, t, f, seed, a = 1) {
+        if (a <= 0.01) return;
+        scatterDots(c, x - r * 2.2, y - r * 2.2, r * 4.4, r * 4.4, { frame: f, seed, spacing: 3, lum: 255 * a,
+            density: (nx, ny) => a * Math.max(0, 0.5 - Math.hypot(nx - 0.5, ny - 0.5) * 1.1), mask: (nx, ny) => Math.hypot(nx - 0.5, ny - 0.5) < 0.5 });
+        const rot = t * 0.004 + seed;
+        scatterDots(c, x - r * 1.3, y - r * 1.3, r * 2.6, r * 2.6, { frame: f, seed: seed + 1, spacing: 2, lum: 240 * a, density: 0.8 * a,
+            mask: (nx, ny) => { const d = Math.hypot(nx - 0.5, ny - 0.5); if (d > 0.5 || d < 0.36) return false; const g = Math.atan2(ny - 0.5, nx - 0.5) - rot; return ((g % 2.1) + 2.1) % 2.1 > 0.6; } });
+        scatterDots(c, x - r * 0.55, y - r * 0.55, r * 1.1, r * 1.1, { frame: f, seed: seed + 2, spacing: 1.6, lum: 255 * a, density: a, mask: (nx, ny) => Math.hypot(nx - 0.5, ny - 0.5) < 0.5 });
+    }
+    const proEase = k => { k = Math.max(0, Math.min(1, k)); return k * k * (3 - 2 * k); };
+    function drawPrologue(c, t) {
+        const T = t % PRO_LOOP, f = Math.floor(t / SAND_INTERVAL) % SAND_FRAMES, P = PRO_T;
+        c.fillStyle = '#000'; c.fillRect(0, 0, PRO_W, PRO_H);
+        if (T < P.dark + 1000) {
+            c.save(); c.beginPath(); c.rect(0, 0, PRO_W, PRO_PIC_H); c.clip();
+            c.drawImage(proStars(f), 0, 0);
+            const broken = T >= P.broken;
+            const shake = T >= P.attack && T < P.escape ? (hash3(Math.floor(T / 50), 1, 3) - 0.5) * 6 : 0;
+            c.drawImage(proMother(f, broken), PRO_MS.x - 40 + shake, PRO_MS.y + shake * 0.5);
+            // 해골 함선: 오른쪽 어둠에서 천천히 밀려 들어옴
+            let dx = 9999;
+            if (T >= P.skull) {
+                const e = 1 - (1 - Math.min(1, (T - P.skull) / 3200)) ** 3;
+                dx = (1 - e) * 720;
+                c.globalAlpha = 0.2 + 0.8 * e; c.drawImage(proDeathStar(f), SK_X + dx, SK_Y); c.globalAlpha = 1;
+                const eyeA = proEase((T - P.eyes) / 350);
+                const eR = [SK_X + dx + SK.cx + SK.cw * 0.7, SK_Y + SK.cy + SK.ch * 0.5], eL = [SK_X + dx + SK.cx + SK.cw * 0.3, SK_Y + SK.cy + SK.ch * 0.5];
+                scatterDots(c, eL[0] - 40, eL[1] - 30, 80, 60, { frame: f, seed: 5330, spacing: 3, lum: 200 * eyeA, density: (nx, ny) => 0.35 * eyeA * Math.max(0, 1 - Math.hypot(nx - 0.5, ny - 0.5) * 2.2) });
+                proOrb(c, eR[0], eR[1], 30, t, f, 5340, eyeA);
+                        // 공격 광선: 오른쪽 눈에서 모선으로 번쩍이는 지그재그 빛
+                if (T >= P.attack && T < P.escape) {
+                    const slot = Math.floor(T / 170);
+                    if (hash3(slot, 2, 7) > 0.35) {
+                        const tx = PRO_MS.x + PRO_MS.w * (0.45 + 0.4 * hash3(slot, 3, 7)), ty = PRO_MS.y + PRO_MS.h * (0.3 + 0.4 * hash3(slot, 4, 7));
+                        const n = 40;
+                        for (let i = 0; i <= n; i++) {
+                            const s = i / n, jit = (hash3(slot, i, 8) - 0.5) * 22 * Math.sin(s * Math.PI);
+                            const bx = eR[0] + (tx - eR[0]) * s, by = eR[1] + (ty - eR[1]) * s + jit;
+                            c.fillStyle = `rgba(255,255,255,${0.55 + 0.45 * hash3(slot, i, 9)})`; c.fillRect(bx - 2, by - 2, 4, 4);
+                            c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(bx - 5, by - 5, 10, 10);
+                        }
+                    }
+                }
+            }
+            // 모선이 부서지는 순간 하얀 번쩍임
+            if (T >= P.broken && T < P.broken + 250) { c.fillStyle = `rgba(230,240,255,${0.75 * (1 - (T - P.broken) / 250)})`; c.fillRect(0, 0, PRO_W, PRO_PIC_H); }
+            // 폭발 + 파편
+            if (broken) {
+                const u = ((T - P.broken) % 1500) / 1500;
+                [[560, 380, 0], [520, 470, 0.33], [460, 340, 0.66]].forEach(([bx, by, ph], i) => {
+                    const q = (u + ph) % 1, r = 20 + q * 110, a = Math.max(0, 1 - q);
+                    if (a <= 0.02) return;
+                    scatterDots(c, bx - r, by - r, r * 2, r * 2, { frame: f, seed: 5410 + i, spacing: 2.6, lum: 255 * a,
+                        mask: (nx, ny) => { const d = Math.hypot(nx - 0.5, ny - 0.5); return d < 0.5 && d > 0.5 - 0.22 - (1 - q) * 0.25; },
+                        density: (nx, ny) => a * (0.4 + 0.6 * hash3(Math.floor(nx * 12), Math.floor(ny * 12), i)) });
+                });
+                const du = (T - P.broken) / 4500;
+                for (let i = 0; i < 34; i++) {
+                    const q = (du * (0.6 + hash3(i, 1, 9) * 0.6) + hash3(i, 2, 9) * 0.3) % 1;
+                    const ang = -1.4 + hash3(i, 3, 9) * 2.8, sp = 120 + hash3(i, 4, 9) * 420;
+                    const px = 560 + Math.cos(ang) * sp * q, py = 420 + Math.sin(ang) * sp * q + 60 * q * q, sz = 2 + hash3(i, 5, 9) * 7;
+                    c.save(); c.translate(px, py); c.rotate(T * 0.004 * (hash3(i, 6, 9) - 0.5) * 6 + i);
+                    c.fillStyle = `rgba(255,255,255,${0.9 * (1 - q * 0.7)})`;
+                    c.fillRect(-sz / 2, -sz / 4, sz, sz / 2); c.restore();
+                }
+            }
+            // 코어: 모선 안에서 빛나다가 해골 입으로 끌려가 입 안에 박힘 (참고 스크린샷의 입 속 빛)
+            const mouth = CRATER;
+            const k = proEase((T - P.pull) / (P.pulled - P.pull));
+            const cx = PRO_CORE0[0] + shake + (mouth[0] - PRO_CORE0[0]) * k, cy = PRO_CORE0[1] + (mouth[1] - PRO_CORE0[1]) * k + Math.sin(T * 0.012) * (k > 0 && k < 1 ? 6 : 1.5);
+            if (T >= P.pull) { c.fillStyle = '#000'; c.beginPath(); c.arc(PRO_CORE0[0] + shake, PRO_CORE0[1], 34, 0, Math.PI * 2); c.fill(); }
+            if (T >= P.pull && T < P.pulled + 400) {   // 견인 광선
+                const [mx, my] = mouth;
+                for (let i = 0; i < 160; i++) {
+                    const s = ((i / 160) + T * 0.0006) % 1, px = cx + (mx - cx) * s, py = cy + (my - cy) * s, w = 50 * (1 - s) + 8;
+                    const o = (hash3(i, 3, Math.floor(T / 90)) - 0.5) * 2 * w;
+                    c.fillStyle = `rgba(170,205,255,${0.35 * (1 - s * 0.5)})`; c.fillRect(px - o * 0.3, py + o, 2.4, 2.4);
+                }
+            }
+            proOrb(c, cx, cy, 30, t, f, 5402, 1);
+            // 탈출선 (바우스): 모선에서 빠져나와 아래 왼쪽으로 다가옴
+            if (T >= P.escape) {
+                const e = proEase((T - P.escape) / 2100), w = 40 + 170 * e, h = w * paddle.height / PADDLE_SIZES[0];
+                const ex = 330 - 110 * e, ey = 470 + 330 * e;
+                for (let i = 1; i <= 14; i++) scatterDots(c, ex - w * 0.15 + i * 7 * (0.4 + e), ey - i * 9 * (0.4 + e), w * 0.3, 8, { frame: (f + i) % SAND_FRAMES, seed: 5500 + i, spacing: 2, lum: 255, density: 0.6 / i });
+                pvClassicVaus(c, ex - w / 2, ey - h / 2, w, h, f);
+            }
+            c.fillStyle = '#000'; c.fillRect(0, 0, PRO_W, 28);   // 위 띠
+            if (T > P.dark) { c.fillStyle = `rgba(0,0,0,${Math.min(1, (T - P.dark) / 1000)})`; c.fillRect(0, 0, PRO_W, PRO_PIC_H); }
+            c.restore();
+        }
+        // 자막 (원작처럼 그림 아래 검은 칸에 타자 치듯)
+        const blink = Math.floor(t / 420) % 2 === 0;
+        const type = (text, start, x, y, align) => {
+            const n = Math.min(text.length, Math.floor((T - start) / PRO_CHAR_MS)), s = text.slice(0, Math.max(0, n));
+            c.textAlign = align; c.fillText(s, x, y);
+            return n < text.length ? (align === 'center' ? x + c.measureText(s).width / 2 - c.measureText(text).width / 2 + c.measureText(s).width / 2 : x + c.measureText(s).width) : null;
+        };
+        c.textBaseline = 'middle'; c.fillStyle = '#e0e0e0'; c.font = font('38px');
+        const outAlpha = T > PRO_LOOP - 750 ? Math.max(0, (PRO_LOOP - T) / 750) : 1;
+        c.globalAlpha = outAlpha;
+        c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(40, PRO_PIC_H + 8, PRO_W - 80, 1);
+        c.fillStyle = '#e0e0e0';
+        let cur = null, curY = 0;
+        PRO_LINE_AT.forEach((st, i) => { if (T < st) return; const y = PRO_PIC_H + 70 + i * 74, cx2 = type(PROLOGUE_LINES[i], st, 60, y, 'left'); if (cx2 !== null) { cur = cx2; curY = y; } });
+        if (cur !== null && blink) c.fillRect(cur + 6, curY - 18, 18, 36);
+        c.globalAlpha = 1;
+    }
+    let prologueRAF = 0;
+    function startProloguePreview() {
+        cancelAnimationFrame(prologueRAF);
+        const t0 = performance.now();
+        const step = () => {
+            const cv = document.getElementById('dev-prologue-canvas');
+            if (!cv || devDetailScreen.style.display === 'none') { prologueRAF = 0; return; }
+            drawPrologue(cv.getContext('2d'), performance.now() - t0);   // 열 때마다 처음부터
+            prologueRAF = requestAnimationFrame(step);
+        };
+        prologueRAF = requestAnimationFrame(step);
+    }
+
     function startGemPreview() {
         cancelAnimationFrame(gemPreviewRAF);
         const step = () => {
@@ -3476,12 +4104,16 @@
     }
 
     // 개발자 모드 7번 카드 예시 배치: 2열, 카드 기본 크기(343x515)를 확대
+    const SHOP_PER_PAGE = 4;
+    let shopPage = 0;
+    const shopPageCount = () => Math.ceil(SHOP_CARDS.length / SHOP_PER_PAGE);
+    // cards[k] = 현재 페이지 k번째 칸, idx = SHOP_CARDS 안의 번호
     function shopPreviewLayout(canvasW) {
         const cols = 2, gap = 28, pad = 30;
         const cw = (canvasW - pad * 2 - gap * (cols - 1)) / cols, sc = cw / INTRO_CARD_W, ch = INTRO_CARD_H * sc;
-        const rows = Math.ceil(SHOP_CARDS.length / cols);
-        const cards = SHOP_CARDS.map((_, i) => ({ x: pad + (i % cols) * (cw + gap), y: pad + Math.floor(i / cols) * (ch + gap), w: cw, h: ch }));
-        return { cards, sc, height: pad * 2 + rows * ch + (rows - 1) * gap };
+        const start = shopPage * SHOP_PER_PAGE, n = Math.min(SHOP_PER_PAGE, SHOP_CARDS.length - start);
+        const cards = Array.from({ length: n }, (_, k) => ({ idx: start + k, x: pad + (k % cols) * (cw + gap), y: pad + Math.floor(k / cols) * (ch + gap), w: cw, h: ch }));
+        return { cards, sc, height: pad * 2 + 2 * ch + gap };   // 항상 2줄 높이 (마지막 페이지도 같은 크기)
     }
 
     function drawShopPreview() {
@@ -3496,8 +4128,8 @@
         c.fillStyle = '#000';
         c.fillRect(0, 0, cv.width, cv.height);
 
-        SHOP_CARDS.forEach((card, i) => {
-            const r = L.cards[i];
+        L.cards.forEach(r => {
+            const i = r.idx, card = SHOP_CARDS[i];
             // 예시로 보유 단계를 카드마다 다르게 채워 보여줌
             const level = card.max > 1 ? (i % card.max) + 1 : 0;
             c.save();
@@ -3508,7 +4140,27 @@
         });
     }
 
+    // 개발자 메뉴: 한 화면에 5개씩, 아래 ◀ ▶ 로 넘김 (스크롤 없음)
+    const DEV_MENU_PER_PAGE = 5;
+    let devMenuPage = 0;
+    function renderDevMenuPage() {
+        const btns = [...devMenuScreen.querySelectorAll('.dev-menu-btn[data-cat]')], n = Math.ceil(btns.length / DEV_MENU_PER_PAGE);
+        devMenuPage = Math.max(0, Math.min(n - 1, devMenuPage));
+        btns.forEach((b, i) => { b.style.display = Math.floor(i / DEV_MENU_PER_PAGE) === devMenuPage ? 'block' : 'none'; });
+        document.getElementById('dev-menu-page').textContent = (devMenuPage + 1) + ' / ' + n;
+        devMenuScreen.querySelectorAll('.dev-mn-nav').forEach(b => {
+            const off = b.dataset.nav === 'prev' ? devMenuPage === 0 : devMenuPage === n - 1;
+            b.disabled = off; b.style.color = off ? '#444' : '#fff'; b.style.borderColor = off ? '#333' : '#fff'; b.style.cursor = off ? 'default' : 'pointer';
+        });
+    }
+    devMenuScreen.addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('.dev-mn-nav');
+        if (!b || b.disabled) return;
+        devMenuPage += b.dataset.nav === 'next' ? 1 : -1;
+        renderDevMenuPage();
+    });
     function openDevOverlay() {
+        renderDevMenuPage();
         devOverlay.classList.add('open');
         devMenuScreen.style.display = 'block';
         devDetailScreen.style.display = 'none';
@@ -3556,6 +4208,12 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
     }
     // 3. 상점 카드: 카드 그림 누르면 상세
     devDetailBody.addEventListener('click', e => {
+        const nv = e.target.closest && e.target.closest('.dev-shop-nav');
+        if (nv) {
+            if (nv.disabled) return;
+            shopPage = Math.max(0, Math.min(shopPageCount() - 1, shopPage + (nv.dataset.nav === 'next' ? 1 : -1)));
+            devDetailBody.innerHTML = devContent.shop.body; drawShopPreview(); return;
+        }
         const back = e.target.closest && e.target.closest('.dev-shop-back');
         if (back) { shopDetailId = null; devDetailBody.innerHTML = devContent.shop.body; drawShopPreview(); return; }
         const cv = e.target.id === 'dev-shop-canvas' ? e.target : null;
@@ -3563,9 +4221,9 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
         const r = cv.getBoundingClientRect(), k = cv.width / r.width;
         const x = (e.clientX - r.left) * k, y = (e.clientY - r.top) * k;
         const L = shopPreviewLayout(cv.width);
-        const i = L.cards.findIndex(q => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h);
-        if (i < 0) return;
-        shopDetailId = SHOP_CARDS[i].id;
+        const hitCard = L.cards.find(q => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h);
+        if (!hitCard) return;
+        shopDetailId = SHOP_CARDS[hitCard.idx].id;
         devDetailBody.innerHTML = devContent.shop.body;
     });
     devDetailBody.addEventListener('click', e => {
@@ -3609,6 +4267,18 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
         document.getElementById('dev-price-msg').textContent = b.dataset.act === 'save' ? '저장됨' : '기본값으로 되돌림';
     });
     devDetailBody.addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('.dev-pd-nav');
+        if (!b || b.disabled) return;
+        paddlePage = Math.max(0, Math.min(PADDLE_VIEWS.length - 1, paddlePage + (b.dataset.nav === 'next' ? 1 : -1)));
+        devDetailBody.innerHTML = devContent.paddle.body;
+    });
+    devDetailBody.addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('.dev-en-nav');
+        if (!b || b.disabled) return;
+        enemyPage = Math.max(0, Math.min(ENEMY_DESIGNS.length - 1, enemyPage + (b.dataset.nav === 'next' ? 1 : -1)));
+        devDetailBody.innerHTML = devContent.enemy.body;
+    });
+    devDetailBody.addEventListener('click', e => {
         const b = e.target.closest && e.target.closest('.dev-stage-jump');
         if (b) jumpToStage(parseInt(b.dataset.stage, 10));
     });
@@ -3617,18 +4287,22 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
         btn.addEventListener('click', () => {
             const cat = btn.getAttribute('data-cat');
             if (cat === 'stageview') stagePreviewIdx = 0;
+            if (cat === 'enemy') enemyPage = 0;
+            if (cat === 'paddle') paddlePage = 0;
             if (cat === 'price') priceDetailId = null;
-            if (cat === 'shop') shopDetailId = null;
+            if (cat === 'shop') { shopDetailId = null; shopPage = 0; }
             const data = devContent[cat];
             devDetailTitle.textContent = data.title;
             devDetailBody.innerHTML = data.body;
             devMenuScreen.style.display = 'none';
             devDetailScreen.style.display = 'block';
-            if (cat === 'paddle') drawPaddlePreview();
+            if (cat === 'paddle') startPaddlePreview();
             if (cat === 'brick') drawBrickPreview();
             if (cat === 'shop') drawShopPreview();
             if (cat === 'stageview') drawStagePreview();
             if (cat === 'money') startGemPreview();
+            if (cat === 'enemy') startEnemyPreview();
+            if (cat === 'prologue') startProloguePreview();
         });
     });
 </script>
