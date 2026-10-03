@@ -308,6 +308,16 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 17. 세균전 (NEW) -->
+    <a class="game-card" href="games/17/Viruswar.html">
+      <div class="icon-frame"><canvas id="iconVirus" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">세균전</div>
+        <div class="card-desc">정통 두뇌대전</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -940,6 +950,76 @@ function drawAlkaIcon(id) {
   ctx.fillRect(6, 20, 12, 1);
 }
 
+// 17. 세균전
+function drawVirusIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // Background
+  ctx.fillStyle = '#14141f';
+  ctx.fillRect(0, 0, 24, 24);
+
+  // 세균 1마리 (dir=1: 오른쪽을 봄, dir=-1: 왼쪽을 봄)
+  function germ(cx, cy, dir, body, dark, light) {
+    const P = (dx, dy, w = 1, h = 1) => {
+      const x = dir > 0 ? cx + dx : cx - dx - w + 1;
+      ctx.fillRect(x, cy + dy, w, h);
+    };
+
+    // 촉수 (상대 반대쪽으로만)
+    ctx.fillStyle = dark;
+    P(0, -6); P(0, 6); P(-4, -4); P(-4, 4);
+    ctx.fillStyle = body;
+    P(-1, -8, 3, 2); P(-1, 7, 3, 2);   // 위, 아래
+    P(-6, -6, 2, 2); P(-6, 5, 2, 2);   // 대각선
+    P(-6, -1, 1, 3);                   // 뒤쪽
+
+    // 동그란 몸통 (외곽선 + 몸통)
+    for (let dy = -5; dy <= 5; dy++) {
+      for (let dx = -5; dx <= 5; dx++) {
+        const d = dx * dx + dy * dy;
+        if (d > 25) continue;
+        ctx.fillStyle = d > 16 ? dark : body;
+        P(dx, dy);
+      }
+    }
+
+    // 하이라이트
+    ctx.fillStyle = light;
+    P(-2, -3); P(-3, -2, 1, 2);
+
+    // 화난 눈썹 (앞쪽으로 내려감)
+    ctx.fillStyle = '#000000';
+    P(0, -4, 2, 1); P(2, -3, 2, 1);
+
+    // 눈 (상대를 노려봄)
+    ctx.fillStyle = '#ffffff';
+    P(1, -2, 3, 3);
+    ctx.fillStyle = '#000000';
+    P(3, -1, 1, 2);
+
+    // 이를 악문 입
+    ctx.fillStyle = '#ffffff';
+    P(1, 2, 4, 1);
+    ctx.fillStyle = dark;
+    P(1, 3, 4, 1);
+  }
+
+  germ(6, 14, 1, '#ef4444', '#7f1d1d', '#fca5a5');   // 빨간 세균
+  germ(17, 14, -1, '#3b82f6', '#1e3a8a', '#93c5fd'); // 파란 세균
+
+  // 이마 사이 충돌 스파크
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillRect(12, 3, 1, 2);
+  ctx.fillRect(11, 5, 2, 1);
+  ctx.fillRect(11, 6, 1, 2);
+  ctx.fillRect(9, 5, 1, 1);
+  ctx.fillRect(14, 5, 1, 1);
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -958,6 +1038,7 @@ drawAirFightIcon('iconAirFight');
 drawFireIcon('iconFire');
 draw3SecIcon('icon3Sec');
 drawAlkaIcon('iconAlka');
+drawVirusIcon('iconVirus');
 </script>
 </body>
 </html>
