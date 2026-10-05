@@ -85,6 +85,12 @@
             cursor: pointer;
         }
 
+        /* 업그레이드 화면의 저장 코드 입력칸 (게임 좌표 x 80 ~ 1090, y 1582 ~ 1732 에 맞춤) */
+        #code-box { display: none; position: absolute; left: 6.84%; width: 86.32%; top: 77.2%; height: 5.6%; z-index: 15; gap: 2%; align-items: stretch; }
+        #code-box.open { display: flex; }
+        #code-in { flex: 1; min-width: 0; background: #000; color: #fff; border: 2px solid #ddd; border-radius: 1.2vmin; font: bold 2.6vmin var(--mono); font-size: min(2.6vmin, 2.2vh); letter-spacing: 0.15em; text-align: center; text-transform: uppercase; padding: 0 2%; }
+        #code-go { width: 24%; background: #eee; color: #000; border: none; border-radius: 1.2vmin; font: bold 2.4vmin var(--mono); font-size: min(2.4vmin, 2vh); }
+        #code-msg { position: absolute; left: 0; right: 0; top: 108%; text-align: center; color: #fff; font: bold 2vmin var(--mono); font-size: min(2vmin, 1.6vh); }
         /* 개발자 모드 오버레이 - 게임 영역(1170x2080) 내부로 제한 */
         #dev-overlay {
             display: none;
@@ -155,6 +161,7 @@
 <div id="game-container">
     <canvas id="gameCanvas" width="1170" height="2080"></canvas>
     <button id="dev-entry" aria-label="dev mode"></button>
+    <div id="code-box"><input id="code-in" maxlength="19" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false"><button id="code-go">이동</button><div id="code-msg"></div></div>
 
     <div id="dev-overlay">
         <div id="dev-panel">
@@ -171,6 +178,7 @@
                 <button class="dev-menu-btn" data-cat="prologue">9. 프롤로그</button>
                 <button class="dev-menu-btn" data-cat="background">10. 배경</button>
                 <button class="dev-menu-btn" data-cat="music">11. 음악</button>
+                <button class="dev-menu-btn" data-cat="boss3">12. 보스3</button>
                 <div id="dev-menu-nav" style="display:flex; gap:10px; align-items:center; margin-top:14px;">
                     <button class="dev-mn-nav" data-nav="prev" style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; background:#000; color:#fff; border:1px solid #fff; cursor:pointer;">◀</button>
                     <div id="dev-menu-page" style="flex:1; text-align:center; font:bold 22px Menlo, monospace;">1 / 2</div>
@@ -2401,7 +2409,8 @@
         shard:    [80],
         aim:      [65],
         absorb:   [30, 50, 70],
-        abyss:    [0]                                  // 보스2 보상 (팔지 않음)
+        abyss:    [0],                                 // 보스2 보상 (팔지 않음)
+        save:     [50]                                 // 저장: 살 때마다 50 (여러 번)
     };
     const PRICE_KEY = 'sb_shop_prices';
     // 업그레이드 카드 단계별 효과 (개발자 모드 7번 표시용). [0] = 카드 없음, [1] = 1단계 ...
@@ -2427,6 +2436,7 @@
             });
             case 'absorb': return [0, 1, 2, 3].map(lv => lv ? `방어력 ${lv} · ${ABSORB_RECHARGE_MS / 1000}초마다 1 충전 · 적 공격 1번에 1 소모하고 마비를 막음` : '충격 흡수 없음');
             case 'life':   return Array.from({ length: MAX_LIVES + 1 }, (_, n) => n ? `목숨 +1 (최대 ${MAX_LIVES})` : `시작 목숨 ${START_LIVES}`);
+            case 'save':   return ['저장 안 함', '산 순간의 진행을 16자리 코드로 · 다음 스테이지 (보스전 포함) 부터 다시 시작 · 몇 번이든 살 수 있음'];
         }
         return null;
     }
@@ -2446,11 +2456,67 @@
     const cardById = id => SHOP_CARDS.find(c => c.id === id);
     const cardLevel = id => upgrades[id] || 0;
     function cardPrice(id) { const a = SHOP_PRICES[id]; return a[Math.min(cardLevel(id), a.length - 1)]; }
+    const SAVE_FROM_STAGE = 10;     // 저장 카드: 10스테이지 클리어 뒤 상점부터 (보스 앞 상점 포함)
     const ABSORB_FROM_STAGE = 10;   // 10스테이지 클리어 뒤 상점부터 등장 (그 상점에는 꼭 나옴)
+    // ===== 저장 코드: 16자리 (32글자: 헷갈리는 O 0 I 1 뺌), 4자리씩 '-' =====
+    // 담는 것: 버전 · 다음 위치 (스테이지 0~31, 보스1 32, 보스2 33) · 목숨 · 보석 · 점수 (100 단위) · 카드 단계
+    // 남는 자리는 검사값 (한 글자만 틀려도 걸러짐)
+    const SAVE_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', SAVE_VER = 1;
+    const SAVE_CARDS = ['pierce', 'size', 'laser', 'clone', 'power', 'shield', 'magnet', 'interest', 'shard', 'aim', 'absorb', 'abyss'];
+    const SAVE_FIELDS = () => [['ver', 4], ['to', 34], ['lives', MAX_LIVES + 1], ['gems', 4096], ['score', 65536], ...SAVE_CARDS.map(id => [id, cardById(id).max + 1])];
+    let saveCode = null, saveTo = null;          // 최근에 산 저장 코드, 그 코드로 가는 곳
+    const saveStageLabel = to => to == null ? '' : to === 32 ? '보스1 부터' : to === 33 ? '보스2 부터' : `${to + 1}스테이지 부터`;
+    function saveNextTo() {                      // 상점 다음에 갈 곳 (goNextStage 와 같은 순서)
+        if (currentStage === BOSS_AFTER_STAGE && !boss) return 32;
+        if (currentStage === BOSS2_AFTER_STAGE && !boss) return 33;
+        return currentStage + 1 >= STAGES.length ? 0 : currentStage + 1;
+    }
+    function saveCheck(v) { let h = 0x2F6B ^ Number(v % 2147483647n); for (let k = 0; k < 6; k++) { h = Math.imul(h ^ (h >>> 13), 0x5BD1E995) >>> 0; h = (h + Number((v >> BigInt(k * 11)) & 2047n) * 40503) >>> 0; } return h & 0x3FFF; }   // 14비트
+    function makeSaveCode(state) {
+        let v = 0n;
+        for (const [k, n] of SAVE_FIELDS()) { const x = Math.max(0, Math.min(n - 1, state[k] | 0)); v = v * BigInt(n) + BigInt(x); }
+        v = v * 16384n + BigInt(saveCheck(v));
+        v ^= 0x5A3C96F00F1E2D3Bn & ((1n << 80n) - 1n);   // 섞기 (비슷한 진행이 비슷한 코드가 안 되게)
+        let out = '';
+        for (let i = 0; i < 16; i++) { out = SAVE_ABC[Number(v & 31n)] + out; v >>= 5n; }
+        return out.match(/.{4}/g).join('-');
+    }
+    function readSaveCode(code) {
+        const t = String(code).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/O/g, '0').replace(/I/g, '1');
+        if (t.length !== 16) return { err: '16자리를 입력하세요' };
+        let v = 0n;
+        for (const ch of t) { const i = SAVE_ABC.indexOf(ch); if (i < 0) return { err: '잘못된 코드' }; v = v * 32n + BigInt(i); }
+        v ^= 0x5A3C96F00F1E2D3Bn & ((1n << 80n) - 1n);
+        const chk = Number(v % 16384n); v /= 16384n;
+        if (saveCheck(v) !== chk) return { err: '잘못된 코드' };
+        const st = {}, F = SAVE_FIELDS();
+        for (let i = F.length - 1; i >= 0; i--) { const [k, n] = F[i]; st[k] = Number(v % BigInt(n)); v /= BigInt(n); }
+        if (v !== 0n) return { err: '잘못된 코드' };
+        if (st.ver !== SAVE_VER) return { err: '지원하지 않는 코드' };
+        if (st.lives < 1) return { err: '잘못된 코드' };
+        return { st };
+    }
+    function currentSaveState(to) {
+        const st = { ver: SAVE_VER, to, lives, gems: gemCount, score: Math.floor(score / 100) };
+        SAVE_CARDS.forEach(id => st[id] = cardLevel(id));
+        return st;
+    }
+    // 코드로 돌아가기: 카드 · 보석 · 점수 · 목숨을 되돌리고 그 위치부터 시작
+    function loadSave(st, code) {
+        for (const k in upgrades) delete upgrades[k];
+        SAVE_CARDS.forEach(id => { if (st[id]) upgrades[id] = st[id]; });
+        upgrades.save = 1; saveCode = code; saveTo = st.to;      // 넣은 코드를 업그레이드 화면에서 다시 볼 수 있게
+        lives = st.lives; gemCount = st.gems; score = st.score * 100;
+        introCard = null; lastPurchase = null; enemies.length = 0;
+        if (st.to === 32 || st.to === 33) { startBossFight(st.to === 32 ? 1 : 2); gameState = 'BOSS_WARN'; }
+        else { initGame(st.to); gameState = 'PLAY'; }
+        absorbCharge = absorbMax();
+    }
     function canOffer(card) {
         if (card.reward) return false;                  // 보상 카드 (심연의 구체) 는 상점에 안 나옴
         if (card.id === 'life') return lives < MAX_LIVES;
         if (card.id === 'absorb' && currentStage + 1 < ABSORB_FROM_STAGE) return false;
+        if (card.id === 'save') return currentStage + 1 >= SAVE_FROM_STAGE;   // 10스테이지 클리어 뒤 상점부터, 몇 번이든
         return cardLevel(card.id) < card.max;          // 1회/5단계 카드는 최대 단계면 제외
     }
     const LASER_GUARANTEE_STAGES = 5;   // 1~5스테이지 클리어 뒤 상점
@@ -2596,6 +2662,7 @@
             upgrades[id] = cardLevel(id) + 1;
             if (id === 'life') lives = Math.min(MAX_LIVES, lives + 1);
             if (id === 'absorb') absorbCharge = absorbMax();
+            if (id === 'save') { saveTo = saveNextTo(); saveCode = makeSaveCode(currentSaveState(saveTo)); }   // 산 뒤의 보석 · 카드로
             shopBought = id;
             lastPurchase = id;
             return;
@@ -2662,6 +2729,15 @@
             ctx.restore();
         });
 
+        if (shopBought === 'save' && saveCode) {            // 산 코드 보여 주기
+            const by = L.cards[0].y - 150;
+            ctx.fillStyle = 'rgb(20,20,20)'; ctx.beginPath(); ctx.roundRect(80, by - 60, LOGIC_WIDTH - 160, 120, 14); ctx.fill();
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(80, by - 60, LOGIC_WIDTH - 160, 120, 14); ctx.stroke();
+            ctx.fillStyle = '#fff'; ctx.font = font('bold 64px'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(saveCode, LOGIC_WIDTH / 2, by);
+            ctx.fillStyle = 'rgb(160,160,160)'; ctx.font = font('30px');
+            ctx.fillText(`${saveStageLabel(saveTo)} · 업그레이드 화면에서 다시 볼 수 있음`, LOGIC_WIDTH / 2, L.msgY);
+        }
         if (shopBought) {
             drawShopButton(L.next, '다음 스테이지 ▶', null, true, true);
         } else {
@@ -3140,7 +3216,7 @@
                 ctx.font = font('40px');
                 ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);
                 ctx.font = font('28px');
-                ctx.fillText('V4.25.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.28.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER') {
                 if (performance.now() - lostAt >= OVER_TO_TITLE_MS) goTitle();
                 ctx.font = font('bold 100px');
@@ -3309,37 +3385,6 @@
             tone(ac, out, t + 0.22, { type: 'sine', f0: 58, f1: 42, dur: 0.16, gain: 0.05 });
             tone(ac, out, t + S16 * 4, { type: 'square', f0: hz(93), dur: 0.03, gain: 0.012, hp: 2000 });
         }
-        // 스테이지 시작음: 'Arcanoid Intro' 악보 그대로 (개발자 모드 '음악'에서만 들을 수 있음)
-        // 4/4, 조표 플랫 다수 (E G D 는 모두 내림), 템포 = 140. [MIDI, 시작 박, 길이 박]
-        const START_BEAT = 60 / 140;
-        const START_MEL = [                                       // 멜로디 (높은음자리표)
-            [63, 0, 0.75], [63, 0.75, 0.25], [66, 1, 1.5], [66, 2.5, 0.5], [65, 3, 0.5], [63, 3.5, 0.5],   // 1마디: E♭(점8분) E♭(16분) G♭(점4분) G♭ F E♭
-            [61, 4, 0.5], [65, 4.5, 0.5], [63, 5, 3]                                                        // 2마디: D♭ F E♭(점2분)
-        ];
-        const START_BASS = [[54, 1, 2], [53, 3, 2], [51, 5, 3]];  // 베이스 (낮은음자리표): 4분 쉼표 뒤 G♭(2분) F(4분 + 이음줄 4분) E♭(점2분)
-        const STAGE_START_LEN = 8 * START_BEAT + 0.2;
-        // 지속음: 음량을 끝까지 유지하다가 끝에서 끊음 (칩튠 느낌). 같은 음이 이어질 때 구분되도록 끝을 조금 비움
-        function hold(ac, out, t, o) {
-            const osc = ac.createOscillator(), g = ac.createGain();
-            osc.type = o.type; osc.frequency.setValueAtTime(hz(o.m), t);
-            const a = 0.004, rel = Math.min(o.rel || 0.03, o.dur * 0.5);
-            g.gain.setValueAtTime(0.0001, t);
-            g.gain.linearRampToValueAtTime(o.gain, t + a);
-            g.gain.setValueAtTime(o.gain, t + o.dur - rel);
-            g.gain.linearRampToValueAtTime(0.0001, t + o.dur);
-            let node = osc;
-            if (o.lp) { const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = o.lp; node.connect(f); node = f; }
-            node.connect(g); g.connect(out);
-            osc.start(t); osc.stop(t + o.dur + 0.02);
-        }
-        function stageStart(ac, out, t) {
-            START_MEL.forEach(([m, beat, len]) => {
-                const d = len * START_BEAT * (len > 1 ? 0.98 : 0.86);
-                hold(ac, out, t + beat * START_BEAT, { type: 'square', m, dur: d, gain: 0.07, lp: 3800, rel: len > 2 ? 0.25 : 0.03 });
-                hold(ac, out, t + beat * START_BEAT, { type: 'triangle', m, dur: d, gain: 0.05, rel: len > 2 ? 0.25 : 0.03 });
-            });
-            START_BASS.forEach(([m, beat, len]) => hold(ac, out, t + beat * START_BEAT, { type: 'triangle', m, dur: len * START_BEAT * 0.97, gain: 0.10, rel: len > 2 ? 0.25 : 0.04 }));
-        }
         // 보스2 결말 긴장 음악: 느린 심장 박동 + 낮게 울리는 반음 충돌 (B♭ - A) + 올라가는 노이즈. 한 마디 2초, 4마디 반복
         const TENSE_BAR = 2.0;
         function tenseBar(ac, out, t, bar) {
@@ -3354,14 +3399,6 @@
             for (let i = 0; i < 8; i++) tone(ac, out, t + i * 0.25, { type: 'square', f0: hz(93 + (i % 2) * 1), dur: 0.03, gain: 0.008 + 0.006 * k, hp: 2500 });
             noise(ac, out, t + TENSE_BAR * 0.5, { dur: TENSE_BAR * 0.5, gain: 0.015 + 0.025 * k, bp: 900 + 900 * k, q: 3 });
         }
-        // ===== 스테이지 시작음 (Round Start 를 바탕으로 다시 만듦): 같은 멜로디 · 템포 (200 BPM, G 단조), 소리는 부드럽게 =====
-        // 이전 (받아 적은 그대로) 은 음마다 바로 작아지고 (tone 의 지수 감쇠) 음 사이가 비어서 뚝뚝 끊겼음
-        //  -> 음을 끝까지 유지 · 다음 음과 이어 붙임 (레가토) · 음이 바뀔 때 살짝 미끄러짐 · 긴 음에 떨림 (비브라토)
-        //  -> 베이스는 길게 이어지는 선, 아래에 부드러운 화음 (E♭ - F - Cm), 끝에 높은 반짝임 + 에코
-        const RS_STEP = 0.15, RS_LEN = 3.0;
-        const RS_MEL = [[67, 0, 1], [67, 1, 1], [70, 2, 4], [69, 6, 1], [67, 7, 1], [65, 8, 1], [69, 9, 1], [67, 10, 2], [67, 12, 1], [67, 13, 1], [67, 14, 3.4]];
-        const RS_BAS = [[51, 2, 4], [53, 6, 1], [55, 7, 1], [57, 8, 2], [48, 10, 1], [43, 11, 1], [48, 12, 1], [43, 13, 1], [48, 14, 3.4]];
-        const RS_PAD = [[2, 4, [63, 67, 70]], [6, 4, [65, 69, 72]], [10, 7.4, [60, 63, 67]]];
         // 부드러운 음: 천천히 시작 · 끝까지 유지 · 천천히 사라짐. from = 앞 음에서 미끄러져 옴, vib = 떨림
         function smooth(ac, out, t, o) {
             const osc = ac.createOscillator(), g = ac.createGain(), f = hz(o.m);
@@ -3385,31 +3422,41 @@
             node.connect(g); g.connect(out);
             osc.start(t); osc.stop(end + r + 0.02);
         }
-        function roundStart(ac, out, t) {
-            const S = RS_STEP, lead = ac.createGain(); lead.gain.value = 1; lead.connect(out);
-            const dl = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();   // 에코: 2칸 (0.3초) 뒤, 되먹임 25%
-            dl.delayTime.value = S * 2; fb.gain.value = 0.25; wet.gain.value = 0.28;
+        // ===== 스테이지 시작음: 비장한 출정 (100 BPM, A 단조, 약 2.5초). 새 스테이지가 시작될 때마다 =====
+        // 악보 형식: [MIDI, 시작 박, 길이 박]
+        function playScore(ac, out, t, B, sc) {
+            const lead = ac.createGain(); lead.gain.value = 1; lead.connect(out);
+            const dl = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
+            dl.delayTime.value = sc.echo || B / 2; fb.gain.value = 0.2; wet.gain.value = sc.wet ?? 0.22;
             lead.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(out);
-            // 멜로디: 사각파 (부드럽게 깎음) + 삼각파 겹침. 같은 음이 다시 나오면 아주 살짝 띄워 다시 침, 다른 음이면 이어 붙이고 미끄러짐
-            RS_MEL.forEach(([m, st, ln], i) => {
-                const nx = RS_MEL[i + 1], pv = RS_MEL[i - 1], same = nx && nx[0] === m;
-                const dur = nx ? ln * S + (same ? -0.035 : 0.012) : ln * S, long = ln >= 3;
-                const from = pv && pv[0] !== m && pv[1] + pv[2] === st ? pv[0] : 0;
-                const rel = long ? 0.35 : 0.06;
-                smooth(ac, lead, t + st * S, { type: 'square', m, dur, gain: 0.048, lp: 2600, from, vib: long, release: rel });
-                smooth(ac, lead, t + st * S, { type: 'triangle', m, dur, gain: 0.04, detune: 6, from, vib: long, release: rel });
+            sc.mel.forEach(([m, st, ln], i) => {
+                const nx = sc.mel[i + 1], last = !nx, dur = nx ? ln * B + 0.012 : ln * B;
+                const o = { m, dur, release: last ? 0.3 : 0.06, vib: last && ln * B > 0.4 };
+                if (sc.bell) {   // 종소리: 바로 울리고 천천히 사라짐
+                    smooth(ac, lead, t + st * B, { ...o, type: 'triangle', gain: 0.06, attack: 0.005, sus: 0.25, release: 0.5 });
+                    smooth(ac, lead, t + st * B, { ...o, type: 'sine', m: m + 12, gain: 0.02, attack: 0.005, sus: 0.1, release: 0.3 });
+                } else {         // 금관 느낌: 사각파 (부드럽게 깎음) + 삼각파
+                    smooth(ac, lead, t + st * B, { ...o, type: 'square', gain: 0.046, lp: sc.lp || 2400, attack: 0.02 });
+                    smooth(ac, lead, t + st * B, { ...o, type: 'triangle', gain: 0.04, detune: 6, attack: 0.02 });
+                }
             });
-            // 베이스: 이어지는 선 (삼각파 + 한 옥타브 아래 사인)
-            RS_BAS.forEach(([m, st, ln], i) => {
-                const nx = RS_BAS[i + 1], dur = nx ? ln * S + 0.01 : ln * S, rel = nx ? 0.05 : 0.35;
-                smooth(ac, out, t + st * S, { type: 'triangle', m: m - 12, dur, gain: 0.11, attack: 0.012, release: rel, sus: 0.9 });
-                smooth(ac, out, t + st * S, { type: 'sine', m: m - 24, dur, gain: 0.05, attack: 0.02, release: rel, sus: 0.9 });
+            sc.bass.forEach(([m, st, ln], i) => {
+                const last = i === sc.bass.length - 1, dur = ln * B + (last ? 0 : 0.01), rel = last ? 0.3 : 0.05;
+                smooth(ac, out, t + st * B, { type: 'triangle', m, dur, gain: 0.11, attack: 0.012, release: rel, sus: 0.9 });
+                smooth(ac, out, t + st * B, { type: 'sine', m: m - 12, dur, gain: 0.05, attack: 0.02, release: rel, sus: 0.9 });
             });
-            // 화음 (아주 부드럽게): E♭ - F - Cm
-            RS_PAD.forEach(([st, ln, ch]) => ch.forEach(m => smooth(ac, out, t + st * S, { type: 'triangle', m: m - 12, dur: ln * S, gain: 0.014, attack: 0.12, release: 0.3, sus: 1 })));
-            // 끝: 높은 반짝임 (G B♭ D G) - 에코를 타고 퍼짐
-            [79, 82, 86, 91].forEach((m, i) => smooth(ac, lead, t + 14 * S + 0.05 + i * 0.07, { type: 'triangle', m, dur: 0.12, gain: 0.022, attack: 0.006, release: 0.25, sus: 0.5 }));
+            (sc.pad || []).forEach(([st, ln, ch]) => ch.forEach(m => smooth(ac, out, t + st * B, { type: 'triangle', m, dur: ln * B, gain: 0.014, attack: sc.padAtk || 0.08, release: 0.3, sus: 1 })));
+            (sc.timp || []).forEach(([st, m]) => { tone(ac, out, t + st * B, { type: 'sine', f0: hz(m) * 2, f1: hz(m), bend: 0.12, dur: 0.5, gain: 0.16 }); noise(ac, out, t + st * B, { dur: 0.08, gain: 0.04, lp: 400 }); });
+            (sc.snare || []).forEach(([st, g]) => noise(ac, out, t + st * B, { dur: 0.07, gain: g, bp: 1800, q: 0.8 }));
+            if (sc.cym != null) noise(ac, out, t + sc.cym * B, { dur: sc.cymLen || 0.6, gain: 0.03, hp: 5000 });
+            (sc.spark || []).forEach(([st, m], i) => smooth(ac, lead, t + st * B, { type: 'triangle', m, dur: 0.1, gain: 0.02, attack: 0.005, release: 0.2, sus: 0.5 }));
         }
+        // 비장한 출정: 100 BPM, A 단조. 라 (점) 도 미 (길게) 레 시 → 라 (길게). 팀파니 · 작은 북 몰아치기
+        const C3_B = 0.6, C3 = { lp: 1800, mel: [[69, 0, 0.75], [72, 0.75, 0.25], [76, 1, 1], [74, 2, 0.5], [71, 2.5, 0.5], [69, 3, 0.75]],
+            bass: [[45, 0, 1], [41, 1, 1], [43, 2, 1], [45, 3, 0.75]], pad: [[0, 1, [57, 60, 64]], [1, 1, [57, 60, 65]], [2, 1, [55, 59, 62]], [3, 0.75, [57, 60, 64]]],
+            timp: [[0, 33], [1, 29], [2, 31], [3, 33]], snare: [[2.5, 0.02], [2.625, 0.03], [2.75, 0.04], [2.875, 0.05]], cym: 3, cymLen: 0.45 };
+        const stageStartJingle = (ac, out, t) => playScore(ac, out, t, C3_B, C3);
+        const START_LEN = 2.5;
         // ===== 세션 2 BGM: 정적이고 신비롭게. 70 BPM, 떠 있는 리디안 화음 (C - B♭ - A♭ - B♭) + 높은 종소리 (에코) + 낮은 사인 베이스 =====
         const M2_BEAT = 60 / 70, M2_BAR = M2_BEAT * 4;
         const M2_CH = [{ b: 36, c: [55, 59, 62, 66] }, { b: 34, c: [53, 57, 60, 64] }, { b: 32, c: [51, 55, 58, 62] }, { b: 34, c: [53, 57, 62, 64] }];
@@ -3499,8 +3546,8 @@
             [45, 52, 57, 60].forEach(m => tone(ac, out, e, { type: 'triangle', f0: hz(m), dur: 2.6, gain: 0.05, attack: 0.05 }));
             tone(ac, out, e, { type: 'sine', f0: hz(33), dur: 2.6, gain: 0.1 }); noise(ac, out, e, { dur: 0.4, gain: 0.08, lp: 400 });
         }
-        return { sfx, bgmBar, tensionBeat, stageStart, STAGE_START_LEN, START_BEAT, START_MEL, START_BASS, S16, tenseBar, TENSE_BAR,
-                 roundStart, RS_LEN, RS_MEL, RS_BAS, RS_STEP, bgm2Bar, M2_BAR, bgm3Bar, M3_BAR, bgm4Bar, M4_BAR, bossBar, MB_BAR, prologueBar, PRO_BAR, PRO_BARS, loseJingle, LOSE_LEN, overJingle, OVER_LEN };
+        return { sfx, bgmBar, tensionBeat, S16, tenseBar, TENSE_BAR,
+                 stageStartJingle, START_LEN, C3, C3_B, bgm2Bar, M2_BAR, bgm3Bar, M3_BAR, bgm4Bar, M4_BAR, bossBar, MB_BAR, prologueBar, PRO_BAR, PRO_BARS, loseJingle, LOSE_LEN, overJingle, OVER_LEN };
     })();
 
     // 재생: 첫 터치/키 입력에서 AudioContext 를 만듦 (iOS 는 사용자 입력이 있어야 소리 남)
@@ -3512,7 +3559,7 @@
     const SFX_MIN_GAP = { break: 0.025, hit: 0.03, rubber: 0.04, laserBlock: 0.04, laser: 0.05, metal: 0.04 };
     // 음량: 모든 소리를 같은 크기 (가장 큰 50ms 구간 -20dB) 로 맞춘 뒤 (SND_TRIM), 음악 30% · 효과음 70%
     const MUSIC_VOLUME = 0.3, SFX_VOLUME = 0.7, BGM_VOLUME = 1, MASTER_VOLUME = 1;
-    const SND_TRIM = { break: 0.98, hit: 5.14, rubber: 1.47, laserBlock: 4.07, laser: 12.28, metal: 2.99, drop: 1.23, clear: 1.41, buy: 2.12, bgm1: 2.41, bgm2: 2.03, bgm3: 1.94, bgm4: 1.2, boss: 1.53, prologue: 1.13, tense: 1.53, start: 0.95, startOld: 1.06, lose: 2.33, over: 1.27 };   // backups/loudness_test.js 로 잰 값
+    const SND_TRIM = { break: 0.98, hit: 5.14, rubber: 1.47, laserBlock: 4.07, laser: 6.14, metal: 2.99, drop: 1.23, clear: 1.41, buy: 2.12, bgm1: 2.41, bgm2: 2.03, bgm3: 1.94, bgm4: 1.2, boss: 1.53, prologue: 1.13, tense: 1.53, start: 0.82, lose: 2.33, over: 1.27 };   // backups/loudness_test.js 로 잰 값
     function unlockAudio() {
         try {
             if (!AC) {
@@ -3544,8 +3591,7 @@
     };
     // 한 번 나오는 곡
     const JINGLES = {
-        start: { len: SND.RS_LEN, play: SND.roundStart },              // 게임에서 쓰는 스테이지 시작음
-        startOld: { len: SND.STAGE_START_LEN, play: SND.stageStart },   // 이전 (악보로 만든 것, 비교용)
+        start: { len: SND.START_LEN, play: SND.stageStartJingle },     // 스테이지 시작음 (비장한 출정)
         lose:  { len: SND.LOSE_LEN, play: SND.loseJingle },
         over:  { len: SND.OVER_LEN, play: SND.overJingle }
     };
@@ -3727,14 +3773,15 @@
     // ===== 업그레이드 보기 (게임 일시정지) =====
     function upgViewLayout() {
         const owned = SHOP_CARDS.filter(c => cardLevel(c.id) > 0).map(c => c.id);
-        const cols = 4, pad = 40, gap = 24, sc = 0.74;
+        const cols = owned.length > 12 ? 5 : 4, pad = 40, gap = 24, sc = cols === 5 ? 0.58 : 0.74;   // 13장 이상이면 5줄 (코드 입력칸을 가리지 않게)
         const cw = INTRO_CARD_W * sc, ch = INTRO_CARD_H * sc, top = 340;
         const cards = owned.map((id, i) => ({ id, x: pad + (i % cols) * (cw + gap), y: top + Math.floor(i / cols) * (ch + gap), w: cw, h: ch }));
         const resume = { x: LOGIC_WIDTH / 2 - 260, y: LOGIC_HEIGHT - HUD_BOTTOM_H - 200, w: 520, h: 116 };
-        return { cards, resume, sc };
+        const code = { x: 80, y: resume.y - 210, w: LOGIC_WIDTH - 160, h: 150 };     // 코드 입력 영역 (계속하기 위)
+        return { cards, resume, sc, code };
     }
-    function openUpgradeView() { gameState = 'UPG_VIEW'; }
-    function closeUpgradeView() { gameState = 'PLAY'; }
+    function openUpgradeView() { gameState = 'UPG_VIEW'; showCodeBox(true); }
+    function closeUpgradeView() { showCodeBox(false); gameState = 'PLAY'; }
     function handleUpgViewTap(x, y) {
         if (inRect(upgViewLayout().resume, x, y) || inRect(UPG_BTN, x, y)) closeUpgradeView();
     }
@@ -3758,6 +3805,9 @@
             drawShopCard(ctx, 0, 0, INTRO_CARD_W, INTRO_CARD_H, cardById(r.id), cardLevel(r.id), f, { noPrice: true, owned: true, descStep: cardLevel(r.id) - 1 });   // 지금 단계 설명
             ctx.restore();
         });
+        // 코드 입력칸 자리 (실제 입력칸은 HTML 이 이 위에 겹쳐짐)
+        ctx.fillStyle = 'rgb(160,160,160)'; ctx.font = font('30px'); ctx.textAlign = 'left';
+        ctx.fillText('저장 코드로 돌아가기', L.code.x, L.code.y + 2);
         drawShopButton(L.resume, '계속하기 ▶', null, true, true);
     }
 
@@ -3848,6 +3898,7 @@
             score = 0;
             gemCount = 0;
             for (const k in upgrades) delete upgrades[k];
+            saveCode = null; saveTo = null;
             initGame(0);
             gameState = 'PROLOGUE';
             prologueStartT = performance.now();
@@ -3901,6 +3952,13 @@
     const devDetailTitle = document.getElementById('dev-detail-title');
     const devDetailBody = document.getElementById('dev-detail-body');
 
+    // 개발자 모드 공통 쪽 넘김 (스크롤 대신): ◀ n / N ▶
+    const devPager = (cls, i, n) => {
+        const nav = (k, label, off) => `<button class="${cls}" data-nav="${k}" ${off ? 'disabled' : ''} style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; cursor:${off ? 'default' : 'pointer'}; border:1px solid ${off ? '#333' : '#fff'}; background:#000; color:${off ? '#444' : '#fff'};">${label}</button>`;
+        return n <= 1 ? '' : `<div style="display:flex; gap:10px; align-items:center; margin-top:10px;">${nav('prev', '◀', i === 0)}<div style="flex:1; text-align:center; font:bold 22px Menlo, monospace;">${i + 1} / ${n}</div>${nav('next', '▶', i === n - 1)}</div>`;
+    };
+    const MUSIC_PER_PAGE = 3, PRICE_PER_PAGE = 7, BRICK_PER_PAGE = 4, DETAIL_PER_PAGE = 2;
+    let musicPage = 0, pricePage = 0, brickPage = 0, detailPage = 0;
     const devContent = {
         stagejump: {
             title: '1. 스테이지 이동',
@@ -3941,7 +3999,8 @@
         },
         brick: {
             title: '4. 벽돌',
-            body: `<canvas id="dev-brick-canvas" width="1170" height="600" style="width:100%; background:#000; border:1px solid #444;"></canvas>`
+            get body() { const nP = Math.ceil(BRICK_TIERS.length / BRICK_PER_PAGE); brickPage = Math.max(0, Math.min(nP - 1, brickPage));
+                return `<canvas id="dev-brick-canvas" width="1170" height="600" style="width:100%; background:#000; border:1px solid #444;"></canvas>${devPager('dev-bk-nav', brickPage, nP)}`; }
         },
         paddle: {
             title: '5. 패들',
@@ -3965,9 +4024,10 @@
                 for (let i = 1; i <= lvMax; i++) head += `<td style="${cell}">${i}</td>`;
                 head += `<td style="${cell}">합</td></tr>`;
                 let rows = '', total = 0;
-                DEV_CARDS.filter(c => !c.reward).forEach(c => {
+                const PC = DEV_CARDS.filter(c => !c.reward && c.id !== 'save'), nP = Math.ceil(PC.length / PRICE_PER_PAGE); pricePage = Math.max(0, Math.min(nP - 1, pricePage));
+                PC.forEach(c => { const a = SHOP_PRICES[c.id]; if (c.id !== 'life') total += a.reduce((x, y) => x + y, 0); });
+                PC.slice(pricePage * PRICE_PER_PAGE, (pricePage + 1) * PRICE_PER_PAGE).forEach(c => {
                     const a = SHOP_PRICES[c.id], sum = c.id === 'life' ? null : a.reduce((x, y) => x + y, 0);
-                    if (sum != null) total += sum;
                     const nameCell = upgradeEffects(c.id)
                         ? `<button class="dev-price-card" data-id="${c.id}" style="all:unset; cursor:pointer; font-size:15px; white-space:nowrap; text-decoration:underline; text-underline-offset:3px;">${c.name} ›</button>`
                         : `<span style="font-size:15px; white-space:nowrap;">${c.name}</span>`;
@@ -3978,9 +4038,9 @@
                 const btn = (k, label, main) => `<button class="dev-price-btn" data-act="${k}" style="flex:1; padding:10px 0; font:bold 18px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid ${main ? '#fff' : '#555'}; background:${main ? '#fff' : '#000'}; color:${main ? '#000' : '#ccc'};">${label}</button>`;
                 return `<div style="font-size:13px; color:#888; margin-bottom:6px;">숫자 = 단계별 가격 (여분 패들은 구매 횟수별) · 카드 이름을 누르면 단계별 효과</div>
 <table style="width:100%; border-collapse:collapse; table-layout:fixed;"><colgroup><col style="width:24%"><col><col><col><col><col><col style="width:12%"></colgroup>${head}${rows}</table>
-<div id="dev-price-total" style="margin-top:8px; font-size:15px;">전부 최대: <b>${total}</b> · 29스테이지까지 모이는 수정 약 985</div>
+<div id="dev-price-total" style="margin-top:8px; font-size:15px;">전부 최대 (저장 카드 제외): <b>${total}</b> · 29스테이지까지 모이는 수정 약 985 · 저장 카드 ${SHOP_PRICES.save[0]}</div>
 <div style="display:flex; gap:8px; margin-top:10px;">${btn('default', '기본값', false)}${btn('save', '저장', true)}</div>
-<div id="dev-price-msg" style="min-height:20px; margin-top:6px; font-size:14px; text-align:center; color:#aaa;"></div>`;
+<div id="dev-price-msg" style="min-height:20px; margin-top:6px; font-size:14px; text-align:center; color:#aaa;"></div>${devPager('dev-pr-nav', pricePage, nP)}`;
             }
         },
         enemy: {
@@ -3997,14 +4057,15 @@
         music: {
             title: '11. 음악',
             get body() {
-                const rows = MUSIC_LIST.map(m => {
+                const nP = Math.ceil(MUSIC_LIST.length / MUSIC_PER_PAGE); musicPage = Math.max(0, Math.min(nP - 1, musicPage));
+                const rows = MUSIC_LIST.slice(musicPage * MUSIC_PER_PAGE, (musicPage + 1) * MUSIC_PER_PAGE).map(m => {
                     const on = musicPlaying === m.id;
                     return `<div style="border:1px solid ${on ? '#fff' : '#444'}; border-radius:8px; padding:12px 14px; margin-bottom:12px; display:flex; gap:12px; align-items:center;">
 <div style="flex:1;"><div style="font:bold 22px Menlo, monospace;">${m.name}</div><div style="font-size:14px; color:#999; margin-top:4px; line-height:1.4;">${m.note}</div></div>
 <button class="dev-music-btn" data-id="${m.id}" style="min-width:110px; padding:12px 0; font:bold 22px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid #fff; background:${on ? '#fff' : '#000'}; color:${on ? '#000' : '#fff'};">${on ? '■ 정지' : '▶ 재생'}</button></div>`;
                 }).join('');
                 return `<div id="dev-music-list">${soundOn ? '' : '<div style="color:#f77; margin-bottom:10px;">소리가 꺼져 있습니다. 게임 화면 우측 하단 볼륨 버튼을 켜 주세요.</div>'}${rows}
-<div style="font-size:14px; color:#888;">재생하는 동안 게임 배경음악은 잠시 꺼지고, 멈추면 돌아옵니다. 화면을 나가면 자동으로 멈춥니다.</div></div>`;
+<div style="font-size:14px; color:#888;">재생하는 동안 게임 배경음악은 잠시 꺼지고, 멈추면 돌아옵니다. 화면을 나가면 자동으로 멈춥니다.</div>${devPager('dev-mu-nav', musicPage, nP)}</div>`;
             }
         },
         background: {
@@ -4028,6 +4089,15 @@
                 return `<div style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">${nav('prev', '◀', prologuePage === 0)}<div style="flex:3; text-align:center; font:bold 20px Menlo, monospace;">${V.name}</div>${nav('next', '▶', prologuePage === 2)}</div>
 <div style="font-size:14px; color:#888; margin-bottom:6px;">${V.note}</div>
 <canvas id="dev-prologue-canvas" width="${PRO_W}" height="${PRO_H}" style="width:100%; display:block; background:#000; border:1px solid #444;"></canvas>`;
+            }
+        },
+        boss3: {
+            title: '12. 보스3 (마지막 보스)',
+            get body() {
+                const V = BOSS3_VIEWS[boss3Page];
+                return `<div style="font:bold 22px Menlo, monospace;">${V.name}</div>
+<div style="font-size:13px; line-height:1.35; color:#999; margin:2px 0 6px;">${V.note}<br><span style="color:#c88;">${V.idea}</span></div>
+<canvas id="dev-b3-canvas" width="${B3_W}" height="${B3_H}" style="width:100%; display:block; background:#000; border:1px solid #444;"></canvas>${devPager('dev-b3-nav', boss3Page, BOSS3_VIEWS.length)}`;
             }
         },
         money: {
@@ -4479,9 +4549,10 @@
     BP.brickY = BP.descY + BP.descLine * 2 + 16;
     function brickPreviewLayout(canvasW) {
         const cw = (canvasW - BP.pad * 2 - BP.gap * (BP.cols - 1)) / BP.cols;
-        const rows = Math.ceil(BRICK_TIERS.length / BP.cols);
-        const cells = BRICK_TIERS.map((T, i) => ({
-            i, x: BP.pad + (i % BP.cols) * (cw + BP.gap), y: BP.pad + Math.floor(i / BP.cols) * (BP.cellH + BP.gap), w: cw, h: BP.cellH
+        const first = brickPage * BRICK_PER_PAGE, list = BRICK_TIERS.map((T, i) => i).slice(first, first + BRICK_PER_PAGE);
+        const rows = Math.ceil(BRICK_PER_PAGE / BP.cols);       // 쪽마다 높이 같게 (넘길 때 화면이 안 튐)
+        const cells = list.map((i, k) => ({
+            i, x: BP.pad + (k % BP.cols) * (cw + BP.gap), y: BP.pad + Math.floor(k / BP.cols) * (BP.cellH + BP.gap), w: cw, h: BP.cellH
         }));
         return { cells, height: BP.pad * 2 + rows * BP.cellH + (rows - 1) * BP.gap, bw: brickWidth * BP.scale, bh: brickHeight * BP.scale };
     }
@@ -4613,6 +4684,7 @@
         { id: 'shard',   name: '파편',      cat: '공격', max: 1, desc: ['깨질 때 좌우', '블럭에 데미지'] },
         { id: 'aim',     name: '조준',      cat: '공격', max: 1, desc: ['블럭 7개 이하면', '남은 블럭 조준'] },
         { id: 'absorb',  name: '충격 흡수', cat: '방어', max: 3, desc: ['적 공격을 막아', '마비 방지'] },
+        { id: 'save',    name: '저장',      cat: '지원', max: 99, repeat: true, desc: ['진행을 코드로 저장', '다음 스테이지부터'] },
         { id: 'abyss',   name: '심연의 구체', cat: '보스', max: 1, reward: true, desc: ['패들 한가운데 = 조준', '튕길 때마다 속도 +1%'] }   // 보스2 보상 (상점에 안 나옴)
     ];
     const DEV_CARDS = SHOP_CARDS.map((c, i) => [c, i]).sort((a, b) => CARD_CAT_ORDER.indexOf(a[0].cat) - CARD_CAT_ORDER.indexOf(b[0].cat) || a[1] - b[1]).map(x => x[0]);   // 개발자 모드 정렬
@@ -4743,6 +4815,16 @@
                 for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + (i - 3) * 0.32; disc(cx + Math.cos(a) * h * 0.52, cy - h * 0.38 + Math.sin(a) * h * 0.22, 2.4, { lum: 255, density: 1 }); }
                 break;
             }
+            case 'save': {      // 저장: 디스크 (위 금속 덮개 + 아래 이름표) + 코드 점 4묶음
+                const W = h * 1.5, H = h * 1.5, x0 = cx - W / 2, y0 = cy - H / 2;
+                dot(x0, y0, W, H, { lum: 120, density: 0.85, mask: (nx, ny) => !(nx > 0.82 && ny < 0.18 && nx - 0.82 > ny) });
+                strokeDotRect(c, x0, y0, W, H, 4, { seed: 9610, frame: f, lum: 255, density: 0.95, spacing: 2 });
+                dot(x0 + W * 0.22, y0 + 4, W * 0.5, H * 0.3, { lum: 230, density: 1 });
+                dot(x0 + W * 0.55, y0 + 10, W * 0.1, H * 0.2, { lum: 40, density: 1 });
+                dot(x0 + W * 0.14, y0 + H * 0.5, W * 0.72, H * 0.42, { lum: 250, density: 1 });
+                for (let k = 0; k < 4; k++) dot(x0 + W * (0.2 + k * 0.165), y0 + H * 0.66, W * 0.11, H * 0.1, { lum: 40, density: 1 });
+                break;
+            }
             case 'abyss': {     // 심연의 구체: 줄무늬 구체 + 위쪽 블럭으로 향하는 점선 조준선 + 반짝임
                 brick(cx - h * 0.3, cy - h * 0.95, h * 0.6, h * 0.3, 190);
                 for (let i = 0; i < 5; i++) disc(cx, cy - h * 0.55 + i * h * 0.17, 2.2, { lum: 120 + i * 25, density: 1 });
@@ -4831,7 +4913,7 @@
         ty += 60;
 
         // 단계 표시: 1~5단계는 칸, 1단계는 '1회', 반복은 '반복'
-        if (card.max > 1) {
+        if (card.max > 1 && !card.repeat) {
             const pip = 22, gap = 10, tw = card.max * pip + (card.max - 1) * gap;
             for (let i = 0; i < card.max; i++) {
                 const px = x + w / 2 - tw / 2 + i * (pip + gap);
@@ -4841,14 +4923,18 @@
         } else {
             c.fillStyle = 'rgb(140,140,140)';
             c.font = font('26px');
-            c.fillText(opts.owned && card.max !== 1 ? `${level}회 구매` : (card.max === 1 ? '1회 구매' : '반복 구매'), x + w / 2, ty - 1);
+            c.fillText(card.id === 'save' ? (opts.owned ? '최근 코드' : '반복 구매') : opts.owned && card.max !== 1 ? `${level}회 구매` : (card.max === 1 ? '1회 구매' : '반복 구매'), x + w / 2, ty - 1);
         }
         ty += 40;
 
         // 설명 (2줄)
         c.fillStyle = 'rgb(175,175,175)';
         c.font = font('30px');
-        cardDesc(card, opts.descStep ?? level).forEach((line, i) => c.fillText(line, x + w / 2, ty + i * 40));
+        if (card.id === 'save' && opts.owned && saveCode) {          // 업그레이드 화면: 최근 코드 (4자리 x 2줄)
+            c.fillStyle = '#fff'; c.font = font('bold 36px');
+            [saveCode.slice(0, 9), saveCode.slice(10)].forEach((line, i) => c.fillText(line, x + w / 2, ty + i * 44));
+            c.fillStyle = 'rgb(130,130,130)'; c.font = font('24px'); c.fillText(saveStageLabel(saveTo), x + w / 2, ty + 94);
+        } else cardDesc(card, opts.descStep ?? level).forEach((line, i) => c.fillText(line, x + w / 2, ty + i * 40));
 
         // 가격 자리 (미정)
         if (opts.noPrice) {
@@ -5540,6 +5626,302 @@
         if (cur && Math.floor(t / 420) % 2 === 0) c.fillRect(cur[0] + 6, cur[1] - 19, 18, 38);
         c.globalAlpha = 1;
     }
+
+    // ===== 보스3 (마지막 보스) 시안 3개 · 기괴하고 성스럽게 · 흑백 모래 점 · 개발자 모드 12번 =====
+    // 가만히 있는 부분 (몸통 · 깃털 · 손 · 얼굴) 은 미리 그려 두고, 움직이는 부분 (눈 · 고리 · 불꽃 · 눈물) 만 매번 그림
+    const B3_W = 1170, B3_H = 1160, B3_CX = 585, B3_CY = 540;
+    const b3Cache = {};
+    function b3Sprite(key, w, h, f, seed, region) {     // region(x, y) 픽셀 좌표 -> { L, d } | null
+        const k = key + (f % 2); if (b3Cache[k]) return b3Cache[k];
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        b2Paint(cv.getContext('2d'), 0, 0, w, h, f % 2, seed, 2.4, (nx, ny) => region(nx * w, ny * h));
+        return (b3Cache[k] = cv);
+    }
+    const b3Dot = (c, x, y, L, s = 2.6) => { L = Math.max(0, Math.min(255, L)) | 0; if (L < 6) return; c.fillStyle = `rgb(${L},${L},${L})`; c.fillRect(x - s / 2, y - s / 2, s, s); };
+    const b3Clamp = (v, a = -1, b = 1) => Math.max(a, Math.min(b, v));
+    // 눈: 아몬드 모양 · 테두리 밝게 · 홍채 줄무늬 · 동공 (검게) · 반짝임. open 0 = 감음, (lx, ly) = 보는 방향 (-1 ~ 1)
+    function b3Eye(c, x, y, r, open, lx, ly, f, gain = 1) {
+        const sp = r > 40 ? 2.6 : 2.2, op = Math.max(0.03, open), ix = x + lx * r * 0.32, iy = y + ly * r * 0.18 * op;
+        for (let py = -r * 0.62; py <= r * 0.62; py += sp) for (let px = -r; px <= r; px += sp) {
+            const u = px / r, lim = op * (1 - u * u) * 0.6 * r, a = Math.abs(py);
+            if (a > lim + 1.4) continue;
+            if (hash3((px * 7) | 0, (py * 5) | 0, f + 77) > 0.93) continue;
+            let L;
+            if (a > lim - 2.2) L = 255;
+            else {
+                const d = Math.hypot(x + px - ix, y + py - iy);
+                if (Math.hypot(x + px - (ix - r * 0.1), y + py - (iy - r * 0.08)) < r * 0.065) L = 255;
+                else if (d < r * 0.15) continue;
+                else if (d < r * 0.4) L = 70 + 130 * Math.abs(Math.sin(Math.atan2(py - (iy - y), px - (ix - x)) * 9)) * (0.4 + 0.6 * d / (r * 0.4));
+                else L = 175 - 70 * (a / Math.max(1, lim));
+            }
+            b3Dot(c, x + px, y + py, L * gain, sp - 0.2);
+        }
+    }
+    const b3Blink = (t, seed, every = 4.5) => { const ph = (t / every + hash3(seed, 3, 9)) % 1; return ph < 0.05 ? Math.abs(ph - 0.025) / 0.025 : 1; };
+    const b3Look = (x, y, ball) => [b3Clamp((ball[0] - x) / 380), b3Clamp((ball[1] - y) / 380)];
+    function b3Ball(c, t, f) {                            // 시연용 공 (눈이 따라봄)
+        const bx = B3_CX + 430 * Math.sin(t * 0.63), by = B3_H - 220 + 90 * Math.sin(t * 1.21);
+        scatterDots(c, bx - 18, by - 18, 36, 36, { frame: f, seed: 990, spacing: 2.2, density: 0.95, lum: 250, mask: (nx, ny) => Math.hypot(nx - 0.5, ny - 0.5) <= 0.5 });
+        return [bx, by];
+    }
+    function b3Frame(c, t, f, name, hp) {                // 이름 · 체력 막대 · 패들 (게임 화면처럼)
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillStyle = 'rgb(220,40,40)'; c.font = font('bold 34px'); c.fillText(name, B3_W / 2, 40);
+        const bw = 900, bx = (B3_W - bw) / 2;
+        c.strokeStyle = 'rgba(255,255,255,0.6)'; c.lineWidth = 2; c.strokeRect(bx, 70, bw, 16);
+        c.fillStyle = 'rgb(230,230,230)'; c.fillRect(bx + 2, 72, (bw - 4) * hp, 12);
+        const pw = PADDLE_SIZES[0]; pvClassicVaus(c, B3_W / 2 - pw / 2 + Math.sin(t * 0.63) * 300, B3_H - 70, pw, paddle.height, f);
+    }
+    function b3Motes(c, t, n, seed) {                     // 아래에서 위로 떠오르는 빛 알갱이
+        for (let i = 0; i < n; i++) {
+            const h1 = hash3(i, seed, 1), h2 = hash3(i, seed, 2), sp = 25 + 45 * h2;
+            const y = B3_H - ((t * sp + h1 * B3_H) % B3_H), x = 80 + h2 * (B3_W - 160) + Math.sin(t * 0.7 + i) * 12;
+            b3Dot(c, x, y, 70 + 120 * Math.sin((t + i) * 1.7) ** 2, 2.6);
+        }
+    }
+
+    // ---------- 시안 A · OPHANIM · 눈의 바퀴: 여섯 날개 + 눈이 가득한 두 바퀴 + 가운데 큰 눈 ----------
+    function b3Feather(f) {                               // 깃털 1장 (뿌리가 아래, 70 x 320)
+        return b3Sprite('A_feather', 70, 320, f, 7101, (x, y) => {
+            const u = (x - 35) / 35, v = 1 - y / 320;
+            const w = Math.pow(Math.sin(Math.PI * Math.min(1, v)), 0.55) * (v < 0.12 ? v / 0.12 : 1);
+            if (Math.abs(u) > w) return null;
+            if (Math.abs(u) < 0.07) return { L: 250, d: 0.95 };
+            if (Math.abs(u) > w - 0.14) return { L: 235, d: 0.9 };
+            return { L: Math.sin(v * 46 - Math.abs(u) * 7) > 0.55 ? 85 : 175 - Math.abs(u) * 70, d: 0.85 };
+        });
+    }
+    const A_WINGS = [   // 오른쪽 날개 (왼쪽은 거울): 어깨 위치 · 첫 깃털 각도 · 끝 깃털 각도 · 길이 · 날갯짓 위상
+        { sx: 70, sy: -70, a0: 0.25, a1: 1.2, k: 1.2, ph: 0 },
+        { sx: 100, sy: 0, a0: 1.25, a1: 1.95, k: 1.35, ph: 1.4 },
+        { sx: 60, sy: 70, a0: 2.05, a1: 2.85, k: 1.05, ph: 2.6 } ];
+    function b3Wings(c, t, f, cx, cy) {
+        const fe = b3Feather(f);
+        for (const side of [1, -1]) {
+            c.save(); c.translate(cx, cy); c.scale(side, 1);
+            for (const W of A_WINGS) {
+                const flap = Math.sin(t * 1.1 + W.ph) * 0.07;
+                for (let i = 0; i < 9; i++) {
+                    const q = i / 8, a = W.a0 + (W.a1 - W.a0) * q + flap * (0.5 + q), k = W.k * (0.72 + 0.4 * Math.sin(q * Math.PI * 0.85 + 0.25));
+                    c.save(); c.translate(W.sx, W.sy); c.rotate(a); c.drawImage(fe, -21 * k, -320 * k, 42 * k, 320 * k); c.restore();
+                }
+            }
+            c.restore();
+        }
+    }
+    // 바퀴: 3D 로 도는 고리 (띠 3줄 + 새긴 무늬) + 고리 위 눈 12개. front = 앞쪽 절반만 / 뒤쪽 절반만
+    function b3Wheel(c, t, f, cx, cy, R, rot, front, ball, seed) {
+        const N = Math.round(R * 2 * Math.PI / 6.5), eyes = [];
+        for (let k = 0; k < N; k++) {
+            const th = k / N * Math.PI * 2;
+            for (const off of [-11, 0, 11]) {
+                const [X, Y, Z] = rot((R + off) * Math.cos(th), (R + off) * Math.sin(th), 0), zn = Z / R;
+                if ((zn >= 0) !== front) continue;
+                const lit = 0.45 + 0.55 * (zn + 1) / 2;
+                let L = off === 0 ? 125 : 225; if (off === 0 && k % 10 < 2) L = 30;          // 띠 가운데 새긴 무늬
+                b3Dot(c, cx + X, cy + Y, L * lit, 2.4 + 0.6 * lit);
+            }
+        }
+        for (let j = 0; j < 12; j++) {
+            const th = j / 12 * Math.PI * 2 + 0.26, [X, Y, Z] = rot(R * Math.cos(th), R * Math.sin(th), 0), zn = Z / R;
+            if ((zn >= 0) !== front) continue;
+            const ex = cx + X, ey = cy + Y, [lx, ly] = b3Look(ex, ey, ball), lit = 0.5 + 0.5 * (zn + 1) / 2;
+            b3Eye(c, ex, ey, 21 + 7 * lit, b3Blink(t, seed + j, 3.2), lx, ly, f, lit);
+        }
+    }
+    function drawBoss3A(c, t) {
+        const f = Math.floor(t * 1000 / SAND_INTERVAL) % SAND_FRAMES, cx = B3_CX, cy = B3_CY;
+        c.fillStyle = '#000'; c.fillRect(0, 0, B3_W, B3_H);
+        for (let i = 0; i < 44; i++) {                    // 뒤의 빛줄기
+            const a = i / 44 * Math.PI * 2 + t * 0.03, len = 420 + 260 * hash3(i, 5, 1);
+            for (let r = 170; r < len; r += 11) b3Dot(c, cx + Math.cos(a) * r, cy + Math.sin(a) * r, 75 * (1 - r / len) * (i % 2 ? 0.6 : 1), 2.2);
+        }
+        b3Motes(c, t, 50, 11);
+        b3Wings(c, t, f, cx, cy);
+        const ball = b3Ball(c, t, f);
+        const rotA = (x, y, z) => { const a = 1.15, b = t * 0.42; let y1 = y * Math.cos(a) - z * Math.sin(a), z1 = y * Math.sin(a) + z * Math.cos(a); return [x * Math.cos(b) + z1 * Math.sin(b), y1, -x * Math.sin(b) + z1 * Math.cos(b)]; };
+        const rotB = (x, y, z) => { const a = 1.15, b = t * 0.35 + 1; let x1 = x * Math.cos(a) + z * Math.sin(a), z1 = -x * Math.sin(a) + z * Math.cos(a); return [x1, y * Math.cos(b) - z1 * Math.sin(b), y * Math.sin(b) + z1 * Math.cos(b)]; };
+        b3Wheel(c, t, f, cx, cy, 300, rotA, false, ball, 100); b3Wheel(c, t, f, cx, cy, 255, rotB, false, ball, 200);
+        // 가운데 몸: 어두운 구 + 밝은 테두리 · 큰 눈 (공을 따라봄)
+        c.drawImage(b3Sprite('A_core', 330, 330, f, 7201, (x, y) => { const d = Math.hypot(x - 165, y - 165) / 160; if (d > 1) return null;
+            return d > 0.9 ? { L: 245, d: 0.95 } : { L: 25 + 70 * Math.max(0, 1 - Math.hypot(x / 330 - 0.35, y / 330 - 0.3) * 2.2), d: 0.75 }; }), cx - 165, cy - 165);
+        const [lx, ly] = b3Look(cx, cy, ball);
+        b3Eye(c, cx, cy, 125, b3Blink(t, 1, 5.5), lx, ly, f);
+        b3Wheel(c, t, f, cx, cy, 300, rotA, true, ball, 100); b3Wheel(c, t, f, cx, cy, 255, rotB, true, ball, 200);
+        for (let k = 0; k < 140; k++) {                   // 머리 위 후광 (돌아가며 끊긴 고리)
+            const a = k / 140 * Math.PI * 2; if (Math.sin(a * 7 + t * 1.6) < -0.35) continue;
+            for (const dr of [0, 6]) b3Dot(c, cx + Math.cos(a) * (175 + dr), cy - 255 + Math.sin(a) * (34 + dr * 0.2), 250, 2.8);
+        }
+        b3Frame(c, t, f, 'OPHANIM · 눈의 바퀴', 1);
+    }
+
+    // ---------- 시안 B · COR SACRUM · 가시관의 심장: 장미창 앞에서 뛰는 심장 + 가시관 + 불꽃 + 빛이 새는 상처 ----------
+    const HB = { w: 620, h: 660, ox: 310, oy: 380, s: 235 };   // 심장 그림: 가운데 (ox, oy), 1 = s 픽셀
+    const HB_EYES = [[-0.58, 0.05], [0.08, -0.52], [0.62, 0.32]];
+    function hbInHeart(X, Y) { const a = X * X + Y * Y - 1; return a * a * a - X * X * Y * Y * Y <= 0; }
+    function heartSprite(f) {
+        return b3Sprite('B_heart', HB.w, HB.h, f, 7301, (x, y) => {
+            const X = (x - HB.ox) / HB.s, Y = -(y - HB.oy) / HB.s;
+            // 가시관: 꼬인 덩굴 2줄 + 위아래로 뻗은 가시
+            const yc = 0.5 + 0.07 * Math.sin(X * 3), sA = yc + 0.065 * Math.sin(X * 15), sB = yc - 0.065 * Math.sin(X * 15);
+            if (Math.abs(X) < 1.22) {
+                if (Math.abs(Y - sA) < 0.032 || Math.abs(Y - sB) < 0.032) return { L: 235, d: 0.95 };
+                const k = Math.round((X + 1.2) / 0.16), kx = -1.2 + k * 0.16, dir = k % 2 ? 1 : -1, dy = (Y - yc) * dir;
+                if (dy > 0.05 && dy < 0.27 && Math.abs(X - kx) < 0.045 * (1 - (dy - 0.05) / 0.22)) return { L: 250, d: 0.95 };
+            }
+            // 대동맥 관 2개
+            const tube = (tx, y0, y1, r) => Math.abs(X - tx - 0.06 * Math.sin((Y - y0) * 4)) < r && Y > y0 && Y < y1;
+            if (tube(-0.28, 0.85, 1.42, 0.13) || tube(0.3, 0.8, 1.32, 0.1)) {
+                const ring = Math.sin(Y * 40) > 0.75; return { L: ring ? 70 : 150 + 60 * (X < 0 ? 1 : 0.6), d: 0.9 };
+            }
+            if (!hbInHeart(X, Y)) return null;
+            if (!hbInHeart(X * 1.035, (Y - 0.02) * 1.035 + 0.02)) return { L: 245, d: 0.95 };        // 테두리
+            const wx = X - 0.45, wy = Y + 0.12, wu = wx * Math.cos(0.6) + wy * Math.sin(0.6), wv = -wx * Math.sin(0.6) + wy * Math.cos(0.6);
+            const wd = (wu / 0.3) ** 2 + (wv / 0.055) ** 2;
+            if (wd < 1) return { L: 255, d: 1 };                                                     // 상처 (안에서 빛)
+            if (wd < 2.2) return { L: 18, d: 0.6 };
+            if (Math.abs(vnoise(x / 46, y / 46, 7) - 0.5) < 0.03) return { L: 215, d: 0.9 };        // 핏줄
+            return { L: 55 + 145 * b3Clamp(1 - Math.hypot(X + 0.38, Y - 0.42) / 1.55, 0, 1), d: 0.85 };
+        });
+    }
+    function drawBoss3B(c, t) {
+        const f = Math.floor(t * 1000 / SAND_INTERVAL) % SAND_FRAMES, cx = B3_CX, cy = B3_CY + 30;
+        c.fillStyle = '#000'; c.fillRect(0, 0, B3_W, B3_H);
+        // 장미창: 바깥 원 · 살 24개 · 꽃잎 원 12개 (천천히 돎)
+        const rw = t * 0.05;
+        for (let k = 0; k < 360; k++) { const a = k / 360 * Math.PI * 2; b3Dot(c, cx + Math.cos(a) * 500, cy + Math.sin(a) * 500, 120, 2.6); b3Dot(c, cx + Math.cos(a) * 470, cy + Math.sin(a) * 470, 70, 2.2); }
+        for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2 + rw; for (let r = 160; r < 470; r += 9) b3Dot(c, cx + Math.cos(a) * r, cy + Math.sin(a) * r, 60, 2.2); }
+        for (let i = 0; i < 12; i++) {
+            const a = i / 12 * Math.PI * 2 + rw, px = cx + Math.cos(a) * 365, py = cy + Math.sin(a) * 365;
+            for (let k = 0; k < 64; k++) { const b = k / 64 * Math.PI * 2; b3Dot(c, px + Math.cos(b) * 88, py + Math.sin(b) * 88, 110, 2.4); if (k % 2) b3Dot(c, px + Math.cos(b) * 38, py + Math.sin(b) * 38, 80, 2.2); }
+        }
+        b3Motes(c, t, 40, 22);
+        // 박동: 쿵-쿵 (1초마다)
+        const ph = t % 1, pulse = Math.exp(-(((ph - 0.02) / 0.05) ** 2)) + 0.6 * Math.exp(-(((ph - 0.22) / 0.05) ** 2)), sc = 1 + 0.05 * pulse;
+        if (ph < 0.6) { const r = 300 + ph * 700, a = (1 - ph / 0.6) * 0.8; for (let k = 0; k < 200; k++) { const b = k / 200 * Math.PI * 2; if (k % 3) b3Dot(c, cx + Math.cos(b) * r, cy + Math.sin(b) * r * 0.95, 220 * a, 2.6); } }
+        // 불꽃 (심장 위)
+        const topY = cy + (-HB.oy) * sc + 40;
+        [[-0.3, 1, 170], [0.32, 0.8, 130], [0, 1.25, 210]].forEach(([dx, wk, hgt], i) => {
+            const bx = cx + dx * HB.s * sc, w = 70 * wk;
+            for (let v = 0; v < 1; v += 0.025) for (let u = -1; u <= 1; u += 0.06) {
+                const lim = Math.pow(1 - v, 0.8) * (0.7 + 0.45 * vnoise(u * 2 + i, v * 4 - t * 3.2, 41));
+                if (Math.abs(u) > lim || hash3((u * 50) | 0, (v * 99) | 0, f + i) > 0.85 - 0.3 * v) continue;
+                b3Dot(c, bx + u * w + Math.sin(v * 6 + t * 5 + i) * 10 * v, topY - v * hgt, 255 * (1 - v * 0.6), 2.6);
+            }
+        });
+        const hs = heartSprite(f);
+        c.drawImage(hs, cx - HB.ox * sc, cy - HB.oy * sc, HB.w * sc, HB.h * sc);
+        const ball = b3Ball(c, t, f);
+        HB_EYES.forEach(([X, Y], i) => {                  // 심장 위에서 가끔 뜨는 눈 3개
+            const ex = cx + X * HB.s * sc, ey = cy - Y * HB.s * sc, ph2 = (t / 5 + i / 3) % 1, open = ph2 < 0.5 ? Math.sin(ph2 / 0.5 * Math.PI) : 0;
+            if (open > 0.02) { const [lx, ly] = b3Look(ex, ey, ball); b3Eye(c, ex, ey, 34, open, lx, ly, f); }
+        });
+        // 상처에서 떨어지는 빛 방울
+        const wx = cx + 0.45 * HB.s * sc, wy = cy + 0.12 * HB.s * sc;
+        for (let i = 0; i < 12; i++) { const q = (t * 0.55 + i / 12) % 1; b3Dot(c, wx + q * 30 + Math.sin(i) * 8, wy + 20 + q * q * 620, 255 * (1 - q), 3.4 - q * 1.4); }
+        b3Frame(c, t, f, 'COR SACRUM · 가시관의 심장', 1);
+    }
+
+    // ---------- 시안 C · MATER DOLOROSA · 천 개의 손: 금 간 도자기 얼굴 + 눈물 + 이마의 세 번째 눈 + 손바닥에 눈이 달린 손 16개 ----------
+    const FC = { w: 470, h: 640, ox: 235, oy: 330, rx: 165, ry: 235 };
+    const FC_CRACKS = (() => { const R = galRng(4242), out = []; for (let k = 0; k < 7; k++) { let x = FC.ox + (R() - 0.5) * 260, y = FC.oy + (R() - 0.5) * 380, a = R() * 6.283; for (let i = 0; i < 46; i++) { a += (R() - 0.5) * 0.9; x += Math.cos(a) * 5; y += Math.sin(a) * 5; out.push([x, y]); } } return out; })();
+    function faceSprite(f) {
+        return b3Sprite('C_face', FC.w, FC.h, f, 7401, (x, y) => {
+            const u = (x - FC.ox) / FC.rx, v = (y - FC.oy) / FC.ry, inF = u * u + v * v <= 1;
+            const hu = (x - FC.ox) / 228, hv = (y - FC.oy + 20) / 290;                     // 두건
+            if (!inF) { if (hu * hu + hv * hv <= 1 && y < FC.oy + 200) return { L: 55 + 55 * (Math.sin(Math.atan2(hv, hu) * 22) > 0.4 ? 1 : 0), d: 0.85 }; return null; }
+            if (u * u + v * v > 0.93) return { L: 245, d: 0.95 };
+            let near = 1e9; for (const [px, py] of FC_CRACKS) { const d = (px - x) ** 2 + (py - y) ** 2; if (d < near) near = d; }
+            if (near < 6) return { L: 15, d: 0.6 }; if (near < 14) return { L: 250, d: 0.95 };   // 금 (가장자리는 이 빠진 듯 밝게)
+            for (const ec of [-0.37, 0.37]) {                                                  // 감은 눈 · 속눈썹 · 눈썹
+                const du = (u - ec) / 0.23; if (Math.abs(du) < 1) {
+                    const lid = -0.04 + 0.06 * (1 - du * du);
+                    if (Math.abs(v - lid) < 0.018) return { L: 20, d: 0.95 };
+                    if (v > lid && v < lid + 0.07 && Math.abs(((u - ec) * 60) % 1) < 0.18) return { L: 50, d: 0.9 };
+                    if (Math.abs(v - (-0.23 + 0.05 * du * du)) < 0.014) return { L: 120, d: 0.85 };
+                }
+                if (Math.abs(u - ec * 0.97 - (v - 0.1) * 0.05) < 0.025 && v > 0.06 && v < 0.85) return { L: 95, d: 0.85 };   // 눈물 자국
+            }
+            if (Math.abs(u - 0.035) < 0.02 && v > 0 && v < 0.3) return { L: 115, d: 0.85 };   // 코
+            if (Math.hypot((u - 0.0) / 0.1, (v - 0.33) / 0.025) < 1) return { L: 60, d: 0.85 };
+            const lu = u / 0.23, lv = (v - 0.53) / 0.07; if (lu * lu + lv * lv < 1) return { L: Math.abs(lv) < 0.2 ? 12 : 105, d: 0.9 };   // 입
+            return { L: 165 + 75 * b3Clamp(1 - Math.hypot(u + 0.3, v + 0.3) / 1.4, 0, 1), d: 0.85 };
+        });
+    }
+    function handSprite(f) {                               // 손 (손끝이 위, 120 x 210)
+        return b3Sprite('C_hand', 120, 210, f, 7501, (x, y) => {
+            const u = (x - 60) / 60, v = y / 210;
+            const palm = Math.abs(u) < 0.46 && v > 0.36 && v < 0.96 && !(v > 0.88 && Math.abs(u) > 0.46 - (v - 0.88) * 2);
+            let fing = false;
+            [[-0.32, 0.14], [-0.11, 0.03], [0.1, 0.05], [0.31, 0.16]].forEach(([fu, tip]) => { const dv = v - tip; if (Math.abs(u - fu) < 0.085 && dv > 0 && v < 0.42 && !(dv < 0.04 && Math.hypot((u - fu) / 0.085, (0.04 - dv) / 0.04) > 1)) fing = true; });
+            const tu = u - 0.47, tv = v - 0.62, ta = tu * Math.cos(0.7) - tv * Math.sin(0.7), tb = tu * Math.sin(0.7) + tv * Math.cos(0.7), thumb = Math.abs(tb) < 0.08 && ta > -0.08 && ta < 0.36;
+            if (!palm && !fing && !thumb) return null;
+            const edge = (() => { for (const [ex, ey] of [[3, 0], [-3, 0], [0, 3], [0, -3]]) { const uu = (x + ex - 60) / 60, vv = (y + ey) / 210; if (!(Math.abs(uu) < 0.46 && vv > 0.36 && vv < 0.96) && !fing && !thumb) return true; } return false; })();
+            if (edge && palm) return { L: 240, d: 0.95 };
+            if (fing && [0.22, 0.31].some(c2 => Math.abs(v - c2) < 0.008)) return { L: 60, d: 0.9 };   // 손가락 마디
+            return { L: 150 + 70 * b3Clamp(1 - Math.abs(u + 0.2), 0, 1), d: 0.85 };
+        });
+    }
+    function drawBoss3C(c, t) {
+        const f = Math.floor(t * 1000 / SAND_INTERVAL) % SAND_FRAMES, cx = B3_CX, cy = B3_CY - 10;
+        c.fillStyle = '#000'; c.fillRect(0, 0, B3_W, B3_H);
+        // 만돌라 (아몬드 모양 빛) + 후광 가시
+        for (let k = 0; k < 420; k++) {
+            const a = k / 420 * Math.PI * 2, sx = Math.sin(a), sy = Math.cos(a), w = 330 * Math.pow(Math.abs(sx), 0.8) * Math.sign(sx), h = 600 * sy;
+            b3Dot(c, cx + w, cy + 60 + h, 150 + 100 * Math.sin(k * 0.9 + t * 3) ** 2, 2.6);
+        }
+        for (let i = 0; i < 52; i++) { const a = i / 52 * Math.PI * 2 + t * 0.04, l = i % 2 ? 300 : 345; for (let r = 270; r < l; r += 6) b3Dot(c, cx + Math.cos(a) * r, cy + Math.sin(a) * r, 200 * (1 - (r - 270) / 90), 2.4); }
+        b3Motes(c, t, 45, 33);
+        const ball = b3Ball(c, t, f), hs = handSprite(f);
+        // 손 16개: 머리 둘레에 흔들리며, 팔 대신 가는 실로 이어짐
+        const hands = [];
+        for (let i = 0; i < 16; i++) {
+            const a = -Math.PI / 2 + ((i + 0.5) / 16 - 0.5) * (Math.PI + 1.0) + Math.sin(t * 0.8 + i * 0.7) * 0.05, r = 400 + Math.sin(t * 1.1 + i) * 12;
+            hands.push({ a, x: cx + Math.cos(a) * r, y: cy + 40 + Math.sin(a) * r * 0.95 });
+        }
+        for (const H of hands) for (let q = 0; q < 1; q += 0.02) {
+            const r0 = 240, r1 = 320, rr = r0 + (r1 - r0) * q, wob = Math.sin(q * 9 + t * 2 + H.a * 3) * 9;
+            b3Dot(c, cx + Math.cos(H.a) * rr - Math.sin(H.a) * wob, cy + 40 + Math.sin(H.a) * rr * 0.95 + Math.cos(H.a) * wob, 90, 2.2);
+        }
+        hands.forEach((H, i) => {
+            c.save(); c.translate(H.x, H.y); c.rotate(H.a + Math.PI / 2); c.drawImage(hs, -60, -105); c.restore();
+            const ex = H.x - Math.cos(H.a) * 35, ey = H.y - Math.sin(H.a) * 35, [lx, ly] = b3Look(ex, ey, ball);   // 손바닥 눈
+            b3Eye(c, ex, ey, 19, b3Blink(t, 300 + i, 3.8), lx, ly, f);
+        });
+        c.drawImage(faceSprite(f), cx - FC.ox, cy - FC.oy);
+        // 눈물: 감은 눈에서 볼을 타고 흘러 턱 아래로 떨어짐
+        for (const ec of [-0.37, 0.37]) for (let i = 0; i < 16; i++) {
+            const q = (t * 0.32 + i / 16) % 1, ux = ec * 0.97 + (q * 0.8) * 0.05;
+            let x = cx + ux * FC.rx, y = cy + (0.06 + q * 0.8) * FC.ry;
+            if (q > 0.85) { const g = (q - 0.85) / 0.15; y += g * g * 260; }
+            b3Dot(c, x, y, 255 * (q > 0.85 ? 1 - (q - 0.85) / 0.15 : 1), 3.2);
+        }
+        // 이마의 세 번째 눈 (세로): 천천히 열려 공을 노려봄
+        const ph = (t / 6) % 1, open = ph < 0.6 ? Math.sin(Math.min(1, ph / 0.15) * Math.PI / 2) * (ph > 0.5 ? 1 - (ph - 0.5) / 0.1 : 1) : 0;
+        const tx = cx, ty = cy - 0.43 * FC.ry, [lx, ly] = b3Look(tx, ty, ball);
+        c.save(); c.translate(tx, ty); c.rotate(Math.PI / 2); b3Eye(c, 0, 0, 46, Math.max(0.04, open), ly, -lx, f); c.restore();
+        b3Frame(c, t, f, 'MATER DOLOROSA · 천 개의 손', 1);
+    }
+    const BOSS3_VIEWS = [
+        { name: 'A · OPHANIM · 눈의 바퀴', draw: drawBoss3A, note: '여섯 날개 + 눈이 가득한 두 바퀴 (3D 회전) + 가운데 큰 눈 · 눈이 공을 따라봄',
+          idea: '약점: 가운데 눈 (뜰 때만) · 바퀴가 공 · 레이저를 튕김 · 바퀴 눈의 빛줄기 · 날개를 접으면 무적' },
+        { name: 'B · COR SACRUM · 가시관의 심장', draw: drawBoss3B, note: '장미창 앞에서 쿵-쿵 뛰는 심장 + 가시관 + 불꽃 + 빛이 새는 상처 · 가끔 눈이 뜸',
+          idea: '약점: 상처 · 박동마다 충격파가 공을 밀어냄 · 가시관이 돌며 막음 · 빛 방울에 맞으면 마비' },
+        { name: 'C · MATER DOLOROSA · 천 개의 손', draw: drawBoss3C, note: '금 간 도자기 얼굴 + 눈물 + 이마의 세 번째 눈 + 눈 달린 손 16개',
+          idea: '약점: 이마의 눈 (열릴 때) · 손이 공을 잡아 던짐 · 손바닥 눈 레이저 · 눈물에 맞으면 마비' } ];
+    let boss3Page = 0, boss3RAF = 0;
+    function startBoss3Preview() {
+        cancelAnimationFrame(boss3RAF);
+        const t0 = performance.now();
+        const step = () => {
+            const cv = document.getElementById('dev-b3-canvas');
+            if (!cv || devDetailScreen.style.display === 'none') { boss3RAF = 0; return; }
+            BOSS3_VIEWS[boss3Page].draw(cv.getContext('2d'), (performance.now() - t0) / 1000);
+            boss3RAF = requestAnimationFrame(step);
+        };
+        boss3RAF = requestAnimationFrame(step);
+    }
     let prologueRAF = 0, prologuePage = 0;
     devDetailBody.addEventListener('click', e => {
         const b = e.target.closest && e.target.closest('.dev-pro-nav');
@@ -5608,17 +5990,16 @@
     });
     // 11. 음악 미리듣기: 게임 BGM 과 따로 재생 (재생 중에는 게임 BGM 을 꺼 둠)
     const MUSIC_LIST = [
-        { id: 'prologue', name: '프롤로그', note: '10초 (2.5초 x 4마디) · 장면에 맞춤: 모선 (고요한 장조) → 해골 함선 (낮은 불협 드론) → 공격 · 탈출 (쿵쿵 + 내려가는 음) → 암전 (단조 화음)' },
-        { id: 'start', name: '스테이지 시작음 (Round Start 재창조)', note: 'Round Start 의 멜로디 · 템포 (200 BPM, G 단조) 그대로, 소리는 부드럽게 다시 만듦 · 약 3초 · 이어지는 멜로디 + 미끄러짐 + 긴 음 떨림 + 이어지는 베이스 + 화음 (E♭ - F - Cm) + 끝 반짝임 · 새 스테이지가 시작될 때' },
-        { id: 'startOld', name: '이전 스테이지 시작음 (악보)', note: '악보 그대로 · ♩=140 · 약 3.4초 · 지금은 게임에 안 씀 (비교용)' },
-        { id: 'bgm1', name: '세션 1 BGM (1~8)', note: '88 BPM · A단조 (Am7 - Fmaj7 - Dm - E) · 삼각파 아르페지오 + 에코' },
-        { id: 'bgm2', name: '세션 2 BGM (9~16)', note: '정적이고 신비롭게 · 70 BPM · 떠 있는 리디안 화음 (C - B♭ - A♭ - B♭) + 높은 종소리 에코 + 낮은 베이스' },
-        { id: 'bgm3', name: '세션 3 BGM (17~24)', note: '약간 긴장감 · 112 BPM · E단조 8분음 베이스 반복 + 심장 킥 + 째깍 + 반음 충돌' },
-        { id: 'bgm4', name: '세션 4 BGM (25~32)', note: '낮은 음으로 비장하게 · 64 BPM · D단조 (Dm - B♭ - Gm - A) + 팀파니 + 낮은 금관 화음 + 느린 행진 멜로디' },
-        { id: 'boss', name: '보스전', note: '150 BPM · E 프리지안 (E - F - G - F) 질주 베이스 + 킥 · 스네어 + 리드 동기 · 보스1 · 보스2 공통 (경고가 끝나면 시작)' },
-        { id: 'lose', name: '목숨 1개 잃음', note: '짧게 약 1.5초 · 내려가는 4음 + 낮게 꺼지는 음 · SIGNAL LOST 화면에서는 배경음악이 쉼' },
-        { id: 'over', name: '게임 오버', note: '약 4.4초 · 느리게 내려가는 A단조 (A G F E) + 낮은 단조 화음' },
-        { id: 'tense', name: '보스2 결말 · 긴장 음악', note: '한 마디 2초 반복 · 느린 심장 박동 + 낮은 반음 충돌 + 째깍 + 올라가는 노이즈 · 보스2 마지막 타격 뒤' }
+        { id: 'prologue', name: '프롤로그', note: '10초 · 모선 → 해골 함선 → 탈출 → 암전' },
+        { id: 'start', name: '스테이지 시작음 · 비장한 출정', note: '100 BPM · A 단조 · 팀파니 + 작은 북 · 2.5초 · 매 스테이지 시작' },
+        { id: 'bgm1', name: '세션 1 BGM (1~8)', note: '88 BPM · A 단조 · 삼각파 아르페지오 + 에코' },
+        { id: 'bgm2', name: '세션 2 BGM (9~16)', note: '70 BPM · 신비롭게 · 떠 있는 화음 + 종소리' },
+        { id: 'bgm3', name: '세션 3 BGM (17~24)', note: '112 BPM · 긴장감 · 8분음 베이스 + 째깍' },
+        { id: 'bgm4', name: '세션 4 BGM (25~32)', note: '64 BPM · 비장하게 · 팀파니 + 낮은 금관' },
+        { id: 'boss', name: '보스전', note: '150 BPM · 질주 베이스 + 드럼 · 보스 1 · 2 공통' },
+        { id: 'lose', name: '목숨 1개 잃음', note: '약 1.5초 · 내려가는 4음' },
+        { id: 'over', name: '게임 오버', note: '약 4.4초 · 느리게 내려가는 단조' },
+        { id: 'tense', name: '보스2 결말 · 긴장 음악', note: '2초 반복 · 심장 박동 + 반음 충돌 · 보스2 결말' }
     ];
     let musicPlaying = null, musicPrev = null, musicTimer = null, musicEndTimer = null;
     function duckGameBgm(on) { if (bgmBus && AC) bgmBus.gain.setTargetAtTime(on ? 0 : BGM_VOLUME, AC.currentTime, 0.05); }
@@ -5776,6 +6157,32 @@
     }
 
     devEntry.addEventListener('click', openDevOverlay);
+    // ===== 저장 코드 입력칸 =====
+    const codeBox = document.getElementById('code-box'), codeIn = document.getElementById('code-in'), codeMsg = document.getElementById('code-msg');
+    let codePending = null;                       // 확인을 기다리는 코드
+    function showCodeBox(on) {
+        codeBox.classList.toggle('open', on); codePending = null; codeMsg.textContent = '';
+        if (!on && codeIn.blur) codeIn.blur();
+        document.getElementById('code-go').textContent = '이동';
+    }
+    codeIn.addEventListener('input', () => {      // 입력하면서 4자리마다 '-'
+        const t = codeIn.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+        codeIn.value = t.match(/.{1,4}/g) ? t.match(/.{1,4}/g).join('-') : '';
+        codePending = null; codeMsg.textContent = ''; document.getElementById('code-go').textContent = '이동';
+    });
+    codeIn.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') document.getElementById('code-go').click(); });
+    for (const ev of ['click', 'touchstart', 'touchend']) codeBox.addEventListener(ev, e => e.stopPropagation(), { passive: true });
+    document.getElementById('code-go').addEventListener('click', () => {
+        const r = readSaveCode(codeIn.value);
+        if (r.err) { codeMsg.textContent = r.err; codePending = null; return; }
+        if (codePending !== codeIn.value) {       // 한 번 더 누르면 이동 (지금 진행은 사라짐)
+            codePending = codeIn.value; codeMsg.textContent = `${saveStageLabel(r.st.to)} 시작 · 지금 진행은 사라집니다`;
+            document.getElementById('code-go').textContent = '확인'; return;
+        }
+        const code = r.st && makeSaveCode(r.st);
+        showCodeBox(false); codeIn.value = '';
+        loadSave(r.st, code);
+    });
     function closeDevOverlay() { musicStop(); devOverlay.classList.remove('open'); setGameMusicMuted(false); }
     document.getElementById('dev-close').addEventListener('click', closeDevOverlay);
     document.getElementById('dev-back-btn').addEventListener('click', () => {
@@ -5812,9 +6219,11 @@
         const eff = upgradeEffects(id) || ['없음', c.desc.join(' ') + ' (1회 구매)'];
         const n = isLife ? pr.length : Math.max(1, c.max);
         const td = 'padding:8px 6px; border-bottom:1px solid #2a2a2a; vertical-align:top;';
-        let cum = 0, rows = `<tr style="color:#777;"><td style="${td}">${isLife ? '시작' : '기본'}</td><td style="${td} text-align:right;">-</td><td style="${td} text-align:right;">-</td><td style="${td}">${eff[0]}</td></tr>`;
+        const nP = Math.ceil(n / DETAIL_PER_PAGE); detailPage = Math.max(0, Math.min(nP - 1, detailPage));
+        let cum = 0, rows = detailPage ? '' : `<tr style="color:#777;"><td style="${td}">${isLife ? '시작' : '기본'}</td><td style="${td} text-align:right;">-</td><td style="${td} text-align:right;">-</td><td style="${td}">${eff[0]}</td></tr>`;
         for (let lv = 1; lv <= n; lv++) {
             const price = pr[Math.min(lv - 1, pr.length - 1)]; cum += price;
+            if (Math.floor((lv - 1) / DETAIL_PER_PAGE) !== detailPage) continue;
             const say = cardDesc(c, lv - 1).join(' ');
             rows += `<tr><td style="${td} white-space:nowrap;">${isLife ? lv + '번째' : lv + '단계'}</td><td style="${td} text-align:right; font-weight:bold;">${price}</td><td style="${td} text-align:right; color:#999;">${cum}</td><td style="${td}">${eff[Math.min(lv, eff.length - 1)]}<div style="color:#8a8a8a; font-size:13px; margin-top:3px;">카드 설명: “${say}”</div></td></tr>`;
         }
@@ -5823,7 +6232,7 @@
 <div style="font:bold 22px Menlo, monospace;">${c.name}</div></div>
 ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨이 최대면 상점에 안 나옴</div>' : ''}
 <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:15px; line-height:1.4;"><colgroup><col style="width:17%"><col style="width:13%"><col style="width:13%"><col></colgroup>
-<tr style="color:#888; font-size:13px;"><td style="${td}">단계</td><td style="${td} text-align:right;">비용</td><td style="${td} text-align:right;">누적</td><td style="${td}">효과</td></tr>${rows}</table>`;
+<tr style="color:#888; font-size:13px;"><td style="${td}">단계</td><td style="${td} text-align:right;">비용</td><td style="${td} text-align:right;">누적</td><td style="${td}">효과</td></tr>${rows}</table>${devPager('dev-dt-nav', detailPage, nP)}`;
     }
     // 3. 상점 카드: 카드 그림 누르면 상세
     devDetailBody.addEventListener('click', e => {
@@ -5842,14 +6251,14 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
         const L = shopPreviewLayout(cv.width);
         const hitCard = L.cards.find(q => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h);
         if (!hitCard) return;
-        shopDetailId = DEV_CARDS[hitCard.idx].id;
+        shopDetailId = DEV_CARDS[hitCard.idx].id; detailPage = 0;
         devDetailBody.innerHTML = devContent.shop.body;
     });
     devDetailBody.addEventListener('click', e => {
         const card = e.target.closest && e.target.closest('.dev-price-card');
         const back = e.target.closest && e.target.closest('.dev-price-back');
         if (!card && !back) return;
-        priceDetailId = card ? card.dataset.id : null;
+        priceDetailId = card ? card.dataset.id : null; detailPage = 0;
         devDetailBody.innerHTML = devContent.price.body;
     });
     // 7. 카드 가격: 입력하면 합계만 바로 갱신, 저장을 눌러야 게임에 반영
@@ -5902,6 +6311,16 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
         if (b) b.dataset.stage === 'boss' ? jumpToBoss(1) : b.dataset.stage === 'boss2' ? jumpToBoss(2) : jumpToStage(parseInt(b.dataset.stage, 10));
     });
 
+    devDetailBody.addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('.dev-mu-nav, .dev-pr-nav, .dev-bk-nav, .dev-dt-nav, .dev-b3-nav');
+        if (!b || b.disabled) return;
+        const d = b.dataset.nav === 'next' ? 1 : -1;
+        if (b.classList.contains('dev-mu-nav')) { musicPage += d; devDetailBody.innerHTML = devContent.music.body; }
+        else if (b.classList.contains('dev-pr-nav')) { pricePage += d; devDetailBody.innerHTML = devContent.price.body; }
+        else if (b.classList.contains('dev-b3-nav')) { boss3Page = Math.max(0, Math.min(BOSS3_VIEWS.length - 1, boss3Page + d)); devDetailBody.innerHTML = devContent.boss3.body; startBoss3Preview(); }
+        else if (b.classList.contains('dev-bk-nav')) { brickPage += d; devDetailBody.innerHTML = devContent.brick.body; drawBrickPreview(); }
+        else { detailPage += d; if (shopDetailId) { devDetailBody.innerHTML = devContent.shop.body; } else devDetailBody.innerHTML = devContent.price.body; }
+    });
     document.querySelectorAll('.dev-menu-btn[data-cat]').forEach(btn => {
         btn.addEventListener('click', () => {
             const cat = btn.getAttribute('data-cat');
@@ -5912,6 +6331,11 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
             if (cat === 'paddle') paddlePage = 0;
             if (cat === 'price') priceDetailId = null;
             if (cat === 'shop') { shopDetailId = null; shopPage = 0; }
+            if (cat === 'music') musicPage = 0;
+            if (cat === 'boss3') boss3Page = 0;
+            if (cat === 'brick') brickPage = 0;
+            if (cat === 'price') pricePage = 0;
+            detailPage = 0;
             const data = devContent[cat];
             devDetailTitle.textContent = data.title;
             devDetailBody.innerHTML = data.body;
@@ -5925,6 +6349,7 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
             if (cat === 'enemy') startEnemyPreview();
             if (cat === 'prologue') startProloguePreview();
             if (cat === 'background') startBgPreview();
+            if (cat === 'boss3') startBoss3Preview();
         });
     });
 </script>
