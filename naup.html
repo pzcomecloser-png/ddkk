@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+<title>딸깍 게임즈 - 게임 모음</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body {
+    width: 100%; height: 100%; background: #070714;
+    font-family: 'Courier New', 'Malgun Gothic', monospace;
+    overflow-x: hidden;
+  }
+  #app {
+    position: relative; width: 100%; min-height: 100%; max-width: 480px; margin: 0 auto;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 20px 16px 24px;
+    gap: 16px;
+    background:
+      radial-gradient(circle at 50% 10%, rgba(0, 240, 255, 0.09) 0, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(255, 0, 128, 0.07) 0, transparent 40%),
+      #070714;
+  }
+
+  /* 폰 화면에서는 좌우 여백을 최소화해 꽉 차게 표시 */
+  @media (max-width: 480px) {
+    #app { padding: 16px 6px 20px; }
+  }
+
+  /* ══ 딸깍 게임사 로고 & 헤더 ══ */
+  .company-header {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    width: 100%;
+  }
+
+  .logo-box {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(18, 18, 40, 0.88);
+    border: 2px solid #3d3b70;
+    border-radius: 8px;
+    padding: 8px 16px;
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.18), inset 0 0 10px rgba(0,0,0,0.5);
+  }
+
+  .logo-canvas-wrap {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    background: #000; border: 1.5px solid #00f0ff; border-radius: 4px;
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+  }
+  .logo-canvas-wrap canvas {
+    width: 30px; height: 30px;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+
+  .brand-text {
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .brand-title {
+    color: #00f0ff; font-size: 18px; font-weight: 900;
+    letter-spacing: 1.5px; text-shadow: 0 0 8px rgba(0,240,255,0.7), 2px 2px 0 #000;
+  }
+  .brand-slogan {
+    color: #ff55aa; font-size: 9.5px; font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .page-title {
+    color: #ffe15a; font-size: 13px; font-weight: 900;
+    letter-spacing: 2px; text-shadow: 1px 1px 0 #000;
+    margin-top: 4px;
+  }
+
+  /* ══ 게임 리스트 ══ */
+  .card-list {
+    display: flex; flex-direction: column; gap: 12px;
+    width: 100%; max-width: 380px;
+    padding: 4px 2px;
+  }
+
+  .game-card {
+    display: flex; align-items: center; gap: 14px;
+    background: #14142c; border: 3px solid #3a3a5c; border-radius: 8px;
+    padding: 10px 14px; text-decoration: none; cursor: pointer;
+    box-shadow: 0 4px 0 #05050f, 0 6px 14px rgba(0,0,0,.55);
+    transition: transform .08s ease, border-color .15s ease;
+  }
+  .game-card:hover {
+    border-color: #00e5ff;
+  }
+  .game-card:active {
+    transform: translateY(3px); box-shadow: 0 1px 0 #05050f;
+  }
+
+  .icon-frame {
+    flex: none; width: 56px; height: 56px; background: #05050f;
+    border: 2px solid #4a4a72; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .icon-frame canvas {
+    width: 46px; height: 46px;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+
+  .card-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .card-title {
+    color: #fff; font-size: 16px; font-weight: 900;
+    letter-spacing: 0.5px; text-shadow: 1px 1px 0 #000;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card-desc {
+    color: #a0a0c8; font-size: 11.5px; font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card-arrow {
+    margin-left: auto; color: #ffe15a; font-size: 18px; font-weight: 900;
+    flex: none; padding-left: 4px;
+  }
+
+  /* ══ 하단 푸터 ══ */
+  .footer-box {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    margin-top: 10px; padding-bottom: 8px;
+  }
+  .footer-hint {
+    color: #6a6a95; font-size: 11px; font-weight: 700; letter-spacing: .5px;
+  }
+  .footer-copy {
+    color: #404060; font-size: 9px; font-family: monospace;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- 딸깍 게임즈 로고 & 헤더 -->
+  <div class="company-header">
+    <div class="logo-box">
+      <div class="logo-canvas-wrap">
+        <canvas id="logoCanvas" width="24" height="24"></canvas>
+      </div>
+      <div class="brand-text">
+        <div class="brand-title">딸깍 게임즈 ⚡</div>
+        <div class="brand-slogan">DDALKKAK · 100% AI RETRO STUDIO</div>
+      </div>
+    </div>
+    <div class="page-title">✦ SELECT CARTRIDGE ✦</div>
+  </div>
+
+  <!-- 전체 게임 카트리지 목록 -->
+  <div class="card-list">
+    <!-- 1. 나 키우기 -->
+    <a class="game-card" href="games/01/naup.html">
+      <div class="icon-frame"><canvas id="iconNaup" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">나 키우기</div>
+        <div class="card-desc">육성 시뮬레이션 개그물</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+
+
+
+
+    <!-- 6. 배틀 쉽 -->
+    <a class="game-card" href="games/06/Baship.html">
+      <div class="icon-frame"><canvas id="iconBattleship" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">배틀 쉽</div>
+        <div class="card-desc">본격 해양 전략 전투</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+
+
+    <!-- 9. REWIND -->
+    <a class="game-card" href="games/09/rewind.html">
+      <div class="icon-frame"><canvas id="iconRewind" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">REWIND — 아까의 나야 도와줘</div>
+        <div class="card-desc">시간 되감기 협력 퍼즐</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+
+
+    <!-- 12. 아무도 없는.. (NEW) -->
+    <a class="game-card" href="games/12/nobodyv2.html">
+      <div class="icon-frame"><canvas id="iconNobody" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">아무도 없는..</div>
+        <div class="card-desc">아스키 호러 게임</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+
+    <!-- 14. 밤의 불꽃 (NEW) -->
+    <a class="game-card" href="games/14/Fire.html">
+      <div class="icon-frame"><canvas id="iconFire" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">밤의 불꽃</div>
+        <div class="card-desc">불꽃놀이 로그라이크</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+    <!-- 15. 절대무적 3초전대 (NEW) -->
+    <a class="game-card" href="games/15/3sec.html">
+      <div class="icon-frame"><canvas id="icon3Sec" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">절대무적 3초전대</div>
+        <div class="card-desc">열혈 파일럿 슈팅게임</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+
+
+    <!-- 17. 세균전 (NEW) -->
+    <a class="game-card" href="games/17/Viruswar.html">
+      <div class="icon-frame"><canvas id="iconVirus" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">세균전</div>
+        <div class="card-desc">정통 두뇌대전</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
+  </div>
+
+  <div class="footer-box">
+    <div class="footer-hint">CLICK TO PLAY</div>
+    <div class="footer-copy">© 2026 DDALKKAK GAMES CORP. ALL AI RIGHTS RESERVED.</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  딸깍 게임즈 로고 & 픽셀아트 아이콘 렌더러 (총 7개)
+// ═══════════════════════════════════════════════════════════════
+
+// 0. 딸깍 게임스 로고
+function drawCompanyLogo(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#060a17';
+  ctx.fillRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#ff007f';
+  ctx.fillRect(14, 2, 2, 2);
+  ctx.fillRect(19, 5, 2, 2);
+  ctx.fillRect(20, 11, 2, 2);
+  ctx.fillStyle = '#00f0ff';
+  ctx.fillRect(16, 3, 2, 2);
+  ctx.fillRect(18, 8, 2, 2);
+
+  ctx.fillStyle = '#ffe600';
+  ctx.fillRect(3, 2, 4, 2);
+  ctx.fillRect(2, 4, 4, 2);
+  ctx.fillRect(1, 6, 7, 2);
+  ctx.fillRect(3, 8, 3, 2);
+  ctx.fillRect(2, 10, 2, 2);
+
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(5, 7, 2, 14);
+  ctx.fillRect(7, 9, 2, 10);
+  ctx.fillRect(9, 11, 2, 8);
+  ctx.fillRect(11, 13, 2, 7);
+  ctx.fillRect(13, 15, 2, 5);
+  ctx.fillRect(15, 17, 2, 3);
+  ctx.fillRect(7, 19, 7, 2);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(6, 8, 1, 12);
+  ctx.fillRect(7, 10, 1, 9);
+  ctx.fillRect(8, 11, 1, 7);
+  ctx.fillRect(9, 12, 1, 6);
+  ctx.fillRect(10, 13, 1, 5);
+  ctx.fillRect(11, 14, 1, 4);
+  ctx.fillRect(12, 15, 1, 3);
+
+  ctx.fillStyle = '#00f0ff';
+  ctx.fillRect(7, 11, 2, 3);
+  ctx.fillRect(9, 13, 2, 2);
+}
+
+// 1. 나 키우기
+function drawNaupIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0,0,24,24);
+
+  ctx.fillStyle = '#ff5a5a'; ctx.fillRect(11, 1, 2, 2);
+  ctx.fillStyle = '#b9c3cf'; ctx.fillRect(11, 3, 2, 3);
+  ctx.fillStyle = '#eef3f8'; ctx.fillRect(7, 6, 10, 7);
+  ctx.fillStyle = '#2b3f66'; ctx.fillRect(9, 7, 6, 4);
+  ctx.fillStyle = '#3a9bff'; ctx.fillRect(10, 8, 1, 1); ctx.fillRect(13, 8, 1, 1);
+  ctx.fillStyle = '#b9c3cf'; ctx.fillRect(10, 13, 4, 1);
+  ctx.fillStyle = '#3a72e0'; ctx.fillRect(6, 14, 12, 6);
+  ctx.fillStyle = '#eef3f8'; ctx.fillRect(9, 16, 6, 3);
+  ctx.fillStyle = '#ffd76a'; ctx.fillRect(10, 17, 1, 1); ctx.fillRect(13, 17, 1, 1);
+  ctx.fillStyle = '#2652a8'; ctx.fillRect(4, 15, 2, 4); ctx.fillRect(18, 15, 2, 4);
+  ctx.fillStyle = '#22315c'; ctx.fillRect(8, 20, 3, 3); ctx.fillRect(13, 20, 3, 3);
+}
+
+// 6. 배틀 쉽
+function drawBattleshipIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#0a1d37'; ctx.fillRect(0, 0, 24, 13);
+  ctx.fillStyle = '#0c356a'; ctx.fillRect(0, 13, 24, 11);
+  ctx.fillStyle = '#0174be'; ctx.fillRect(2, 16, 5, 1); ctx.fillRect(15, 17, 6, 1); ctx.fillRect(0, 21, 24, 3);
+  ctx.fillStyle = '#40f8ff'; ctx.fillRect(1, 15, 3, 1); ctx.fillRect(19, 15, 4, 1);
+  ctx.strokeStyle = 'rgba(0, 255, 180, 0.25)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(12, 10, 8, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath(); ctx.moveTo(2, 15); ctx.lineTo(21, 15); ctx.lineTo(18, 18); ctx.lineTo(4, 18); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#475569'; ctx.fillRect(4, 13, 15, 2); ctx.fillRect(19, 13, 2, 1);
+  ctx.fillStyle = '#94a3b8'; ctx.fillRect(8, 9, 6, 4);
+  ctx.fillStyle = '#cbd5e1'; ctx.fillRect(9, 7, 4, 2); ctx.fillRect(10, 5, 2, 2);
+  ctx.fillStyle = '#00ffcc'; ctx.fillRect(10, 4, 2, 1);
+  ctx.fillStyle = '#64748b'; ctx.fillRect(14, 11, 4, 2); ctx.fillRect(5, 11, 3, 2);
+  ctx.fillStyle = '#334155'; ctx.fillRect(17, 10, 3, 1); ctx.fillRect(4, 10, 2, 1);
+  ctx.fillStyle = '#ff9900'; ctx.fillRect(20, 9, 2, 2);
+  ctx.fillStyle = '#ffff00'; ctx.fillRect(21, 9, 1, 1);
+}
+
+// 9. REWIND
+function drawRewindIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#2b1a10';
+  ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = '#3d2718';
+  ctx.fillRect(2, 2, 20, 20);
+
+  ctx.fillStyle = 'rgba(255, 225, 150, 0.10)';
+  ctx.fillRect(5, 2, 14, 8);
+  ctx.fillStyle = 'rgba(255, 225, 150, 0.08)';
+  ctx.fillRect(3, 2, 18, 5);
+
+  ctx.fillStyle = '#ffe15a';
+  ctx.fillRect(10, 2, 2, 1);
+  ctx.fillRect(13, 2, 2, 1);
+  ctx.fillRect(10, 3, 5, 1);
+  ctx.fillRect(11, 4, 3, 1);
+  ctx.fillRect(12, 5, 1, 1);
+  ctx.fillStyle = '#fff6c0';
+  ctx.fillRect(10, 3, 1, 1);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillRect(4, 4, 1, 1);
+  ctx.fillRect(19, 6, 1, 1);
+  ctx.fillRect(20, 3, 1, 1);
+
+  function drawEndChar(x0, body, outline, look) {
+    ctx.fillStyle = body;
+    ctx.fillRect(x0 + 1, 7, 7, 1);
+    ctx.fillRect(x0, 8, 9, 8);
+    ctx.fillRect(x0 + 1, 16, 7, 1);
+    ctx.fillStyle = outline;
+    ctx.fillRect(x0 + 1, 7, 7, 1);
+    ctx.fillRect(x0, 8, 1, 8);
+    ctx.fillRect(x0 + 8, 8, 1, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.fillRect(x0 + 1, 8, 7, 3);
+    ctx.fillStyle = body;
+    ctx.fillRect(x0 + 1, 17, 2, 2);
+    ctx.fillRect(x0 + 6, 17, 2, 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x0 + 2, 10, 2, 2);
+    ctx.fillRect(x0 + 5, 10, 2, 2);
+    ctx.fillStyle = '#20203a';
+    const px = (look === 'R') ? 1 : 0;
+    ctx.fillRect(x0 + 2 + px, 11, 1, 1);
+    ctx.fillRect(x0 + 5 + px, 11, 1, 1);
+    ctx.fillStyle = 'rgba(40,20,10,0.55)';
+    ctx.fillRect(x0 + 3, 14, 3, 1);
+    ctx.fillRect(x0 + 2, 13, 1, 1);
+    ctx.fillRect(x0 + 6, 13, 1, 1);
+    ctx.fillStyle = 'rgba(255,255,255,0.40)';
+    ctx.fillRect(x0, 12, 1, 2);
+    ctx.fillRect(x0 + 8, 12, 1, 2);
+  }
+
+  ctx.fillStyle = '#5c3520';
+  ctx.fillRect(0, 8, 2, 11);
+  ctx.fillRect(22, 8, 2, 11);
+
+  drawEndChar(2, '#a8d8f0', '#d4ecf8', 'R');
+  drawEndChar(13, '#ff9f43', '#ffd9a0', 'L');
+
+  ctx.fillStyle = '#e06565';
+  ctx.fillRect(0, 19, 24, 1);
+  ctx.fillStyle = '#c94f4f';
+  ctx.fillRect(0, 20, 24, 4);
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fillRect(2, 20, 2, 4);
+  ctx.fillRect(8, 20, 2, 4);
+  ctx.fillRect(14, 20, 2, 4);
+  ctx.fillRect(20, 20, 2, 4);
+
+  ctx.fillStyle = '#f0ece4';
+  ctx.fillRect(9, 18, 6, 1);
+  ctx.fillStyle = '#d8d2c6';
+  ctx.fillRect(10, 19, 4, 1);
+
+  ctx.fillStyle = '#d98a2b';
+  ctx.fillRect(10, 16, 4, 2);
+  ctx.fillStyle = '#e8a94a';
+  ctx.fillRect(10, 16, 3, 1);
+  ctx.fillStyle = '#f5efe0';
+  ctx.fillRect(9, 15, 1, 2);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillRect(11, 14, 1, 1);
+  ctx.fillRect(12, 12, 1, 1);
+}
+
+// 12. 아무도 없는..
+function drawNobodyIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, 24, 24);
+
+  for (let y = 1; y < 24; y += 2) {
+    for (let x = 1; x < 24; x += 2) {
+      const n = (x * 7 + y * 13) % 5;
+      if (n === 0)      ctx.fillStyle = 'rgba(255,255,255,0.60)';
+      else if (n === 1) ctx.fillStyle = 'rgba(255,255,255,0.32)';
+      else if (n === 2) ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      else continue;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  ctx.fillStyle = '#d4d4d4'; ctx.fillRect(7, 3, 10, 21);
+  ctx.fillStyle = '#8a8a8a'; ctx.fillRect(7, 3, 10, 1);
+  ctx.fillStyle = '#121212'; ctx.fillRect(8, 4, 8, 20);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.fillRect(9, 6, 1, 1); ctx.fillRect(14, 8, 1, 1); ctx.fillRect(11, 19, 1, 1);
+
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(10, 8, 4, 4); ctx.fillRect(9, 12, 6, 12);
+  ctx.fillRect(8, 13, 1, 6); ctx.fillRect(15, 13, 1, 6);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(10, 9, 1, 1); ctx.fillRect(13, 9, 1, 1);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fillRect(8, 22, 8, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillRect(8, 23, 8, 1);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  for (let y = 0; y < 24; y += 3) ctx.fillRect(0, y, 24, 1);
+}
+
+// 14. 밤의 불꽃
+function drawFireIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // Night sky
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0, 0, 24, 24);
+
+  // Firework 1
+  ctx.fillStyle = '#ff3366';
+  ctx.fillRect(12, 4, 1, 2); ctx.fillRect(12, 10, 1, 2);
+  ctx.fillRect(8, 7, 2, 1); ctx.fillRect(14, 7, 2, 1);
+  ctx.fillStyle = '#ffdd33';
+  ctx.fillRect(10, 5, 1, 1); ctx.fillRect(13, 5, 1, 1);
+  ctx.fillRect(10, 9, 1, 1); ctx.fillRect(13, 9, 1, 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(11, 7, 2, 1); ctx.fillRect(12, 6, 1, 3);
+
+  // Firework 2
+  ctx.fillStyle = '#33ccff';
+  ctx.fillRect(5, 14, 1, 1); ctx.fillRect(9, 14, 1, 1);
+  ctx.fillRect(7, 12, 1, 1); ctx.fillRect(7, 16, 1, 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(7, 14, 1, 1);
+}
+
+// 15. 절대무적 3초전대
+function draw3SecIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // Background
+  ctx.fillStyle = '#111827';
+  ctx.fillRect(0, 0, 24, 24);
+
+  // V-fin (Antenna)
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(11, 2, 2, 2);
+  ctx.fillRect(9, 3, 2, 2); ctx.fillRect(13, 3, 2, 2);
+  ctx.fillRect(7, 4, 2, 2); ctx.fillRect(15, 4, 2, 2);
+
+  // Head
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillRect(9, 5, 6, 6);
+  ctx.fillRect(8, 7, 8, 5);
+
+  // Glowing eyes
+  ctx.fillStyle = '#10b981';
+  ctx.fillRect(9, 8, 2, 1);
+  ctx.fillRect(13, 8, 2, 1);
+
+  // Chin
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(11, 10, 2, 2);
+
+  // Shoulders & Chest
+  ctx.fillStyle = '#3b82f6';
+  ctx.fillRect(7, 12, 10, 6);
+  ctx.fillRect(5, 13, 2, 5);
+  ctx.fillRect(17, 13, 2, 5);
+
+  // Chest Emblem
+  ctx.fillStyle = '#eab308';
+  ctx.fillRect(10, 13, 4, 2);
+  ctx.fillRect(11, 15, 2, 2);
+}
+
+// 17. 세균전
+function drawVirusIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // Background
+  ctx.fillStyle = '#14141f';
+  ctx.fillRect(0, 0, 24, 24);
+
+  // 세균 1마리 (dir=1: 오른쪽을 봄, dir=-1: 왼쪽을 봄)
+  function germ(cx, cy, dir, body, dark, light) {
+    const P = (dx, dy, w = 1, h = 1) => {
+      const x = dir > 0 ? cx + dx : cx - dx - w + 1;
+      ctx.fillRect(x, cy + dy, w, h);
+    };
+
+    // 촉수 (상대 반대쪽으로만)
+    ctx.fillStyle = dark;
+    P(0, -6); P(0, 6); P(-4, -4); P(-4, 4);
+    ctx.fillStyle = body;
+    P(-1, -8, 3, 2); P(-1, 7, 3, 2);   // 위, 아래
+    P(-6, -6, 2, 2); P(-6, 5, 2, 2);   // 대각선
+    P(-6, -1, 1, 3);                   // 뒤쪽
+
+    // 동그란 몸통 (외곽선 + 몸통)
+    for (let dy = -5; dy <= 5; dy++) {
+      for (let dx = -5; dx <= 5; dx++) {
+        const d = dx * dx + dy * dy;
+        if (d > 25) continue;
+        ctx.fillStyle = d > 16 ? dark : body;
+        P(dx, dy);
+      }
+    }
+
+    // 하이라이트
+    ctx.fillStyle = light;
+    P(-2, -3); P(-3, -2, 1, 2);
+
+    // 화난 눈썹 (앞쪽으로 내려감)
+    ctx.fillStyle = '#000000';
+    P(0, -4, 2, 1); P(2, -3, 2, 1);
+
+    // 눈 (상대를 노려봄)
+    ctx.fillStyle = '#ffffff';
+    P(1, -2, 3, 3);
+    ctx.fillStyle = '#000000';
+    P(3, -1, 1, 2);
+
+    // 이를 악문 입
+    ctx.fillStyle = '#ffffff';
+    P(1, 2, 4, 1);
+    ctx.fillStyle = dark;
+    P(1, 3, 4, 1);
+  }
+
+  germ(6, 14, 1, '#ef4444', '#7f1d1d', '#fca5a5');   // 빨간 세균
+  germ(17, 14, -1, '#3b82f6', '#1e3a8a', '#93c5fd'); // 파란 세균
+
+  // 이마 사이 충돌 스파크
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillRect(12, 3, 1, 2);
+  ctx.fillRect(11, 5, 2, 1);
+  ctx.fillRect(11, 6, 1, 2);
+  ctx.fillRect(9, 5, 1, 1);
+  ctx.fillRect(14, 5, 1, 1);
+}
+
+// 전체 렌더링
+drawCompanyLogo('logoCanvas');
+drawNaupIcon('iconNaup');
+drawBattleshipIcon('iconBattleship');
+drawRewindIcon('iconRewind');
+drawNobodyIcon('iconNobody');
+drawFireIcon('iconFire');
+draw3SecIcon('icon3Sec');
+drawVirusIcon('iconVirus');
+</script>
+</body>
+</html>
