@@ -320,8 +320,17 @@ function onTap(x, y) {
     if (now - sceneTime > 300) { SFX.click(); go('mode'); }
     return;
   }
+  if (scene === 'howto') {
+    if (now - sceneTime < 300) return;
+    const e = now - howStart, last = HOW.length - 1;
+    if (e >= HOW[last]) { if (e - HOW[last] > 600) { SFX.click(); go('mode'); } return; }
+    const next = HOW.find(v => v > e);                    // 탭: 다음 장으로
+    howStart = now - next; howFired = HOW_EV.filter(v => v.t < next).length; SFX.click();
+    return;
+  }
   if (scene === 'mode') {
     if (now - sceneTime < 300) return;
+    if (hitBtn(HOW_BTN, x, y)) { SFX.click(); startHow(now); return; }
     const b = hitBtn(MODE_BTNS, x, y);
     if (b) { mode = b.id; reset(); go('game'); SFX.start(); }
     return;
@@ -599,6 +608,7 @@ function drawMode(t, now) {
   ctx.fillStyle = '#fff'; ctx.font = `900 110px ${FONT}`;
   ctx.fillText('모드 선택', LW / 2, 230);
   drawBtns(MODE_BTNS, t);
+  drawBtns(HOW_BTN, t);
   for (const b of MODE_BTNS) {
     const cx = b.x + b.w / 2, cy = b.y + b.h * 0.3;
     drawGerm(cx - 150, cy, 70, P1, t, 1, false);
@@ -1256,6 +1266,7 @@ function frame(now) {
   // 세로모드: 회전 없음 (위에서 설정한 기본 변환 그대로)
   if (scene === 'title') drawTitle(t, now);
   else if (scene === 'mode') drawMode(t, now);
+  else if (scene === 'howto') drawHowto(t, now);
   else {
     updateFx(now);
     updateCpu(now);
@@ -1271,6 +1282,257 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// ===== 게임방법 (튜토리얼 약 22초) =====
+const HOW_BTN = [{ id: 'howto', x: 0, y: 0, w: 680, h: 150, label: '게임방법' }];
+const HOW = [0, 2500, 8000, 13500, 18500];   // 장 시작(ms): 소개 / 복제 / 점프 / 감염 / 정리
+const HC_FLIP = [{ r: 1, c: 2, at: 1800 }, { r: 2, c: 2, at: 2200 }, { r: 3, c: 1, at: 2600 }];
+let howStart = 0, howFired = 0;
+const HOW_EV = [
+  { t: 4500, f: () => SFX.clone() },
+  { t: 9800, f: () => SFX.jump() },
+  { t: 10600, f: () => tone(200, 0.14, 'sine', 0.45, 70) },
+  { t: 14500, f: () => SFX.clone() },
+  ...HC_FLIP.map((q, i) => ({ t: HOW[3] + q.at, f: () => {
+    const [x, y] = hCell(howGeo(), q.r, q.c);
+    burst(x, y, P1, performance.now());
+    HIT_SFX.kungfu(0); tone(523 * Math.pow(2, i * 4 / 12), 0.12, 'square', 0.1, 0, 0.03);
+  } })),
+  { t: HOW[4], f: () => SFX.start() }
+].sort((a, b) => a.t - b.t);
+
+function startHow(now) { go('howto'); howStart = now; howFired = 0; parts = []; }
+
+function howGeo() {
+  return orient === 'port'
+    ? { cx: LW / 2, cy: 1020, cs: 170, capX: LW / 2, capY: 260, bodyY: 1570 }
+    : { cx: 560, cy: 640, cs: 150, capX: 1460, capY: 330, bodyY: 540 };
+}
+const hCell = (g, r, c) => [g.cx + (c - 2) * g.cs, g.cy + (r - 2) * g.cs];
+
+function hGerm(x, y, R, p, t, ph, sx = 1, sy = 1, rot = 0) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sx, sy);
+  drawGerm(0, 0, R, p, t, ph, false); ctx.restore();
+}
+
+function drawMini(g) {
+  const S = g.cs * 5, x0 = g.cx - S / 2, y0 = g.cy - S / 2;
+  ctx.fillStyle = '#1b1f2a'; rrect(x0 - 16, y0 - 16, S + 32, S + 32, 26); ctx.fill();
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+    ctx.fillStyle = (r + c) % 2 ? '#262b38' : '#2c3242';
+    rrect(x0 + c * g.cs + 4, y0 + r * g.cs + 4, g.cs - 8, g.cs - 8, 14); ctx.fill();
+  }
+}
+
+// 이동 범위: 1칸(초록, 복제) / 2칸(노랑, 점프)
+function drawRing(g, ring, a, t) {
+  if (a <= 0) return;
+  const pulse = 0.5 + 0.5 * Math.sin(t * 6);
+  ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+    if (Math.max(Math.abs(r - 2), Math.abs(c - 2)) !== ring) continue;
+    const [x, y] = hCell(g, r, c), h = g.cs / 2 - 10;
+    if (ring === 1) {
+      ctx.fillStyle = `rgba(90,255,150,${0.2 + 0.15 * pulse})`;
+      rrect(x - h, y - h, h * 2, h * 2, 12); ctx.fill();
+      ctx.fillStyle = '#5aff96';
+    } else {
+      ctx.strokeStyle = `rgba(255,210,60,${0.6 + 0.3 * pulse})`; ctx.lineWidth = 5; ctx.setLineDash([12, 10]);
+      ctx.beginPath(); ctx.arc(x, y, g.cs * 0.32, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#ffd23c';
+    }
+    ctx.font = `900 ${Math.round(g.cs * 0.3)}px ${FONT}`;
+    ctx.fillText(ring, x, y);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawTapHint(g, x, y, age) {
+  if (age < 0 || age > 600) return;
+  const k = age / 600;
+  ctx.strokeStyle = `rgba(255,255,255,${1 - k})`; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.arc(x, y, g.cs * (0.15 + 0.35 * k), 0, TAU); ctx.stroke();
+  ctx.font = `${Math.round(g.cs * 0.45)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('👆', x + g.cs * 0.12, y + g.cs * 0.4 - Math.sin(k * Math.PI) * 14);
+}
+
+function howCaption(g, e0, head, lines) {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.globalAlpha = clamp01(e0 / 250);
+  ctx.font = `900 84px ${FONT}`; ctx.lineWidth = 14; ctx.strokeStyle = '#000';
+  ctx.strokeText(head, g.capX, g.capY); ctx.fillStyle = '#ffd23c'; ctx.fillText(head, g.capX, g.capY);
+  ctx.font = `700 54px ${FONT}`;
+  lines.forEach((L, i) => {
+    const k = clamp01((e0 - 400 - i * 900) / 300);
+    if (k <= 0) return;
+    const [txt, col] = Array.isArray(L) ? L : [L, '#ffffff'];
+    ctx.globalAlpha = k; ctx.fillStyle = col;
+    ctx.fillText(txt, g.capX, g.bodyY + i * 92 + (1 - k) * 20);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ----- 소개 -----
+function howIntro(e, t) {
+  const cy = LH / 2, port = orient === 'port';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  const s = e < 300 ? easeOut(e / 300) * 1.15 : 1.15 - 0.15 * clamp01((e - 300) / 200);
+  ctx.save(); ctx.translate(LW / 2, cy - (port ? 320 : 280)); ctx.scale(s, s);
+  ctx.font = `900 140px ${FONT}`; ctx.lineWidth = 20; ctx.strokeStyle = '#000';
+  ctx.strokeText('게임방법', 0, 0); ctx.fillStyle = '#ffd23c'; ctx.fillText('게임방법', 0, 0);
+  ctx.restore();
+  for (const [p, dx, ph] of [[P1, -220, 0], [P2, 220, 1.5]]) {
+    const hop = Math.abs(Math.sin(t * 5 + ph)) * 30;
+    hGerm(LW / 2 + dx, cy - hop, 100 * easeOut((e - 200) / 400), p, t, ph);
+  }
+  ctx.fillStyle = '#fff'; ctx.font = `900 70px ${FONT}`; ctx.fillText('VS', LW / 2, cy);
+  ctx.font = `700 60px ${FONT}`;
+  ['내 세균을 늘려서', '판을 더 많이 차지하면 승리!'].forEach((L, i) => {
+    const k = clamp01((e - 600 - i * 400) / 300);
+    ctx.globalAlpha = k; ctx.fillText(L, LW / 2, cy + 260 + i * 95);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ----- ① 1칸 이동 = 복제 -----
+function howClone(g, a, t) {
+  const R = g.cs * 0.36, [ox, oy] = hCell(g, 2, 2), [tx, ty] = hCell(g, 2, 3);
+  drawRing(g, 1, a < 2000 ? clamp01((a - 600) / 300) : 1 - clamp01((a - 2000) / 300), t);
+  drawTapHint(g, tx, ty, a - 1400);
+  if (a >= 3600) {   // 원래 자리 강조
+    ctx.strokeStyle = `rgba(90,255,150,${clamp01((a - 3600) / 300)})`; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.arc(ox, oy, R * 1.35 + Math.sin(t * 6) * 4, 0, TAU); ctx.stroke();
+  }
+  const st = a >= 1700 && a < 2100 ? Math.sin(clamp01((a - 1700) / 400) * Math.PI) : 0;   // 분열 직전 늘어남
+  hGerm(ox + st * 10, oy, R * easeOut(a / 400), P1, t, 0, 1 + 0.25 * st, 1 - 0.15 * st);
+  if (a >= 2000) {
+    const k = easeOut((a - 2000) / 600);
+    hGerm(ox + (tx - ox) * k, oy + (ty - oy) * k - Math.sin(k * Math.PI) * 20, R * (0.5 + 0.5 * k), P1, t, 2);
+  }
+  popText('뽁!', (ox + tx) / 2, oy - R * 1.5, a - 2000, 500, 60, '#ffffff', -0.1);
+  popText('+1', tx, ty - R * 1.8, a - 2600, 1800, 80, '#5aff96', 0);
+  popText('어? 나?!', ox, oy - R * 1.8, a - 2800, 800, 50, '#ffffff', -0.08);
+  popText('그대로 남아있음!', ox, oy + R * 1.9, a - 3600, 1900, 44, '#5aff96', 0);
+  howCaption(g, a, '① 1칸 이동 = 복제', ['바로 옆 8칸 중 한 곳에', '세균이 하나 더 생겨요!', ['원래 세균은 그대로 → 세균 +1', '#5aff96']]);
+}
+
+// ----- ② 2칸 이동 = 점프 -----
+function howJump(g, b, t) {
+  const R = g.cs * 0.36, [ox, oy] = hCell(g, 2, 2), [tx, ty] = hCell(g, 2, 4);
+  const ra = b < 1900 ? clamp01((b - 500) / 300) : 1 - clamp01((b - 1900) / 300);
+  drawRing(g, 1, ra * 0.35, t);
+  drawRing(g, 2, ra, t);
+  drawTapHint(g, tx, ty, b - 1300);
+  if (b >= 1900) {   // 비워진 원래 자리
+    const k = clamp01((b - 1900) / 600);
+    if (k < 1) {
+      ctx.fillStyle = `rgba(200,200,210,${(1 - k) * 0.7})`;
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * TAU;
+        ctx.beginPath(); ctx.arc(ox + Math.cos(a) * R * (0.5 + k), oy + Math.sin(a) * R * (0.5 + k), R * 0.35 * (1 - k * 0.5), 0, TAU); ctx.fill();
+      }
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 4; ctx.setLineDash([10, 8]);
+    ctx.beginPath(); ctx.arc(ox, oy, R, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+  }
+  let x = ox, y = oy, sx = 1, sy = 1, rot = 0;
+  if (b < 1900) {
+    const c = b >= 1500 ? Math.sin(clamp01((b - 1500) / 400) * Math.PI / 2) : 0;   // 웅크리기
+    sx = 1 + 0.2 * c; sy = 1 - 0.25 * c; y += R * 0.25 * c;
+  } else if (b < 2600) {
+    const k = (b - 1900) / 700;
+    x = ox + (tx - ox) * k; y = oy + (ty - oy) * k - Math.sin(k * Math.PI) * g.cs * 1.3;
+    rot = k * TAU; sx = 0.9; sy = 1.1;
+  } else {
+    x = tx; y = ty;
+    const k = Math.sin(clamp01((b - 2600) / 300) * Math.PI); sx = 1 + 0.25 * k; sy = 1 - 0.2 * k;
+  }
+  hGerm(x, y, R * easeOut(b / 400), P1, t, 0, sx, sy, rot);
+  popText('휙!', (ox + tx) / 2, oy - g.cs * 1.6, b - 1950, 600, 64, '#ffffff', -0.1);
+  popText('휑~', ox, oy - R * 1.6, b - 2200, 2200, 54, '#cfd6e0', 0.08);
+  popText('+0', tx, ty - R * 1.8, b - 2700, 2100, 80, '#ffd23c', 0);
+  howCaption(g, b, '② 2칸 이동 = 점프', ['두 칸 떨어진 곳으로 훌쩍!', '대신 원래 자리는 비어요', ['자리만 옮김 → 세균 +0', '#ffd23c']]);
+}
+
+// ----- ③ 감염 -----
+function howInfect(g, c, t) {
+  const R = g.cs * 0.36, [fx0, fy0] = hCell(g, 2, 0), [tx, ty] = hCell(g, 2, 1), ap = easeOut(c / 400);
+  if (c >= 1500) {   // 감염 범위 3×3
+    const k = clamp01((c - 1500) / 300), h = g.cs * 1.5;
+    ctx.fillStyle = `rgba(63,169,255,${0.12 * k})`; rrect(tx - h, ty - h, h * 2, h * 2, 20); ctx.fill();
+    ctx.strokeStyle = `rgba(63,169,255,${(0.6 + 0.3 * Math.sin(t * 6)) * k})`; ctx.lineWidth = 6; ctx.setLineDash([16, 10]);
+    rrect(tx - h, ty - h, h * 2, h * 2, 20); ctx.stroke(); ctx.setLineDash([]);
+  }
+  drawTapHint(g, tx, ty, c - 400);
+  for (const q of HC_FLIP) {
+    const [x, y] = hCell(g, q.r, q.c), flipped = c >= q.at;
+    let RR = R * ap, dx = 0;
+    if (!flipped && c >= 1500) dx = Math.sin(c * 0.08 + q.r * 3) * 4;   // 덜덜
+    if (flipped && c - q.at < 350) RR *= 1 + 0.35 * Math.sin((c - q.at) / 350 * Math.PI);
+    hGerm(x + dx, y, RR, flipped ? P1 : P2, t, q.r + q.c);
+    popText('감염!', x, y - R * 1.6, c - q.at, 700, 46, '#3fa9ff', 0.1);
+  }
+  const [sx, sy] = hCell(g, 0, 4);
+  hGerm(sx, sy, R * ap, P2, t, 7);
+  popText('휴~ 살았다', sx, sy - R * 1.7, c - 3000, 2000, 44, '#ffffff', 0);
+  hGerm(fx0, fy0, R * ap, P1, t, 1);
+  if (c >= 1000) { const k = easeOut((c - 1000) / 500); hGerm(fx0 + (tx - fx0) * k, fy0, R * (0.5 + 0.5 * k), P1, t, 3); }
+  howCaption(g, c, '③ 감염', ['도착한 칸 주변 8칸의', '상대 세균은 전부 내 편으로!', ['많이 감염시킬수록 연출이 화려해요', '#3fa9ff']]);
+}
+
+// ----- 정리 -----
+const HOW_SUM = [
+  ['1칸', '#5aff96', '복제 · 원래 자리 남음 (+1)'],
+  ['2칸', '#ffd23c', '점프 · 원래 자리 비움 (+0)'],
+  ['감염', '#3fa9ff', '도착 주변 8칸 상대 → 내 편'],
+  ['PASS', '#9aa0a8', '둘 곳 없으면 차례 넘김'],
+  ['승리', '#ff5a6e', '판이 다 차면 많은 쪽 승리!']
+];
+function howSummary(d, t) {
+  const port = orient === 'port';
+  const y0 = port ? 640 : 300, step = port ? 190 : 150, x0 = port ? 60 : LW / 2 - 560;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.font = `900 110px ${FONT}`; ctx.lineWidth = 16; ctx.strokeStyle = '#000';
+  ctx.strokeText('정리!', LW / 2, port ? 420 : 150); ctx.fillStyle = '#ffd23c'; ctx.fillText('정리!', LW / 2, port ? 420 : 150);
+  HOW_SUM.forEach(([tag, col, desc], i) => {
+    const k = easeOut((d - 300 - i * 350) / 300);
+    if (k <= 0) return;
+    const y = y0 + i * step, x = x0 - (1 - k) * 60;
+    ctx.globalAlpha = k;
+    ctx.fillStyle = col; rrect(x, y - 52, 210, 104, 52); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.font = `900 54px ${FONT}`; ctx.textAlign = 'center';
+    ctx.fillText(tag, x + 105, y + 3);
+    ctx.fillStyle = '#fff'; ctx.font = `700 ${port ? 48 : 54}px ${FONT}`; ctx.textAlign = 'left';
+    ctx.fillText(desc, x + 245, y + 3);
+  });
+  ctx.globalAlpha = 1; ctx.textAlign = 'center';
+}
+
+function drawHowto(t, now) {
+  drawBg(t, now);
+  const e = now - howStart;
+  while (howFired < HOW_EV.length && e >= HOW_EV[howFired].t) HOW_EV[howFired++].f();
+  const g = howGeo();
+  let ch = 0;
+  for (let i = 0; i < HOW.length; i++) if (e >= HOW[i]) ch = i;
+  const le = e - HOW[ch];
+  if (ch === 0) howIntro(le, t);
+  else if (ch === 4) howSummary(le, t);
+  else { drawMini(g); [howClone, howJump, howInfect][ch - 1](g, le, t); }
+  drawParts(now);
+  const py = orient === 'port' ? 110 : 70;   // 진행 점
+  for (let i = 0; i < HOW.length; i++) {
+    ctx.fillStyle = i === ch ? '#ffd23c' : i < ch ? 'rgba(255,255,255,.7)' : 'rgba(255,255,255,.25)';
+    ctx.beginPath(); ctx.arc(LW / 2 + (i - 2) * 50, py, i === ch ? 14 : 10, 0, TAU); ctx.fill();
+  }
+  const last = ch === HOW.length - 1;
+  if (!last || le > 1800) {
+    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 4);
+    ctx.fillStyle = '#fff'; ctx.font = `700 50px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(last ? '탭하여 돌아가기' : '탭하면 다음 ▶', LW / 2, LH - (orient === 'port' ? 110 : 60));
+    ctx.globalAlpha = 1;
+  }
+}
+
 // ===== 화면 방향별 레이아웃 =====
 function place(b, x, y, w, h) { b.x = x; b.y = y; if (w) { b.w = w; b.h = h; } }
 function applyLayout() {
@@ -1283,10 +1545,12 @@ function applyLayout() {
     place(m1, LW / 2 - 340, 480); place(m2, LW / 2 - 340, 1080);
     place(r1, LW / 2 - 240, 1300); place(r2, LW / 2 - 240, 1490);
     place(o1, LW - 360, 1350); place(o2, LW - 360, 1530);
+    place(HOW_BTN[0], LW / 2 - 340, 1660, 680, 150);
   } else {
     place(m1, LW / 2 - 760, 400); place(m2, LW / 2 + 80, 400);
     place(r1, LW / 2 - 520, 800); place(r2, LW / 2 + 40, 800);
     place(o1, LW - 360, LH / 2 - 190); place(o2, LW - 360, LH / 2 - 10);
+    place(HOW_BTN[0], LW / 2 - 340, 945, 680, 130);
   }
 }
 
