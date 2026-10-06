@@ -406,6 +406,7 @@
     const PADDLE_HIT_MARGIN = 2;           // 패들 좌우 판정 여유 (px)
     const PADDLE_MIN_OFFSET = 0.18;        // 정중앙 반사 방지 - 최소 기울기
     const PADDLE_MAX_ANGLE = 65 * Math.PI / 180;   // 최대 반사 각도
+    const BALL_LAUNCH_DELAY_MS = 1000;             // 스테이지 시작 · 이어 하기 때 공이 멈춰 있는 시간 (V4.49.0)
     const BALL_MAX_TILT = 75 * Math.PI / 180;      // 공 진행 방향 한계: 수직에서 75도 (가로 기준 75~90도 = 0~15도 기울기는 금지)
     const SHAKE_PADDLE = 1.4;              // 패들 타격 흔들림
     const SHAKE_BRICK = 2.6;               // 벽돌 파괴 흔들림
@@ -1026,12 +1027,14 @@
     const rollStageGems = stageIdx => Math.max(1, stageGemBase(stageIdx) + Math.floor(Math.random() * (GEM_JITTER * 2 + 1)) - GEM_JITTER);
     // total: 이번 스테이지 총량, n: 깨야 할 블럭 수, broken: 지금까지 깬 수, u: 시작 위치 (0~1 무작위)
     // k번째로 깬 블럭의 보석 = floor(k*total/n + u) - floor((k-1)*total/n + u)  -> 합계가 정확히 total, 간격은 고름
+    //  V4.48.3: 한 블럭에서 최대 1개 (블럭이 총량보다 적은 스테이지는 그만큼 덜 나옴 · 25~28 키 블럭 스테이지)
+    const GEM_PER_BRICK_MAX = 1;
     let gemPlan = { total: 0, n: 1, broken: 0, u: 0 };
     function gemsForBreak() {
         const p = gemPlan;
         if (p.broken >= p.n) return 0;
         const k = ++p.broken, step = p.total / p.n;
-        const g = Math.floor(k * step + p.u) - Math.floor((k - 1) * step + p.u); p.dropped = (p.dropped || 0) + g;
+        const g = Math.min(GEM_PER_BRICK_MAX, Math.floor(k * step + p.u) - Math.floor((k - 1) * step + p.u)); p.dropped = (p.dropped || 0) + g;
         return g;
     }
     const balls = [];
@@ -1614,8 +1617,10 @@
             vy: -BALL_VY,
             radius: 18,
             power: ballPower(),
-            trail: []
+            trail: [],
+            hold: BALL_LAUNCH_DELAY_MS                                         // 스테이지 시작 · 이어 하기: 1초 멈춰 있다가 발사 (V4.49.0)
         });
+        balls[0].home = [balls[0].x, balls[0].y, balls[0].vx, balls[0].vy];
         lasers.length = 0;
         gems.length = 0;
         enemies.length = 0; enemyMissiles.length = 0; enemyBurst.length = 0;
@@ -1641,7 +1646,7 @@
                     screenShake = Math.max(screenShake, SHAKE_BRICK * 2);
                     hitStopTimer = KEY_HITSTOP_MS;
                     score += 1000;
-                    const rest = Math.max(0, gemPlan.total - (gemPlan.dropped || 0)); gemPlan.dropped = gemPlan.total; gemPlan.broken = gemPlan.n;   // 남은 보석을 한꺼번에
+                    const rest = Math.min(GEM_PER_BRICK_MAX, Math.max(0, gemPlan.total - (gemPlan.dropped || 0))); gemPlan.dropped = (gemPlan.dropped || 0) + rest; gemPlan.broken = gemPlan.n;   // 키 블럭도 최대 1개 (V4.48.3)
                     for (let k = 0; k < rest; k++) gems.push({ x: hit.x + hit.w / 2 + (k - (rest - 1) / 2) * GEM_SIZE * 0.5, y: hit.y + hit.h / 2, phase: Math.random() * 1400 });
                     return;
                 }
@@ -2870,7 +2875,7 @@
     const MAX_LIVES = 3;
     const upgrades = {};          // 카드 id -> 보유 단계 (여분 패들은 구매 횟수)
     let lastPurchase = null;      // 직전 상점에서 산 카드 (4단계 흡수 연출용)
-    let shopCards = [], shopSel = -1, shopBought = null, rerollCost = REROLL_BASE;
+    let shopCards = [], shopSel = -1, shopBought = null, shopBoughtLv = 0, shopBoughtPrice = 0, rerollCost = REROLL_BASE;
     let shopOpenT = 0, shopMsg = '', shopMsgT = 0;
 
     const cardById = id => SHOP_CARDS.find(c => c.id === id);
@@ -3085,7 +3090,7 @@
             if (id === 'life') lives = Math.min(MAX_LIVES, lives + 1);
             if (id === 'absorb') absorbCharge = absorbMax();
             if (id === 'save') { saveTo = saveNextTo(); saveCode = makeSaveCode(currentSaveState(saveTo)); }   // 산 뒤의 보석 · 카드로
-            shopBought = id;
+            shopBought = id; shopBoughtLv = cardLevel(id) - 1; shopBoughtPrice = price;   // 산 카드는 산 때의 단계 · 설명 · 가격 그대로 보여 줌 (V4.48.2)
             lastPurchase = id;
             return;
         }
@@ -3132,7 +3137,8 @@
             ctx.save();
             ctx.globalAlpha = e;
             ctx.translate(0, (1 - e) * 60 + lift);
-            drawShopCard(ctx, r.x, r.y, r.w, r.h, card, cardLevel(id), f, { price, affordable: gemCount >= price });
+            const bought = shopBought === id;   // 산 카드: 다음 단계로 바뀌지 않게 산 때의 단계 · 가격으로 그림
+            drawShopCard(ctx, r.x, r.y, r.w, r.h, card, bought ? shopBoughtLv : cardLevel(id), f, bought ? { price: shopBoughtPrice, affordable: true } : { price, affordable: gemCount >= price });
             if (sel) {
                 ctx.strokeStyle = '#fff'; ctx.lineWidth = 6;
                 ctx.beginPath(); ctx.roundRect(r.x - 8, r.y - 8, r.w + 16, r.h + 16, 20); ctx.stroke();
@@ -3230,6 +3236,11 @@
         // 여러 공 처리
         for (let bIdx = balls.length - 1; bIdx >= 0; bIdx--) {
             const ball = balls[bIdx];
+            if (ball.hold > 0) {                                               // 발사 전: 처음 자리에 멈춰 있음 (패들은 움직일 수 있음)
+                const h = ball.home;                                           // 다른 곳에서 공 자리 · 속도를 바꿨으면 (분열 · 조준 · 테스트 등) 바로 출발
+                if (h && (ball.x !== h[0] || ball.y !== h[1] || ball.vx !== h[2] || ball.vy !== h[3])) ball.hold = 0;
+                else { ball.hold -= STEP_MS; if (ball.hold > 0) continue; ball.hold = 0; }
+            }
             const speed = Math.hypot(ball.vx, ball.vy);
             const steps = Math.max(1, Math.ceil(speed / (ball.radius * 0.5)));
             const stepX = ball.vx / steps;
@@ -3579,7 +3590,7 @@
             ctx.save(); ctx.translate(0, (LOGIC_HEIGHT - HT_H) / 2); drawHowTo(ctx, t);
             if (t >= HT_READY_MS) { ctx.globalAlpha = Math.min(1, (t - HT_READY_MS) / 500) * (0.45 + 0.55 * Math.abs(Math.sin(t * 0.0025)));
                 ctx.fillStyle = '#bbb'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = font('30px'); ctx.fillText('> TOUCH <', HT_W / 2, HT_H - 60); ctx.globalAlpha = 1; }
-            ctx.restore(); drawVolumeButton(); return;
+            ctx.restore(); drawSkipButton(t); drawVolumeButton(); return;   // SKIP: 게임 방법도 바로 넘길 수 있음 (V4.48.4)
         }
         if (gameState === 'PROLOGUE') {
             const t = performance.now() - prologueStartT;
@@ -3630,7 +3641,7 @@
         ctx.restore();
 
         // ===== 상태 오버레이 (START / GAME_OVER / NEXT_STAGE / LIFE_LOST) =====
-        if (gameState !== 'PLAY' && gameState !== 'CLEAR_SEQ' && gameState !== 'SHOP' && gameState !== 'CARD_INTRO' && gameState !== 'UPG_VIEW' && gameState !== 'BOSS2_FINALE' && gameState !== 'BOSS3_DEVOUR') {
+        if (gameState !== 'PLAY' && gameState !== 'CLEAR_SEQ' && gameState !== 'SHOP' && gameState !== 'CARD_INTRO' && gameState !== 'UPG_VIEW' && gameState !== 'BOSS2_FINALE' && gameState !== 'BOSS3_DEVOUR' && gameState !== 'BOSS_DIE') {   // BOSS_DIE: 보스1 · 2 가 모래로 흩어지는 연출은 덮지 않음 (V4.48.1)
             ctx.fillStyle = 'rgba(0,0,0,0.85)';
             ctx.fillRect(0, 0, LOGIC_WIDTH, LOGIC_HEIGHT);
             drawDust();
@@ -3647,7 +3658,7 @@
                 ctx.font = font('40px');
                 ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);
                 ctx.font = font('28px');
-                ctx.fillText('V4.48.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.49.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER') {
                 if (performance.now() - lostAt >= OVER_TO_TITLE_MS) goTitle();
                 ctx.font = font('bold 100px');
@@ -4458,7 +4469,7 @@
 
     // 게임 시작/재시작 - iOS에서 touchstart가 click을 막으므로 양쪽 모두 연결
     const OVER_TO_TITLE_MS = 6000;
-    function goTitle() { initGame(0); gameState = 'START'; }   // 처음 켰을 때와 같은 타이틀 화면
+    function goTitle() { initGame(0); gameState = 'START'; score = 0; gemCount = 0; stageGems = 0; gems.length = 0; for (const k in upgrades) delete upgrades[k]; }   // 처음 켰을 때와 같은 타이틀 화면 (지난 판의 수정 · 점수 · 카드 지움, V4.48.1)
     function tryStart() {
         if ((gameState === 'GAME_OVER' || gameState === 'LIFE_LOST') && performance.now() - lostAt < LOST_HOLD_MS) return;
         if (gameState === 'GAME_OVER') { goTitle(); return; }
@@ -4494,8 +4505,8 @@
             }
             return;
         }
-        if (gameState === 'HOWTO') {                                              // 게임 방법: 4번 다 보여 준 뒤 누르면 1스테이지
-            if (performance.now() - howtoStartT >= HT_READY_MS) gameState = 'PLAY';
+        if (gameState === 'HOWTO') {                                              // 게임 방법: SKIP 버튼은 언제나 · 4번 다 보여 준 뒤에는 아무 곳이나 → 1스테이지
+            if ((p.x > LOGIC_WIDTH - 250 && p.y < 120) || performance.now() - howtoStartT >= HT_READY_MS) gameState = 'PLAY';
             return;
         }
         if (gameState === 'ENDING') { if (endingDone() && performance.now() - endingT0 > ENDING_SILENCE_MS + END_LOOP + 2500) goTitle(); return; }   // 엔딩 중에는 못 넘김, 끝난 뒤 누르면 타이틀
