@@ -74,6 +74,15 @@ const ORIENT_BTNS = [
   { id: 'land', x: LW - 360, y: LH / 2 - 190, w: 310, h: 140, label: '가로모드' },
   { id: 'port', x: LW - 360, y: LH / 2 - 10,  w: 310, h: 140, label: '세로모드' }
 ];
+const DIFFS = { easy: ['쉬움', '#5aff96'], normal: ['보통', '#ffd23c'], hard: ['어려움', '#ff5a6e'] };
+let diff = 'normal';
+try { const d = localStorage.getItem('viruswar_diff'); if (DIFFS[d]) diff = d; } catch (e) {}
+const DIFF_BTNS = [
+  { id: 'easy',   x: 0, y: 0, w: 680, h: 300, label: '쉬움',   sub: '살살 해줄게~', stars: 1 },
+  { id: 'normal', x: 0, y: 0, w: 680, h: 300, label: '보통',   sub: '한판 붙어보자!', stars: 2 },
+  { id: 'hard',   x: 0, y: 0, w: 680, h: 300, label: '어려움', sub: '봐주는 거 없음', stars: 3 }
+];
+const BACK_BTN = [{ id: 'back', x: 0, y: 0, w: 480, h: 130, label: '◀ 뒤로' }];
 const hitBtn = (btns, x, y) => btns.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
 
 function reset() {
@@ -332,7 +341,18 @@ function onTap(x, y) {
     if (now - sceneTime < 300) return;
     if (hitBtn(HOW_BTN, x, y)) { SFX.click(); startHow(now); return; }
     const b = hitBtn(MODE_BTNS, x, y);
-    if (b) { mode = b.id; reset(); go('game'); SFX.start(); }
+    if (b && b.id === 'cpu') { SFX.click(); go('diff'); }
+    else if (b) { mode = b.id; reset(); go('game'); SFX.start(); }
+    return;
+  }
+  if (scene === 'diff') {
+    if (now - sceneTime < 300) return;
+    if (hitBtn(BACK_BTN, x, y)) { SFX.cancel(); go('mode'); return; }
+    const b = hitBtn(DIFF_BTNS, x, y);
+    if (b) {
+      diff = b.id; try { localStorage.setItem('viruswar_diff', diff); } catch (e) {}
+      mode = 'cpu'; reset(); go('game'); SFX.start();
+    }
     return;
   }
   if (gameOver) {
@@ -468,6 +488,7 @@ function drawPanel(p, cx, t) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = col.body; ctx.font = `900 96px ${FONT}`;
   ctx.fillText(pname(p), cx, BY + 90);
+  if (mode === 'cpu' && p === P2) { ctx.fillStyle = DIFFS[diff][1]; ctx.font = `800 44px ${FONT}`; ctx.fillText(DIFFS[diff][0], cx, BY + 170); }
   drawGerm(cx, BY + 330, 110, p, t, p * 2, active);
   ctx.fillStyle = '#fff'; ctx.font = `900 180px ${FONT}`;
   ctx.fillText(count(p), cx, BY + 620);
@@ -492,6 +513,7 @@ function drawPanelH(p, cy, t, col, active) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = col.body; ctx.font = `900 96px ${FONT}`;
   ctx.fillText(pname(p), x + 450, cy - 70);
+  if (mode === 'cpu' && p === P2) { ctx.fillStyle = DIFFS[diff][1]; ctx.font = `800 44px ${FONT}`; ctx.fillText(DIFFS[diff][0], x + 450, cy + 8); }
   ctx.font = `700 56px ${FONT}`;
   ctx.fillStyle = active ? '#fff' : 'rgba(255,255,255,.3)';
   const label = !active ? '대기 중'
@@ -538,9 +560,9 @@ function drawBtns(btns, t) {
     rrect(b.x, b.y, b.w, b.h, 36); ctx.stroke();
     ctx.fillStyle = '#fff';
     if (b.sub) {
-      ctx.font = `900 110px ${FONT}`; ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h * 0.66);
+      ctx.font = `900 110px ${FONT}`; ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h * (b.ly || 0.66));
       ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = `700 52px ${FONT}`;
-      ctx.fillText(b.sub, b.x + b.w / 2, b.y + b.h * 0.86);
+      ctx.fillText(b.sub, b.x + b.w / 2, b.y + b.h * (b.sy || 0.86));
     } else {
       ctx.font = `800 70px ${FONT}`; ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 4);
     }
@@ -620,6 +642,26 @@ function drawMode(t, now) {
       ctx.fillText('CPU', cx + 150, cy + 100);
     }
   }
+}
+
+function drawDiff(t, now) {
+  drawBg(t, now);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff'; ctx.font = `900 110px ${FONT}`;
+  ctx.fillText('CPU 난이도', LW / 2, orient === 'port' ? 300 : 170);
+  drawBtns(DIFF_BTNS, t);
+  for (const b of DIFF_BTNS) {
+    const [, col] = DIFFS[b.id], cy = b.y + b.h * (b.st || 0.3), cx = b.x + b.w / 2;
+    if (b.id === diff) {   // 지난번 선택
+      ctx.strokeStyle = col; ctx.lineWidth = 8;
+      rrect(b.x - 8, b.y - 8, b.w + 16, b.h + 16, 42); ctx.stroke();
+    }
+    for (let i = 0; i < 3; i++) {
+      const sx = cx + (i - 1) * 80, bob = i < b.stars ? Math.sin(t * 4 + i) * 5 : 0;
+      drawStar(sx - 18, cy - bob, 34, 14, 5, i < b.stars ? col : 'rgba(255,255,255,.18)');
+    }
+  }
+  drawBtns(BACK_BTN, t);
 }
 
 // ===== 감염 연출 =====
@@ -1225,7 +1267,23 @@ function holeRisk(nb, p, m) {
   return reach ? mine : 0;
 }
 
+// 쉬움: 눈앞의 이득만 보고 자주 실수 / 보통: 1수 탐욕 / 어려움: 2수 미니맥스
 function cpuPick(p) {
+  if (diff === 'hard') return cpuHard(p);
+  const ms = listMoves(board, p), easy = diff === 'easy';
+  if (easy && Math.random() < 0.35) return ms[Math.floor(Math.random() * ms.length)];
+  let best = null, bestS = -Infinity;
+  for (const m of ms) {
+    const { nb, inf } = applyB(board, p, m);
+    const s = inf * 2 + (m.jump ? 0 : 1)
+      - (easy ? 0 : holeRisk(nb, p, m) * 0.8)
+      + Math.random() * (easy ? 1.5 : 0.1);
+    if (s > bestS) { bestS = s; best = m; }
+  }
+  return best;
+}
+
+function cpuHard(p) {
   const o = 3 - p;
   let best = null, bestS = -Infinity;
   for (const m of listMoves(board, p)) {
@@ -1267,6 +1325,7 @@ function frame(now) {
   if (scene === 'title') drawTitle(t, now);
   else if (scene === 'mode') drawMode(t, now);
   else if (scene === 'howto') drawHowto(t, now);
+  else if (scene === 'diff') drawDiff(t, now);
   else {
     updateFx(now);
     updateCpu(now);
@@ -1546,11 +1605,15 @@ function applyLayout() {
     place(r1, LW / 2 - 240, 1300); place(r2, LW / 2 - 240, 1490);
     place(o1, LW - 360, 1350); place(o2, LW - 360, 1530);
     place(HOW_BTN[0], LW / 2 - 340, 1660, 680, 150);
+    DIFF_BTNS.forEach((b, i) => { place(b, LW / 2 - 340, 500 + i * 390, 680, 350); Object.assign(b, { st: 0.2, ly: 0.53, sy: 0.83 }); });
+    place(BACK_BTN[0], LW / 2 - 240, 1720);
   } else {
     place(m1, LW / 2 - 760, 400); place(m2, LW / 2 + 80, 400);
     place(r1, LW / 2 - 520, 800); place(r2, LW / 2 + 40, 800);
     place(o1, LW - 360, LH / 2 - 190); place(o2, LW - 360, LH / 2 - 10);
     place(HOW_BTN[0], LW / 2 - 340, 945, 680, 130);
+    DIFF_BTNS.forEach((b, i) => { place(b, LW / 2 - 900 + i * 620, 330, 560, 420); Object.assign(b, { st: 0, ly: 0, sy: 0 }); });
+    place(BACK_BTN[0], LW / 2 - 240, 900);
   }
 }
 
