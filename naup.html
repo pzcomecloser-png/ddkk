@@ -228,6 +228,16 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 18. BreakOUT (NEW) -->
+    <a class="game-card" href="games/18/stipple_breakout.html">
+      <div class="icon-frame"><canvas id="iconBreakout" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">BreakOUT</div>
+        <div class="card-desc">블럭깨기 리메이크</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -619,6 +629,57 @@ function drawVirusIcon(id) {
   ctx.fillRect(14, 5, 1, 1);
 }
 
+// 18. BreakOUT
+function drawBreakoutIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+
+  // 검은 배경 + 희미한 모래 점
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, 24, 24);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  [[3,2],[19,3],[8,6],[22,9],[1,12],[14,4],[5,20],[20,21]].forEach(([x,y]) => ctx.fillRect(x, y, 1, 1));
+
+  // 점선 화살표 (패들에서 위로 퍼지는 궤적)
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  [[7,13],[6,11],[5,9],[4,7],[3,5]].forEach(([x,y]) => ctx.fillRect(x, y, 1, 1));
+  [[16,13],[17,11],[18,9],[19,7],[20,5]].forEach(([x,y]) => ctx.fillRect(x, y, 1, 1));
+  ctx.fillRect(2, 4, 1, 1); ctx.fillRect(4, 4, 1, 1); ctx.fillRect(3, 6, 1, 1);    // 왼쪽 화살촉
+  ctx.fillRect(19, 4, 1, 1); ctx.fillRect(21, 4, 1, 1); ctx.fillRect(20, 6, 1, 1); // 오른쪽 화살촉
+
+  // 수직 점선 가이드
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  for (let y = 2; y < 14; y += 2) { ctx.fillRect(9, y, 1, 1); ctx.fillRect(14, y, 1, 1); }
+
+  // 패들 중앙 바 (모래 질감)
+  ctx.fillStyle = '#4a4a4a';
+  ctx.fillRect(6, 16, 12, 3);
+  ctx.fillStyle = '#8a8a8a';
+  for (let x = 6; x < 18; x++) ctx.fillRect(x, 16 + (x % 3), 1, 1);
+  ctx.fillStyle = '#bdbdbd';
+  ctx.fillRect(6, 16, 12, 1);
+
+  // 양쪽 캡슐 끝 (둥근 캡)
+  function cap(x0) {
+    ctx.fillStyle = '#5a5a5a';
+    ctx.fillRect(x0 + 1, 15, 2, 5);
+    ctx.fillRect(x0, 16, 4, 3);
+    ctx.fillStyle = '#9a9a9a';
+    ctx.fillRect(x0 + 1, 16, 2, 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x0 + 1, 16, 2, 1); // 하이라이트
+  }
+  cap(3);
+  cap(17);
+
+  // 패들 아래 점 표시
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  [4, 9, 14, 19].forEach(x => ctx.fillRect(x, 21, 2, 1));
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -628,6 +689,7 @@ drawNobodyIcon('iconNobody');
 drawFireIcon('iconFire');
 draw3SecIcon('icon3Sec');
 drawVirusIcon('iconVirus');
+drawBreakoutIcon('iconBreakout');
 </script>
 </body>
 </html>
