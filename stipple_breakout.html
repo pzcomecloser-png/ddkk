@@ -245,6 +245,7 @@
     let stageJinglePending = false;              // 새 스테이지가 시작되면 스테이지 시작음 (음악 감독이 처리)
     let DOT_LUM_MUL = 1;                         // 모래 점 밝기 배율 (적 그릴 때만 올림)
     const ENEMY_LUM_MUL = 1.5, MISSILE_LUM_MUL = 1.15;
+    const MOB_LUM_MUL = ENEMY_LUM_MUL * 1.25;   // 돌격형 · 원거리형 적만 25% 더 밝게 (보스 · 미사일은 그대로, V4.50.1)
 
     // 캔버스 폰트 스택 - CSS와 동일하게 실명 지정.
     // generic monospace는 macOS와 iOS에서 서로 다른 폰트로 해석되어
@@ -1568,7 +1569,7 @@
         
         buildShields();                                                       // 보호 블럭: 스테이지 시작 · 이어 하기 모두 다시 채움
         if (resetBricks) {
-            boss = null; bossSpr = null; bossDust.length = 0; fin = null; b3dv = null;
+            boss = null; bossSpr = null; bossDust.length = 0; fin = null; b3dv = null; b1o = null;
             stageGems = 0;
             stageJinglePending = true;
             resetAbsorb();
@@ -1631,7 +1632,7 @@
     function damageBrick(hit, power = 1, fromShard = false, src = 'ball') {
         if (BRICK_TIERS[hit.tier].gate && src !== 'cheat') power = src === 'ball' && !fromShard ? GATE_BALL_DMG : GATE_LASER_DMG;
         if (!isBreakable(hit)) {
-            sfx('metal');
+            sfx(src === 'laser' ? 'metalLaser' : 'metal');   // 레이저가 비파괴 블럭에 맞을 때는 20% 작게 (V4.52.1)
             spawnBurst(hit, 8);
             screenShake = Math.max(screenShake, SHAKE_METAL);
         } else {
@@ -1794,11 +1795,11 @@
         }
         enemyBurst.push({ ring: true, x: e.x, y: e.y, r: 10, life: 1 });
     }
-    function killEnemy(i) {
+    function killEnemy(i, byPaddle = false) {
         const e = enemies[i];
         explodeEnemy(e);
         screenShake = Math.max(screenShake, SHAKE_BRICK * 0.6);
-        score += 100; sfx('break');            // 수정(보석)은 주지 않음
+        score += 100; if (!byPaddle) sfx('enemyDie');   // 적 전용 터지는 소리 (패들에 부딪혀 죽으면 마비 · 흡수 소리만) · 수정(보석)은 주지 않음
         enemies.splice(i, 1);
     }
     // 원 (적) 이 벽돌에 닿으면 밀어내고 그 방향 속도를 뒤집음
@@ -1867,7 +1868,7 @@
                 e.x += e.vx; e.y += RUSH_DESCEND_VY * (inBricks ? RUSH_DIVE_MUL : 1);
                 }
                 e.x = Math.max(ENEMY_R, Math.min(LOGIC_WIDTH - ENEMY_R, e.x));
-                if (circleHitsRect(e.x, e.y, ENEMY_R, PR)) { hitPaddleByEnemy() ? sfx('laserBlock') : sfx('metal'); killEnemy(i); continue; }
+                if (circleHitsRect(e.x, e.y, ENEMY_R, PR)) { sfx(hitPaddleByEnemy() ? 'stun' : 'absorb'); killEnemy(i, true); continue; }   // 마비 / 충격 흡수 전용 소리 (V4.52.0)
                 if (e.y > LOGIC_HEIGHT + 60) { enemies.splice(i, 1); continue; }
             } else {
                 floatEnemy(e, age);
@@ -1890,7 +1891,7 @@
             if (m.dx != null) { m.x += m.dx; m.y += m.dy; } else m.y += MISSILE_SPEED;   // 포탑 미사일: 조준한 방향으로 곧게
             if (m.vx) { m.x += m.vx; m.vx *= 0.9; if (Math.abs(m.vx) < 0.05) m.vx = 0; }   // 보스2 미사일: 230px 간격으로 퍼짐
             if (m.x + MISSILE_W / 2 > PR.x && m.x - MISSILE_W / 2 < PR.x + PR.w && m.y + MISSILE_H / 2 > PR.y && m.y - MISSILE_H / 2 < PR.y + PR.h) {
-                hitPaddleByEnemy() ? sfx('laserBlock') : sfx('metal');
+                hitPaddleByEnemy() ? sfx('stun') : sfx('absorb');   // 미사일: 마비 / 충격 흡수 (V4.52.0)
                 spawnBurst({ x: m.x - 10, y: PR.y - 10, w: 20, h: 20 }, 20);
                 enemyMissiles.splice(i, 1); continue;
             }
@@ -1930,7 +1931,7 @@
         DOT_LUM_MUL = 1;
         drawTurretZones(t);
         DOT_LUM_MUL = MISSILE_LUM_MUL;
-        DOT_LUM_MUL = ENEMY_LUM_MUL;
+        DOT_LUM_MUL = MOB_LUM_MUL;
         for (const e of enemies) {
             if (e.kind === 'rush') enMolecule(ctx, e.x + (e.shake || 0), e.y, ENEMY_S * (e.lunge === 'hold' ? 1.12 : 1), enemyClock * (e.lunge ? 2.5 : 1), f);   // 멈칫: 떨림 + 살짝 부풀고 빨리 돎
             else enCube(ctx, e.x, e.y, ENEMY_S, enemyClock - e.born + e.phase, f);
@@ -1964,6 +1965,10 @@
     const BOSS_WARN_MS = 2600, BOSS_DIE_MS = 2600;
     let boss = null, bossWarnT = 0, bossDieT = 0;
     const bossDust = [];
+    // 보스1 마무리 (V4.51.0): 멈춤 + 번쩍 → 전용 폭발음 · 모래로 흩어짐 + 수정 30개가 쏟아짐 → 모래가 다 가라앉고 남은 수정은 HUD 로 → 정적 → 워프 (출발) → 9스테이지 (은하)
+    const B1O_HIT_MS = 300, B1O_SCATTER_MIN = 1200, B1O_SCATTER_MAX = 4500, B1O_VAC_MS = 600, B1O_HUSH_MS = 400, B1O_WARP_MS = 1600, B1O_FLASH_MS = 250, B1O_FADE_MS = 500;
+    const B1O_GEMS = 30, B1O_GEM_FALL = 8, B1O_GEM_SPAN_MS = 600;   // 수정 낙하 8px/프레임 (평소 4 의 2배: 모래가 가라앉는 동안 패들까지 닿게)
+    let b1o = null, warpInT = 0;
     const bossInSeg = (ang, ringA, pad = 0) => { const g = ang - ringA; const m = ((g % BOSS_SEG) + BOSS_SEG) % BOSS_SEG; return m > BOSS_GAP - pad && m < BOSS_SEG + pad; };
     function bossEyeOpen(t) {
         const p = (t % BOSS_BLINK_MS) / BOSS_BLINK_MS;
@@ -2065,6 +2070,13 @@
         if (boss.kind === 2) { killBoss2(); return; }
         if (boss.kind === 3) { killBoss3(); return; }
         const B = boss; B.dead = true;
+        balls.length = 0; lasers.length = 0; enemyMissiles.length = 0;
+        bossDieT = 0; gameState = 'BOSS_DIE';
+        b1o = { phase: 'HIT', t: 0, pending: [] };                              // 보스1: 먼저 0.3초 멈춤 + 번쩍 (흩어짐은 그 뒤 boss1Shatter)
+        hitStopTimer = 0;
+    }
+    function boss1Shatter() {
+        const B = boss;
         for (let i = 0; i < 1600; i++) {
             let r, a;
             if (i % 5 < 3) { do { a = Math.random() * Math.PI * 2; } while (!bossInSeg(a, B.ringA)); r = BOSS_RING_IN + Math.random() * (BOSS_RING_OUT - BOSS_RING_IN); }
@@ -2073,19 +2085,77 @@
             bossDust.push({ x: B.x + Math.cos(a) * r, y: B.y + Math.sin(a) * r, vx: Math.cos(a) * sp + (Math.random() - 0.5), vy: Math.sin(a) * sp - Math.random() * 0.8,
                             size: 2.2 + Math.random() * 2.4, life: 1 + Math.random() * 0.7, wait: Math.random() * 25 });
         }
-        balls.length = 0; lasers.length = 0; enemyMissiles.length = 0;
-        screenShake = Math.max(screenShake, SHAKE_BRICK * 1.6); sfx('break');
-        bossDieT = 0; gameState = 'BOSS_DIE';
+        for (let i = 0; i < B1O_GEMS; i++) {                                      // 흩어진 모래 일부가 수정이 되어 떨어짐 (0.6초에 걸쳐 하나씩)
+            const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * BOSS_RING_OUT;
+            b1o.pending.push({ x: Math.max(GEM_SIZE, Math.min(LOGIC_WIDTH - GEM_SIZE, B.x + Math.cos(a) * r)), y: B.y + Math.sin(a) * r * 0.6, phase: Math.random() * 1400, at: i / B1O_GEMS * B1O_GEM_SPAN_MS });
+        }
+        screenShake = Math.max(screenShake, SHAKE_BRICK * 2.4); sfx('bossBoom');
     }
-    function updateBossDie() {
-        bossDieT += STEP_MS; movePaddle(); updateBurst();
+    function stepBossDust() {
         for (let i = bossDust.length - 1; i >= 0; i--) {
             const p = bossDust[i];
             if (p.wait > 0) { p.wait--; continue; }                                 // 조금씩 시간차를 두고 흩어짐
             p.x += p.vx; p.y += p.vy; p.vx *= 0.985; p.vy = p.vy * 0.985 + 0.04; p.life -= 0.011;
             if (p.life <= 0) bossDust.splice(i, 1);
         }
-        if (bossDieT >= BOSS_DIE_MS) { const next = boss.after + 1; boss = null; bossSpr = null; bossDust.length = 0; initGame(next); gameState = 'PLAY'; }   // 보스1 -> 9스테이지, 보스2 -> 17스테이지
+    }
+    function updateBossDie() {
+        if (b1o) { updateBoss1Outro(); return; }                                   // 보스1 마무리
+        bossDieT += STEP_MS; movePaddle(); updateBurst(); stepBossDust();
+        if (bossDieT >= BOSS_DIE_MS) { const next = boss.after + 1; boss = null; bossSpr = null; bossDust.length = 0; initGame(next); gameState = 'PLAY'; }   // 보스2 -> 17스테이지
+    }
+    function updateBoss1Outro() {
+        const O = b1o; O.t += STEP_MS; bossDieT += STEP_MS;
+        if (O.phase === 'HIT') { if (O.t >= B1O_HIT_MS) { boss1Shatter(); O.phase = 'SCATTER'; O.t = 0; } return; }   // 멈춤: 아무것도 안 움직임
+        movePaddle(); updateBurst(); stepBossDust();
+        if (O.phase === 'SCATTER') {
+            while (O.pending.length && O.pending[0].at <= O.t) { const g = O.pending.shift(); gems.push({ x: g.x, y: g.y, phase: g.phase }); }
+            updateGems(B1O_GEM_FALL / GEM_FALL_SPEED);
+            const settled = !bossDust.length && !O.pending.length && gems.every(g => g.y - GEM_SIZE / 2 > paddle.y + paddle.height);   // 모래 다 가라앉음 + 수정이 모두 패들을 지나감 (받았거나 놓침)
+            if ((settled && O.t >= B1O_SCATTER_MIN) || O.t >= B1O_SCATTER_MAX) {
+                for (const g of O.pending) gems.push({ x: g.x, y: g.y, phase: g.phase }); O.pending.length = 0;
+                if (gems.length) { O.phase = 'VACUUM'; O.t = 0; gems.forEach((g, i) => { g.vx0 = g.x; g.vy0 = g.y; g.vd = i * 18; }); sfx('drop'); }
+                else { O.phase = 'HUSH'; O.t = 0; }
+            }
+        } else if (O.phase === 'VACUUM') {                                       // 못 받은 수정도 모두 지급 (HUD 로 빨려 들어감)
+            const tx = GEM_RIGHT - 60, ty = HUD_TOP_H / 2;
+            for (let i = gems.length - 1; i >= 0; i--) {
+                const g = gems[i], u = Math.max(0, Math.min(1, (O.t - g.vd) / B1O_VAC_MS)), e = u * u * u;
+                g.x = g.vx0 + (tx - g.vx0) * e; g.y = g.vy0 + (ty - g.vy0) * e;
+                if (u >= 1) { gemCount++; stageGems++; gems.splice(i, 1); gemHudPulse = 160; }
+            }
+            if (!gems.length) { O.phase = 'HUSH'; O.t = 0; }
+        } else if (O.phase === 'HUSH') {                                         // 0.4초 정적 뒤 출발
+            if (O.t >= B1O_HUSH_MS) { O.phase = 'WARP'; O.t = 0; sfx('warp'); }
+        } else if (O.phase === 'WARP') {
+            const u = Math.min(1, O.t / B1O_WARP_MS); screenShake = Math.max(screenShake, 2.2 * u * u);
+            if (O.t >= B1O_WARP_MS) { O.phase = 'FLASH'; O.t = 0; }
+        } else if (O.phase === 'FLASH' && O.t >= B1O_FLASH_MS) {
+            const next = boss.after + 1; b1o = null; boss = null; bossSpr = null; bossDust.length = 0; gems.length = 0;
+            initGame(next); gameState = 'PLAY'; warpInT = B1O_FADE_MS;            // 하얀 화면에서 은하가 드러남
+        }
+    }
+    // 워프: 배경 먼지가 아래로 길게 늘어나며 점점 빨라짐 (배가 위로 출발하는 느낌)
+    function drawWarpDust() {
+        const O = b1o, u = O.phase === 'FLASH' ? 1 : Math.min(1, O.t / B1O_WARP_MS), e = u * u * u, H = LOGIC_HEIGHT;
+        const s = dustDotSize, half = s / 2, { x, y } = dust;
+        for (let b = 0; b < DUST_BUCKETS; b++) {
+            const mul = 0.5 + b * 0.25, L = Math.min(255, Math.round(DUST_LUM[b] * (1 + 1.6 * e)));
+            const travel = 3200 * u * u * u * u * mul, len = s + 700 * e * mul;
+            ctx.fillStyle = `rgb(${L},${L},${L})`;
+            for (let i = b; i < DUST_COUNT; i += DUST_BUCKETS) {
+                const yy = ((y[i] + travel) % H + H) % H;
+                ctx.fillRect(x[i] - half, yy - len, s, len);
+            }
+        }
+    }
+    // 보스1 마무리 화면 덧그림: 멈춤 번쩍 · 워프 끝 하얀 화면 · 9스테이지 들어갈 때 하얀색이 걷힘
+    function drawBoss1OutroFx() {
+        const W = LOGIC_WIDTH, H = LOGIC_HEIGHT;
+        if (b1o && b1o.phase === 'HIT') { ctx.fillStyle = `rgba(255,255,255,${0.75 * (1 - b1o.t / B1O_HIT_MS)})`; ctx.fillRect(0, 0, W, H); }
+        else if (b1o && b1o.phase === 'WARP') { const u = b1o.t / B1O_WARP_MS; if (u > 0.75) { ctx.fillStyle = `rgba(255,255,255,${(u - 0.75) / 0.25})`; ctx.fillRect(0, 0, W, H); } }
+        else if (b1o && b1o.phase === 'FLASH') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); }
+        else if (warpInT > 0) { ctx.fillStyle = `rgba(255,255,255,${warpInT / B1O_FADE_MS})`; ctx.fillRect(0, 0, W, H); }
     }
     function b3Warm() { for (const f of [0, 1]) { b3Feather(f); b3CoreSprite(f); } return {}; }   // 깃털 · 몸 그림을 경고 동안 미리
     function b3WheelPts(B, n = 40) {                  // 바퀴 띠 가운데 점 (게임 좌표) · 공 · 레이저 충돌용
@@ -2299,7 +2369,7 @@
         if (boss && !boss.dead && boss.shown && boss.kind === 2) { drawBoss2(); drawBossBar(); }
         else if (boss && !boss.dead && boss.shown && boss.kind === 3) { drawBoss3Game(); drawBossBar(); }
         else if (boss && boss.dead && boss.kind === 3 && bossDieT < 450) { ctx.fillStyle = `rgba(255,255,255,${0.8 * (1 - bossDieT / 450)})`; ctx.fillRect(0, HUD_TOP_H, LOGIC_WIDTH, LOGIC_HEIGHT - HUD_TOP_H - HUD_BOTTOM_H); }
-        else if (boss && !boss.dead && boss.shown) {
+        else if (boss && (!boss.dead || (b1o && b1o.phase === 'HIT')) && boss.shown) {   // 보스1: 마지막 한 방 멈춤 동안은 그대로 보임
             const R = bossSpr || (bossSpr = buildBossSprites());
             drawRotated(R.outer, boss.x, boss.y, boss.ringA * 0.4);
             drawRotated(R.ring[Math.floor(performance.now() / SAND_INTERVAL) % BOSS_RING_FRAMES], boss.x, boss.y, boss.ringA);
@@ -2659,8 +2729,9 @@
         const t = room > 0 ? Math.max(0, Math.min(1, paddle.x / room)) : 0.5;
         const sN = (t - 0.5) * 2, k = Math.sign(sN) * sN * sN;
         if (lv === 1) return [paddle.x + w / 2 + k * (w / 2 - LASER_EDGE)];
-        const shift = k * (w * 0.28 - LASER_EDGE);
-        return [paddle.x + w * 0.28 + shift, paddle.x + w * 0.72 + shift];
+        const shift = k * (w * 0.28 - LASER_EDGE), a = paddle.x + w * 0.28 + shift, b = paddle.x + w * 0.72 + shift;
+        if (lv >= 4) return [a, (a + b) / 2, b];   // 4단계 이상: 3줄, 가운데는 두 줄 사이 정확히 가운데 (V4.50.0)
+        return [a, b];
     }
 
     function movePaddle() {
@@ -2684,7 +2755,7 @@
                 const dx = pcx - g.x;
                 if (Math.hypot(dx, paddle.y - g.y) < magR) g.x += Math.sign(dx) * Math.min(Math.abs(dx), magPull * speedMul);
             }
-            if (g.y - r > LOGIC_HEIGHT) { if (gameState === 'CLEAR_SEQ') { g.y = LOGIC_HEIGHT + r; continue; } gems.splice(i, 1); continue; }   // 클리어 중에는 버리지 않음 (곧 흡수)
+            if (g.y - r > LOGIC_HEIGHT) { if (gameState === 'CLEAR_SEQ' || b1o) { g.y = LOGIC_HEIGHT + r; continue; } gems.splice(i, 1); continue; }   // 클리어 · 보스1 마무리 중에는 버리지 않음 (곧 흡수)
             if (g.y + r > paddle.y && g.y - r < paddle.y + paddle.height &&
                 g.x + r > paddle.x && g.x - r < paddle.x + paddle.width) {
                 gemCount++;
@@ -3287,7 +3358,7 @@
                 if (ball.vy > 0) {
                     const sh = shields.find(q => q.alive && checkCollision(ball, q));
                     if (sh) {
-                        sh.alive = false;
+                        sh.alive = false; sfx('shield');                                   // 보호 블럭이 막는 소리 (V4.52.0)
                         ball.y = sh.y - ball.radius - 1;
                         ball.vy = -Math.abs(ball.vy);
                         spawnBurst(sh, 40);
@@ -3432,7 +3503,7 @@
         } else {
             pvClassicVaus(ctx, paddle.x, paddle.y, paddle.width, paddle.height, frame);
         }
-        if (paddleStun > 0) drawPaddleStun(ctx, paddle.x, paddle.y, paddle.width, paddle.height, performance.now(), paddleStun / PADDLE_STUN_MS, frame);
+        if (paddleStun > 0) drawPaddleStun(ctx, paddle.x, paddle.y, paddle.width, paddle.height, performance.now(), paddleStun / paddleStunMs(), frame);
     }
 
     function drawAimGuide() {
@@ -3612,8 +3683,8 @@
             ctx.translate((Math.random() - 0.5) * screenShake * 2.8, (Math.random() - 0.5) * screenShake * 2.2);
         }
 
-        // 배경 먼지 - 가장 먼저 그려 모든 오브젝트 뒤에 깔림
-        drawDust();
+        // 배경 먼지 - 가장 먼저 그려 모든 오브젝트 뒤에 깔림 (보스1 뒤 워프 중에는 늘어난 먼지)
+        if (b1o && (b1o.phase === 'WARP' || b1o.phase === 'FLASH')) drawWarpDust(); else drawDust();
 
         const baseFrame = Math.floor(performance.now() / SAND_INTERVAL);
 
@@ -3658,7 +3729,7 @@
                 ctx.font = font('40px');
                 ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);
                 ctx.font = font('28px');
-                ctx.fillText('V4.49.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.52.1', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER') {
                 if (performance.now() - lostAt >= OVER_TO_TITLE_MS) goTitle();
                 ctx.font = font('bold 100px');
@@ -3679,6 +3750,7 @@
         }
 
         drawHUD();
+        drawBoss1OutroFx();                                                       // 보스1 마무리: 번쩍 · 워프 하얀 화면 · 걷힘 (HUD 위)
         if (gameState === 'CLEAR_SEQ' || gameState === 'SHOP') drawClearSeq();
         if (gameState === 'CARD_INTRO') drawCardIntro();
         if (gameState === 'UPG_VIEW') drawUpgradeView();
@@ -3755,6 +3827,52 @@
             hit(ac, out, t) {
                 tone(ac, out, t, { type: 'square', f0: 520, f1: 480, dur: 0.05, gain: 0.07, lp: 2200 });
                 noise(ac, out, t, { dur: 0.015, gain: 0.08, hp: 3000 });
+            },
+            // 보스1 폭발 (16비트): 깊은 쿵 + 내려가는 사각파 굉음 + 모래 쏟아지는 잡음 (V4.51.0)
+            bossBoom(ac, out, t) {
+                tone(ac, out, t, { type: 'sine', f0: 120, f1: 32, bend: 0.5, dur: 0.9, gain: 0.55 });
+                tone(ac, out, t, { type: 'square', f0: 220, f1: 40, bend: 0.6, dur: 0.7, gain: 0.12, lp: 1400 });
+                tone(ac, out, t + 0.02, { type: 'square', f0: 330, f1: 55, bend: 0.5, dur: 0.5, gain: 0.07, lp: 2000, detune: 12 });
+                noise(ac, out, t, { dur: 0.25, gain: 0.35, lp: 3500 });
+                noise(ac, out, t + 0.08, { dur: 1.4, gain: 0.16, bp: 1800, q: 0.7 });
+                [76, 72, 69, 64].forEach((m, i) => tone(ac, out, t + 0.35 + i * 0.11, { type: 'square', f0: hz(m), dur: 0.12, gain: 0.05, lp: 4000 }));
+            },
+            // 워프 출발 (16비트): 올라가는 사각파 2줄 + 커지는 바람 잡음
+            warp(ac, out, t) {
+                tone(ac, out, t, { type: 'square', f0: 110, f1: 880, bend: 1.6, dur: 1.75, gain: 0.08, lp: 3000, attack: 0.3 });
+                tone(ac, out, t, { type: 'square', f0: 165, f1: 1320, bend: 1.6, dur: 1.75, gain: 0.05, lp: 3500, attack: 0.3, detune: 8 });
+                tone(ac, out, t, { type: 'sine', f0: 55, f1: 110, bend: 1.6, dur: 1.75, gain: 0.25, attack: 0.4 });
+                const src = ac.createBufferSource(), g = ac.createGain(), f = ac.createBiquadFilter();
+                src.buffer = noiseBuf(ac); src.loop = true; f.type = 'bandpass'; f.Q.value = 0.8;
+                f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(5000, t + 1.6);
+                g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22, t + 1.55); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.9);
+                src.connect(f); f.connect(g); g.connect(out); src.start(t); src.stop(t + 1.95);
+            },
+            // ===== V4.52.0 효과음 (16비트) =====
+            // 패들 마비: 지지직 전기 + 내려가는 사각파 (멈췄다는 느낌)
+            stun(ac, out, t) {
+                tone(ac, out, t, { type: 'square', f0: 880, f1: 110, bend: 0.25, dur: 0.3, gain: 0.10, lp: 3000 });
+                for (let i = 0; i < 5; i++) noise(ac, out, t + i * 0.045, { dur: 0.025, gain: 0.14, bp: 2400 + i * 300, q: 2 });
+                tone(ac, out, t + 0.02, { type: 'sine', f0: 140, f1: 60, dur: 0.22, gain: 0.22 });
+            },
+            // 충격 흡수로 막음: 맑게 튕기는 방패 소리 (올라가는 두 음)
+            absorb(ac, out, t) {
+                tone(ac, out, t, { type: 'square', f0: hz(79), dur: 0.08, gain: 0.07, lp: 5000 });
+                tone(ac, out, t + 0.07, { type: 'square', f0: hz(86), dur: 0.16, gain: 0.07, lp: 5000 });
+                tone(ac, out, t, { type: 'triangle', f0: hz(91), dur: 0.35, gain: 0.08 });
+                noise(ac, out, t, { dur: 0.04, gain: 0.12, hp: 4000 });
+            },
+            // 보호 블럭이 공을 막음: 단단한 퉁 + 깨지는 짧은 잡음
+            shield(ac, out, t) {
+                tone(ac, out, t, { type: 'sine', f0: 260, f1: 120, dur: 0.14, gain: 0.30 });
+                tone(ac, out, t, { type: 'square', f0: hz(67), f1: hz(62), bend: 0.08, dur: 0.12, gain: 0.07, lp: 2600 });
+                noise(ac, out, t + 0.01, { dur: 0.12, gain: 0.16, bp: 1500, q: 0.9 });
+            },
+            // 적 처치: 블럭과 다른, 낮은 펑 + 흩어지는 잡음 + 짧은 내려가는 삐
+            enemyDie(ac, out, t) {
+                tone(ac, out, t, { type: 'sine', f0: 200, f1: 45, dur: 0.22, gain: 0.32 });
+                noise(ac, out, t, { dur: 0.22, gain: 0.20, lp: 2500 });
+                tone(ac, out, t + 0.01, { type: 'square', f0: hz(84), f1: hz(72), bend: 0.12, dur: 0.14, gain: 0.05, lp: 4000 });
             },
             // 고무에 튕김: 통통 튀는 보잉
             rubber(ac, out, t) {
@@ -4121,7 +4239,27 @@
             [45, 52, 57, 60].forEach(m => tone(ac, out, e, { type: 'triangle', f0: hz(m), dur: 2.6, gain: 0.05, attack: 0.05 }));
             tone(ac, out, e, { type: 'sine', f0: hz(33), dur: 2.6, gain: 0.1 }); noise(ac, out, e, { dur: 0.4, gain: 0.08, lp: 400 });
         }
-        return { sfx, bgmBar, tensionBeat, S16, tenseBar, TENSE_BAR,
+        // ===== 타이틀 곡 (V4.52.0): 72 BPM, A 에올리안 · 8마디 순환 · 16비트 =====
+        //  모래가 흘러내리는 듯한 내려가는 사각파 아르페지오 + 낮은 삼각파 베이스 + 모래 바람 잡음 + 마디 끝 모래시계 종
+        const TI_BEAT = 60 / 72, TI_BAR = TI_BEAT * 4;
+        const TI_CH = [{ b: 45, c: [57, 60, 64, 69] }, { b: 41, c: [57, 60, 65, 69] }, { b: 43, c: [55, 59, 62, 67] }, { b: 40, c: [56, 59, 64, 68] },
+                       { b: 45, c: [57, 60, 64, 72] }, { b: 38, c: [57, 62, 65, 69] }, { b: 40, c: [55, 59, 64, 67] }, { b: 40, c: [56, 59, 62, 64] }];
+        const TI_MEL = [[[76, 0, 3], [74, 3, 1]], [[72, 0, 2], [71, 2, 2]], [[74, 0, 3], [71, 3, 1]], [[68, 0, 4]],
+                        [[76, 0, 2], [79, 2, 1], [76, 3, 1]], [[77, 0, 3], [74, 3, 1]], [[72, 0, 2], [71, 2, 1], [67, 3, 1]], [[68, 0, 2], [71, 2, 2]]];
+        function titleBar(ac, out, t, bar) {
+            const C = TI_CH[bar % 8];
+            tone(ac, out, t, { type: 'triangle', f0: hz(C.b), dur: TI_BAR * 0.98, gain: 0.10, attack: 0.08 });
+            tone(ac, out, t, { type: 'sine', f0: hz(C.b - 12), dur: TI_BAR * 0.98, gain: 0.06, attack: 0.2 });
+            const arp = [3, 2, 1, 0, 2, 1, 0, 1];                                     // 위에서 아래로 흘러내림
+            arp.forEach((k, i) => tone(ac, out.arp || out, t + i * TI_BEAT / 2, { type: 'square', f0: hz(C.c[k]), dur: TI_BEAT * 0.45, gain: 0.018, lp: 2200 }));
+            if (bar >= 2) TI_MEL[bar % 8].forEach(([m, b, l]) => {                    // 처음 두 마디는 반주만
+                tone(ac, out, t + b * TI_BEAT, { type: 'square', f0: hz(m), dur: l * TI_BEAT * 0.92, gain: 0.022, attack: 0.03, lp: 1800 });
+                tone(ac, out, t + b * TI_BEAT, { type: 'triangle', f0: hz(m), dur: l * TI_BEAT * 0.95, gain: 0.04, attack: 0.02 });
+            });
+            noise(ac, out, t, { dur: TI_BAR * 0.9, gain: 0.012, bp: 900, q: 0.5 });    // 모래 바람
+            if (bar % 4 === 3) tone(ac, out, t + 3.5 * TI_BEAT, { type: 'triangle', f0: hz(88), dur: 1.6, gain: 0.03 });   // 모래시계 종 (높은 E)
+        }
+        return { sfx, bgmBar, tensionBeat, S16, tenseBar, TENSE_BAR, titleBar, TI_BAR,
                  stageStartJingle, START_LEN, SA, SA_B, mythPrologue, MYTH_LEN, bgm2Bar, M2_BAR, bgm3Bar, M3_BAR, bgm4Bar, M4_BAR, bossBar, MB_BAR, loseJingle, LOSE_LEN, overJingle, OVER_LEN };
     })();
 
@@ -4131,10 +4269,10 @@
     function setGameMusicMuted(m) { if (gameMusic && AC) gameMusic.gain.setTargetAtTime(m ? 0 : MUSIC_VOLUME, AC.currentTime, 0.05); }
     let bgmTimer = null, breakCombo = 0, lastBreakT = -9;
     const sfxLast = {};
-    const SFX_MIN_GAP = { break: 0.025, hit: 0.03, rubber: 0.04, laserBlock: 0.04, laser: 0.05, metal: 0.04 };
+    const SFX_MIN_GAP = { break: 0.025, hit: 0.03, rubber: 0.04, laserBlock: 0.04, laser: 0.05, metal: 0.04, metalLaser: 0.04 };
     // 음량: 모든 소리를 같은 크기 (가장 큰 50ms 구간 -20dB) 로 맞춘 뒤 (SND_TRIM), 음악 30% · 효과음 70%
     const MUSIC_VOLUME = 0.3, SFX_VOLUME = 0.7, BGM_VOLUME = 1, MASTER_VOLUME = 1;
-    const SND_TRIM = { break: 0.98, hit: 5.14, rubber: 1.47, laserBlock: 4.07, laser: 6.14, metal: 2.99, drop: 1.23, clear: 1.41, buy: 2.12, bgm1: 2.41, bgm2: 2.03, bgm3: 1.94, bgm4: 1.2, boss: 1.22, tense: 1.53, start: 1.19, lose: 2.33, over: 1.27, myth: 1.0 };   // backups/loudness_test.js 로 잰 값
+    const SND_TRIM = { break: 0.98, hit: 5.14, rubber: 1.47, laserBlock: 4.07, laser: 6.14, metal: 2.99, metalLaser: 2.99 * 0.8, drop: 1.23, clear: 1.41, buy: 2.12, bgm1: 2.41, bgm2: 2.03, bgm3: 1.94, bgm4: 1.2, boss: 1.22, tense: 1.53, title: 1.52, stun: 1.08, absorb: 2.57, shield: 1.07, enemyDie: 0.81, start: 1.19, lose: 2.33, over: 1.27, myth: 1.0 };   // backups/loudness_test.js 로 잰 값
     function unlockAudio() {
         try {
             if (!AC) {
@@ -4161,6 +4299,7 @@
         bgm3:     { len: SND.M3_BAR, bar: SND.bgm3Bar },
         bgm4:     { len: SND.M4_BAR, bar: SND.bgm4Bar },
         boss:     { len: SND.MB_BAR, bar: SND.bossBar },
+        title:    { len: SND.TI_BAR, bar: SND.titleBar },                 // V4.52.0 타이틀 곡
         tense:    { len: SND.TENSE_BAR, bar: SND.tenseBar, vol: 1 }
     };
     // 한 번 나오는 곡
@@ -4188,6 +4327,7 @@
         if (stageJinglePending && gameState === 'CARD_INTRO') return null;   // 카드 소개 뒤 바로 시작음이 나옴
         if (AC.currentTime < jingleUntil) return null;
         if (boss && !boss.dead) return 'boss';
+        if (gameState === 'START') return 'title';                              // 타이틀 화면 전용 곡 (V4.52.0)
         return ['bgm1', 'bgm2', 'bgm3', 'bgm4'][Math.min(3, Math.floor(currentStage / STAGES_PER_SESSION))];
     }
     let bgmP = null, jingleUntil = 0, tensNext = 0, dirPrevState = null, jingleBus = null;
@@ -4257,7 +4397,8 @@
                 breakCombo = now - lastBreakT < 0.9 ? breakCombo + 1 : 0;     // 0.9초 안에 연속으로 깨면 음이 올라감
                 lastBreakT = now;
                 SND.sfx.break(AC, sfxOut('break'), t, breakCombo);
-            } else SND.sfx[name](AC, sfxOut(name), t);
+            } else if (name === 'metalLaser') SND.sfx.metal(AC, sfxOut('metalLaser'), t);   // 같은 금속 소리를 따로 통로로 (음량 맞춤 metal x 0.8)
+            else SND.sfx[name](AC, sfxOut(name), t);
         } catch (e) {}
     }
     document.addEventListener('visibilitychange', () => { if (AC) (document.hidden ? AC.suspend() : AC.resume()); });
@@ -4457,6 +4598,7 @@
                 else update();
             }
             if (gemHudPulse > 0) gemHudPulse -= STEP_MS;
+            if (warpInT > 0) warpInT = Math.max(0, warpInT - STEP_MS);
             if (upgHudPulse > 0) upgHudPulse -= STEP_MS;
             
             accumulator -= STEP_MS;
@@ -5005,6 +5147,7 @@
 
     // ===== 패들 마비 (적에게 부딪히거나 미사일에 맞으면 1초 동안 못 움직임) =====
     const PADDLE_STUN_MS = 1000;
+    const paddleStunMs = () => PADDLE_STUN_MS * (1 - 0.1 * cardLevel('size'));   // 크기 증가 1단계마다 마비 10% 짧게 (5단계 = 0.5초, V4.50.0)
     // 충격 흡수: 방어력 최대 = 단계, 30초마다 1 충전, 적 공격 1번에 1 소모하고 마비를 막음 (상태 변수는 파일 앞쪽)
     function resetAbsorb() { absorbCharge = cardLevel('absorb'); absorbTimer = 0; paddleStun = 0; absorbFlash = 0; }
     function updateAbsorb(dt) {
@@ -5017,7 +5160,7 @@
     // 적(돌격형 몸통 / 원거리형 미사일) 이 패들에 맞았을 때 부름. true = 마비됨
     function hitPaddleByEnemy() {
         if (absorbCharge > 0) { absorbCharge--; absorbFlash = 400; if (absorbCharge === cardLevel('absorb') - 1) absorbTimer = 0; return false; }
-        paddleStun = PADDLE_STUN_MS;
+        paddleStun = paddleStunMs();
         return true;
     }
     // k = 남은 마비 비율 (1 = 막 맞음, 0 = 풀림). 패들 위에 덧그림
@@ -5259,7 +5402,7 @@
     // 업그레이드 카드 설명: [0] = 첫 구매 (SHOP_CARDS 의 desc), [1] = 2번째 구매 ... (카드 2줄)
     const CARD_DESC_UP = {
         size:   [['패들이', '조금 더 길어진다'], ['패들이', '한층 더 길어진다'], ['패들이', '훨씬 길어진다'], ['패들이', '최대 길이가 된다']],
-        laser:  [['레이저가', '2줄로 발사'], ['레이저', '발사 속도 증가'], ['레이저', '발사 속도 증가'], ['레이저', '발사 속도 최대']],
+        laser:  [['레이저가', '2줄로 발사'], ['레이저', '발사 속도 증가'], ['레이저가 3줄로 발사', '발사 속도 증가'], ['레이저', '발사 속도 최대']],
         clone:  [2, 3, 4, 5].map(lv => [lv === 5 ? '분열 확률 최대' : '분열 확률 증가', `볼 최대 ${CLONE_MAX_BALLS[lv]}개`]),
         power:  [2, 3, 4].map(lv => [lv === 4 ? '볼 파워 최대' : '볼 파워 +1', `(파워 ${1 + lv})`]),
         shield: [2, 3, 4, 5].map(lv => ['바닥 좌우 끝에', `보호 블럭 ${lv * 2}개`]),
@@ -5278,7 +5421,7 @@
     const CARD_CAT_ORDER = ['공격', '방어', '지원', '보스'];
     const SHOP_CARDS = [
         { id: 'pierce',  name: '돌파',      cat: '공격', max: 1, desc: ['약한 블럭 · 적을', '튕기지 않고 관통'] },
-        { id: 'size',    name: '크기 증가', cat: '방어', max: 5, desc: ['패들이', '더 길어진다'] },
+        { id: 'size',    name: '크기 증가', cat: '방어', max: 5, desc: ['패들이 길어지고,', '빨리 회복한다'] },
         { id: 'laser',   name: '레이저',    cat: '공격', max: 5, desc: ['패들에서', '레이저 발사'] },
         { id: 'clone',   name: '분열',      cat: '공격', max: 5, desc: ['패들에 튕길 때', '확률로 볼 분열'] },
         { id: 'power',   name: '파워',      cat: '공격', max: 4, desc: ['볼 파워', '+1'] },
