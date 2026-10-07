@@ -388,6 +388,7 @@
     canvas.addEventListener('touchstart', e => {
         e.preventDefault();
         if (inTopHud(e.touches[0].clientY)) return;
+        { const r = canvas.getBoundingClientRect(), t = e.touches[0]; if (onLaserBtn((t.clientX - r.left) * LOGIC_WIDTH / r.width, (t.clientY - r.top) * LOGIC_HEIGHT / r.height)) return; }   // LASER 버튼을 눌러도 패들이 그쪽으로 가지 않게
         handleMove(e.touches[0].clientX);
     }, { passive: false });
 
@@ -645,19 +646,105 @@
         const n = pts.length, F = { n, lum, drift, x: new Float32Array(n), y: new Float32Array(n), hx: new Float32Array(n), hy: new Float32Array(n), idx: lum.map(() => []) };
         pts.forEach(([x, y, b], i) => { F.x[i] = F.hx[i] = x; F.y[i] = F.hy[i] = y; F.idx[b].push(i); });
         F.idx = F.idx.map(a => Int32Array.from(a));
+        if (pts.some(p => p[3])) F.meta = pts.map(p => p[3] || null);   // V4.56.0: 부분별 움직임 정보 (개발자 모드 미리보기에서만 씀)
         if (drift) {
             F.bx = new Float32Array(n); F.by = new Float32Array(n); F.ph = new Float32Array(n);
             for (let i = 0; i < n; i++) { F.bx[i] = (Math.random() - 0.5) * 0.12; F.by[i] = (Math.random() - 0.5) * 0.12; F.ph[i] = Math.random() * 6.283; }
         }
         return F;
     }
+    // ===== V4.56.0 살아 있는 배경 (개발자 모드 10번에서 먼저): 배경 2 · 3 · 4 의 점이 그림을 지키며 미세하게 움직임 =====
+    //  배경 1 (모래 먼지) 이 좋아 보였던 이유 = 점이 멈추지 않고 계속 떠다님. 그림이 있는 배경은 아무렇게나 떠다니면 모양이 뭉개지므로
+    //  부분마다 '그 부분다운' 움직임을 줌. 모든 점 공통: 모래알처럼 제자리에서 아주 조금 흔들림 (1세션 먼지와 같은 속도 · 1~3px/초)
+    const LV_SHIM = 0, LV_DISK = 1, LV_BOB = 2, LV_WALL = 3, LV_PULSE = 4, LV_RISE = 5, LV_IRIS = 6, LV_FOLLOW = 7, LV_SWAY = 8, LV_STAR = 9, LV_STILL = 10, LV_ORBIT = 11;
+    //  DISK  [cx, cy, u, v, flat, cos, sin, w]  기울어진 원반 위 점: 원반째 w (rad/초) 로 돎 (은하 · 작은 은하)
+    //  ORBIT [ … DISK 와 같음, 가운데 구멍에 들어가면 숨김 ]  블랙홀 소용돌이 줄기 (안쪽 줄기일수록 빠름)
+    //  BOB   [무리 번호]           성운 · 바위 · 구름: 덩어리째 천천히 떠다님
+    //  WALL  [쪽 (-1 왼 · 1 오), 무게]  살 벽: 아래에서 위로 올라가는 숨 (삼키는 듯) · 벽 안쪽 끝이 가장 크게
+    //  PULSE [cx, cy, 크기, 위상]   가운데를 두고 커졌다 작아짐 (블랙홀 빛무리 · 빛의 고리 · 목구멍 고리)
+    //  RISE  [속도]                체액 방울 · 먼지: 천천히 위로 떠오름 (화면 위로 나가면 아래에서 다시)
+    //  IRIS  []                    홍채 결: 동공과 같은 박자로 넓어졌다 좁아짐 + 아주 천천히 돎
+    //  FOLLOW [눈알 번호]           떠 있는 눈알 몸: 움직이는 눈동자 (drawIrisLive) 와 같이 움직임
+    //  SWAY  [크기, 위상]           점막 · 시신경: 옆으로 물결
+    //  STAR                        흩어진 별: 흔들림 + 일부는 반짝임
+    //  STILL                       움직이는 그림 (눈) 에 붙은 테두리: 아주 조금만
+    let bgLiveFx = false;                                                       // 미리보기에서 움직임 켬 (게임은 아직 꺼짐 · drawFleshLive 의 벽 눈도 같이 움직임)
+    const liveWallDx = (y, w, side, T) => -side * w * 13 * (0.5 + 0.5 * Math.sin(T * 1.1 + y * 0.0045));   // 살 벽 숨 (drawFleshLive 의 숨과 같은 박자 1.1 rad/초)
+    function liveInit(F) {
+        const n = F.n, k = new Uint8Array(n), p = new Float32Array(n * 8), ph = new Float32Array(n), fr = new Float32Array(n), am = new Float32Array(n), hid = new Uint8Array(n);
+        const ox = Float32Array.from(F.hx), oy = Float32Array.from(F.hy), tw = [];
+        for (let i = 0; i < n; i++) {
+            const m = F.meta && F.meta[i];
+            k[i] = m ? m[0] : LV_SHIM;
+            if (m) for (let j = 1; j <= 8 && j < m.length; j++) p[i * 8 + j - 1] = m[j];
+            ph[i] = hash3(i, 17, 3) * 6.2832; fr[i] = 0.22 + 0.33 * hash3(i, 5, 9); am[i] = 2.5 + 2.5 * hash3(i, 8, 1);
+            if (k[i] === LV_STAR && hash3(i, 2, 7) < 0.45) tw.push(i);           // 별의 45% 는 반짝임
+        }
+        if (tw.length) {                                                           // 반짝이는 별은 따로 그림 (drawTwinkle) · 원래 밝기를 기억해서 그 주변에서만 오르내림 (구도가 바뀌지 않게)
+            const bOf = new Int8Array(n); F.idx.forEach((a, b) => { for (let j = 0; j < a.length; j++) bOf[a[j]] = b; });
+            const s = new Set(tw); F.idx = F.idx.map(a => a.filter(i => !s.has(i))); F.tw = Int32Array.from(tw); F.twL = Float32Array.from(tw, i => F.lum[bOf[i]]);
+        }
+        F.mv = { k, p, ph, fr, am, ox, oy, hid };
+    }
+    function moveField(F, T) {
+        const M = F.mv, { k, p, ph, fr, am, ox, oy, hid } = M, H = LOGIC_HEIGHT;
+        let lastA = NaN, ca = 1, sa = 0;
+        const ibr = INB.r * 0.12 * Math.sin(T * 0.7), ia = 0.035 * Math.sin(T * 0.105), ica = Math.cos(ia), isa = Math.sin(ia);   // 홍채: drawIrisLive 의 동공 (1 + 0.12 sin(t ms x 0.0007)) 과 같은 박자로 밀려남 · 천천히 ±2° 흔들리듯 돎 (60초에 한 번)
+        for (let i = 0; i < F.n; i++) {
+            const kind = k[i], q = i * 8;
+            let x = ox[i], y = oy[i], s = 1;                                        // s = 모래알 흔들림 크기 비율
+            if (kind === LV_DISK || kind === LV_ORBIT) {
+                // 은하 (DISK) = 천천히 흔들리듯 돎 (큰 은하 ±2.3° = 가장자리 ±33px · 작은 은하 ±14° = ±17px · 90초에 한 번 → 대각선 구도가 언제나 그대로) · 블랙홀 소용돌이 (ORBIT) = 계속 돎 (소용돌이다움)
+                const w = p[q + 7], a = kind === LV_ORBIT ? w * T : (Math.abs(w) > 0.02 ? 0.25 : 0.04) * Math.sin(T * 0.0698 + p[q] * 0.01);   // |w| > 0.02 = 작은 은하
+                if (a !== lastA) { lastA = a; ca = Math.cos(a); sa = Math.sin(a); }
+                const u = p[q + 2], v = p[q + 3], u2 = u * ca - v * sa, v2 = (u * sa + v * ca) * p[q + 4];
+                x = p[q] + u2 * p[q + 5] - v2 * p[q + 6]; y = p[q + 1] + u2 * p[q + 6] + v2 * p[q + 5]; s = 0.45;
+                if (kind === LV_ORBIT) {
+                    const inH = Math.hypot(x - BH.x, (y - BH.y) / 1.04) < BH.r;
+                    if (inH) { hid[i] = 1; F.x[i] = F.hx[i] = -999; F.y[i] = F.hy[i] = -999; continue; }
+                    if (hid[i]) { hid[i] = 0; F.x[i] = x; F.y[i] = y; }               // 구멍에서 나올 때는 바로 그 자리 (먼 곳에서 날아오지 않게)
+                }
+            } else if (kind === LV_BOB) { const g = p[q]; x += 9 * Math.sin(T * 0.11 + g * 2.1); y += 7 * Math.cos(T * 0.09 + g * 1.7); }
+            else if (kind === LV_WALL) x += liveWallDx(y, Math.min(1, p[q + 1]), p[q], T);   // 무게 최대 1 = 벽 안쪽 끝 (통로로 뻗은 핏줄 끝 · 벽 눈은 벽 끝과 같이)
+            else if (kind === LV_PULSE) { const g = p[q + 2] * Math.sin(T * 0.9 + p[q + 3]); x += (x - p[q]) * g; y += (y - p[q + 1]) * g; s = 0.6; }
+            else if (kind === LV_RISE) { const ny = ((oy[i] - T * p[q]) % H + H) % H; if (Math.abs(ny - F.hy[i]) > H / 2) F.y[i] += ny - F.hy[i]; y = ny; x += 6 * Math.sin(T * 0.45 + ph[i]); }
+            else if (kind === LV_IRIS) {
+                const dx = x - INB.x, dy = y - INB.y, r = Math.hypot(dx, dy) || 1, f = (r + ibr * Math.max(0, 1 - (r - INB.r) / 700)) / r;
+                x = INB.x + (dx * ica - dy * isa) * f; y = INB.y + (dx * isa + dy * ica) * f; s = 0.5;
+            }
+            else if (kind === LV_FOLLOW) { const e = p[q]; x += 8 * Math.sin(T * 0.9 + e); y += 10 * Math.cos(T * 0.7 + e * 2); s = 0.2; }   // drawIrisLive 의 눈동자 (ex + 8 sin(t·0.0009 + i), ey + 10 cos(t·0.0007 + 2i)) 와 똑같이 (T = 초 · t = ms)
+            else if (kind === LV_SWAY) x += p[q] * Math.sin(T * 0.6 + y * 0.004 + p[q + 1]);
+            else if (kind === LV_STILL) s = 0.25;
+            const A = am[i] * s, w = fr[i];
+            F.hx[i] = x + A * Math.sin(T * w + ph[i]); F.hy[i] = y + A * Math.cos(T * w * 0.83 + ph[i] * 1.3);
+        }
+    }
+    // 반짝이는 별: 원래 밝기의 50% ~ 160% 사이를 천천히 오르내림 (8단계로 묶어 그림 · fillStyle 최대 8번). 밝을 때 조금 크게
+    const TW_BIN = 8, twBinX = Array.from({ length: TW_BIN }, () => []), twBinY = Array.from({ length: TW_BIN }, () => []);
+    function drawTwinkle(c, F, size, T) {
+        if (!F.tw) return;
+        for (let b = 0; b < TW_BIN; b++) { twBinX[b].length = 0; twBinY[b].length = 0; }
+        for (let j = 0; j < F.tw.length; j++) {
+            const i = F.tw[j], k = 0.5 + 0.5 * Math.sin(T * (0.5 + 1.3 * hash3(i, 3, 3)) + hash3(i, 9, 9) * 6.28);
+            const L = Math.min(250, F.twL[j] * (0.5 + 1.1 * k * k)), b = Math.min(TW_BIN - 1, Math.floor(L / 256 * TW_BIN));   // 대부분 원래보다 살짝 어둡고 가끔 밝게
+            twBinX[b].push(F.x[i]); twBinY[b].push(F.y[i]);
+        }
+        for (let b = 0; b < TW_BIN; b++) {
+            if (!twBinX[b].length) continue;
+            const L = Math.round((b + 0.5) * 256 / TW_BIN), s = size * (L > 150 ? 1.3 : 1), h = s / 2;
+            c.fillStyle = 'rgb(' + L + ',' + L + ',' + L + ')';
+            for (let j = 0; j < twBinX[b].length; j++) c.fillRect(twBinX[b][j] - h, twBinY[b][j] - h, s, s);
+        }
+    }
     // 참고 그림: 화면 가운데를 비스듬히 가로지르는 큰 나선 은하 + 작은 은하 2개 + 모서리 성운 + 흩어진 별
     function buildGalaxyPoints() {
         const R = galRng(20261009), g = () => { let u = 0; while (!u) u = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * R()); };
-        const pts = [], put = (x, y, L) => { if (x >= -10 && x <= LOGIC_WIDTH + 10 && y >= -10 && y <= LOGIC_HEIGHT + 10) pts.push([x, y, Math.max(0, Math.min(5, L | 0))]); };
-        const spiral = (cx, cy, size, tilt, flat, nArm, nCore, nHaze, bright) => {
+        const pts = [];
+        let meta = null;                                                                 // V4.56.0: 개발자 모드 움직임용 부분 정보 (그림은 그대로)
+        const put = (x, y, L, m = meta) => { if (x >= -10 && x <= LOGIC_WIDTH + 10 && y >= -10 && y <= LOGIC_HEIGHT + 10) pts.push([x, y, Math.max(0, Math.min(5, L | 0)), m]); };
+        const spiral = (cx, cy, size, tilt, flat, nArm, nCore, nHaze, bright, w0) => {
             const ct = Math.cos(tilt), st = Math.sin(tilt);
-            const place = (u, v, L) => { const vv = v * flat; put(cx + u * ct - vv * st, cy + u * st + vv * ct, L); };
+            const place = (u, v, L) => { const vv = v * flat; put(cx + u * ct - vv * st, cy + u * st + vv * ct, L, [LV_DISK, cx, cy, u, v, flat, ct, st, w0, 0]); };   // 은하 전체가 한 덩어리로 천천히 돎 (팔 모양 유지)
             for (let i = 0; i < nCore; i++) { const r = Math.abs(g()) * size * 0.05, a = R() * 6.2832; place(Math.cos(a) * r, Math.sin(a) * r, bright + 1.6 - r / (size * 0.05)); }
             for (let arm = 0; arm < 2; arm++) for (let i = 0; i < nArm; i++) {
                 const t = Math.pow(R(), 0.85), r = size * (0.04 + 0.96 * t);
@@ -667,15 +754,15 @@
             }
             for (let i = 0; i < nHaze; i++) { const r = size * Math.min(1, -Math.log(1 - R() * 0.98) * 0.3), a = R() * 6.2832; place(Math.cos(a) * r, Math.sin(a) * r, bright - 3.2 - r / size * 1.2 + R()); }
         };
-        spiral(600, 1010, 820, -0.62, 0.45, 1000, 240, 450, 4.2);
-        spiral(1065, 1250, 60, -0.5, 0.6, 55, 25, 20, 3.4);
-        spiral(165, 1720, 75, -0.4, 0.55, 65, 30, 25, 3.4);
+        spiral(600, 1010, 820, -0.62, 0.45, 1000, 240, 450, 4.2, -0.0035);   // 마지막 = 도는 속도 (rad/초): 큰 은하 30분에 한 바퀴 · 가장자리 약 3px/초
+        spiral(1065, 1250, 60, -0.5, 0.6, 55, 25, 20, 3.4, -0.045);        // 작은 은하는 더 빨리 (가장자리 약 3px/초)
+        spiral(165, 1720, 75, -0.4, 0.55, 65, 30, 25, 3.4, -0.04);
         const wisp = (x0, y0, x1, y1, bx, by, n, wd) => { for (let i = 0; i < n; i++) {
             const t = R(), mx = (x0 + x1) / 2 + bx, my = (y0 + y1) / 2 + by;
             put((1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * mx + t * t * x1 + g() * wd, (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * my + t * t * y1 + g() * wd, 1 + R() * 1.4); } };
-        wisp(-20, 80, 360, 520, -60, 80, 260, 55);        // 왼쪽 위 성운
-        wisp(820, 1700, 1190, 2060, 120, -60, 260, 60);   // 오른쪽 아래 성운
-        for (let i = 0; i < 650; i++) { const b = R(); put(R() * LOGIC_WIDTH, R() * LOGIC_HEIGHT, b < 0.85 ? R() * 2.2 : 2.5 + R() * 2.5); }   // 흩어진 별
+        meta = [LV_BOB, 0]; wisp(-20, 80, 360, 520, -60, 80, 260, 55);        // 왼쪽 위 성운 (덩어리째 천천히 떠다님)
+        meta = [LV_BOB, 1]; wisp(820, 1700, 1190, 2060, 120, -60, 260, 60);   // 오른쪽 아래 성운
+        meta = [LV_STAR]; for (let i = 0; i < 650; i++) { const b = R(); put(R() * LOGIC_WIDTH, R() * LOGIC_HEIGHT, b < 0.85 ? R() * 2.2 : 2.5 + R() * 2.5); }   // 흩어진 별 (일부 반짝임)
         return pts;
     }
     // 반짝이는 큰 별 (십자 빛): 멀리 있어서 공에 밀리지 않음
@@ -702,21 +789,23 @@
     function buildBlackholePoints() {
         const R = galRng(20260923), g = () => { let u = 0; while (!u) u = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * R()); };
         const pts = [], N = BH_LUM.length - 1;
-        const put = (x, y, L) => { if (x >= -10 && x <= LOGIC_WIDTH + 10 && y >= -10 && y <= LOGIC_HEIGHT + 10) pts.push([x, y, Math.max(0, Math.min(N, L | 0))]); };
+        let meta = null;                                                                 // V4.56.0: 움직임용 부분 정보 (그림 · 무작위 순서는 그대로)
+        const put = (x, y, L, m = meta) => { if (x >= -10 && x <= LOGIC_WIDTH + 10 && y >= -10 && y <= LOGIC_HEIGHT + 10) pts.push([x, y, Math.max(0, Math.min(N, L | 0)), m]); };
         const ct = Math.cos(BH.tilt), st = Math.sin(BH.tilt), rot = (u, v) => [BH.x + u * ct - v * st, BH.y + u * st + v * ct];
         const inHole = (x, y) => Math.hypot(x - BH.x, (y - BH.y) / 1.04) < BH.r;
         const nz = (x, y, sd) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
             const a = hash3(xi, yi, sd), b = hash3(xi + 1, yi, sd), c = hash3(xi, yi + 1, sd), d = hash3(xi + 1, yi + 1, sd); return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy; };
-        // 1) 소용돌이 줄기: 블랙홀을 도는 납작한 타원, 안쪽일수록 밝고 줄기마다 밝은 구간이 있음
+        // 1) 소용돌이 줄기: 블랙홀을 도는 납작한 타원, 안쪽일수록 밝고 줄기마다 밝은 구간이 있음 · 움직임: 줄기째 돎, 안쪽 줄기일수록 빠름 (안쪽 약 4px/초 · 바깥 약 2px/초)
         for (let k = 0; k < 12; k++) {
-            const r0 = 270 + k * 62 + R() * 20, flat = 0.42 + R() * 0.12, ph = R() * 6.28, n = 200 + 10 * k;
+            const r0 = 270 + k * 62 + R() * 20, flat = 0.42 + R() * 0.12, ph = R() * 6.28, n = 200 + 10 * k, wk = -0.015 * Math.pow(270 / r0, 1.5);
             for (let i = 0; i < n; i++) {
                 const a = R() * 6.2832, rr = r0 * (1 + 0.07 * Math.sin(2 * a + ph)) + g() * 10, [x, y] = rot(Math.cos(a) * rr, Math.sin(a) * rr * flat);
                 if (inHole(x, y)) continue;
-                put(x, y, 3.0 - k * 0.15 + (0.5 + 0.5 * Math.sin(a * 3 + ph)) * 1.4 + R() * 0.8 - 0.4);
+                put(x, y, 3.0 - k * 0.15 + (0.5 + 0.5 * Math.sin(a * 3 + ph)) * 1.4 + R() * 0.8 - 0.4, [LV_ORBIT, BH.x, BH.y, Math.cos(a) * rr, Math.sin(a) * rr, flat, ct, st, wk]);
             }
         }
-        // 2) 구멍 둘레 빛무리: 바깥으로 갈수록 어두움, 왼쪽이 더 밝음
+        // 2) 구멍 둘레 빛무리: 바깥으로 갈수록 어두움, 왼쪽이 더 밝음 · 움직임: 구멍이 숨 쉬듯 빛무리 · 고리가 함께 커졌다 작아짐
+        meta = [LV_PULSE, BH.x, BH.y, 0.02, 0];
         for (let i = 0; i < 1200; i++) {
             const t = Math.pow(R(), 1.6), rr = BH.r * (1.12 + t * 1.25), a = R() * 6.2832;
             put(BH.x + Math.cos(a) * rr, BH.y + Math.sin(a) * rr * 1.04, 5 - t * 3.6 + Math.max(0, -Math.cos(a)) * 1.3 + g() * 0.4);
@@ -726,7 +815,8 @@
             const a = R() * 6.2832, rr = BH.r * (1.02 + Math.abs(g()) * 0.035);
             put(BH.x + Math.cos(a) * rr, BH.y + Math.sin(a) * rr * 1.04, 5.5 + (Math.cos(a) < -0.2 ? 1 : 0) - (R() < 0.3 ? 1 : 0));
         }
-        // 4) 강착 원반: 구멍 앞을 비스듬히 가로지르는 얇고 밝은 띠 (가운데가 가장 밝고 두꺼움) + 띠 둘레 옅은 빛
+        // 4) 강착 원반: 구멍 앞을 비스듬히 가로지르는 얇고 밝은 띠 (가운데가 가장 밝고 두꺼움) + 띠 둘레 옅은 빛 · 움직임: 얇은 띠라 흔들림만 아주 작게 (번지지 않게)
+        meta = [LV_STILL];
         for (let i = 0; i < 1000; i++) {
             const s2 = R() * 2 - 1, near = 1 - Math.abs(s2), off = g() * (4 + 16 * Math.pow(near, 1.5)), [x, y] = rot(s2 * 640, BH.r * 0.22 + off);
             if (Math.abs(off) > 26 && Math.hypot(x - BH.x, (y - BH.y) / 1.04) < BH.r) continue;   // 구멍 안에서는 띠 가운데만 (넓게 튄 점은 구멍을 뿌옇게 만듦)
@@ -736,33 +826,35 @@
             const s2 = R() * 2 - 1, near = 1 - Math.abs(s2), [x, y] = rot(s2 * 760, BH.r * 0.22 + g() * (24 + 40 * near));
             if (Math.hypot(x - BH.x, (y - BH.y) / 1.04) > BH.r * 1.02) put(x, y, 1.2 + near * 1.8);   // 옅은 빛은 구멍 밖에만 (구멍 안은 밝은 원반 띠만 지나감)
         }
-        // 5) 작은 나선 은하 2개 (왼쪽 위, 오른쪽 아래)
-        const spiral = (cx, cy, size, tilt, flat, n) => {
-            const c2 = Math.cos(tilt), s3 = Math.sin(tilt), at = (u, v, L) => put(cx + u * c2 - v * flat * s3, cy + u * s3 + v * flat * c2, L);
+        // 5) 작은 나선 은하 2개 (왼쪽 위, 오른쪽 아래) · 움직임: 은하째 천천히 돎
+        const spiral = (cx, cy, size, tilt, flat, n, w0) => {
+            const c2 = Math.cos(tilt), s3 = Math.sin(tilt), at = (u, v, L) => put(cx + u * c2 - v * flat * s3, cy + u * s3 + v * flat * c2, L, [LV_DISK, cx, cy, u, v, flat, c2, s3, w0]);
             for (let i = 0; i < n * 0.25; i++) { const r = Math.abs(g()) * size * 0.08, a = R() * 6.2832; at(Math.cos(a) * r, Math.sin(a) * r, 5 - r / (size * 0.08)); }
             for (let arm = 0; arm < 2; arm++) for (let i = 0; i < n; i++) {
                 const t = Math.pow(R(), 0.8), r = size * (0.06 + 0.94 * t), a = arm * Math.PI + 2.6 * Math.log(r / (size * 0.06)) + g() * 0.12, rr = r + g() * size * 0.04;
                 at(Math.cos(a) * rr, Math.sin(a) * rr, 4.2 - t * 2.6 + R() * 0.8);
             }
         };
-        spiral(240, 330, 110, -0.5, 0.62, 160);
-        spiral(985, 1620, 95, -0.4, 0.6, 130);
-        // 6) 떠다니는 바위 조각: 울퉁불퉁한 밝은 테두리 (한쪽은 그늘) + 안쪽 옅은 점
+        spiral(240, 330, 110, -0.5, 0.62, 160, -0.03);
+        spiral(985, 1620, 95, -0.4, 0.6, 130, -0.034);
+        // 6) 떠다니는 바위 조각: 울퉁불퉁한 밝은 테두리 (한쪽은 그늘) + 안쪽 옅은 점 · 움직임: 바위마다 따로 천천히 떠다님
         const rocks = [];
         for (let tries = 0; rocks.length < 22 && tries < 600; tries++) {
             const x = 30 + R() * (LOGIC_WIDTH - 60), y = 80 + R() * (LOGIC_HEIGHT - 160), rad = 14 + Math.pow(R(), 2) * 44;
             if (Math.hypot(x - BH.x, y - BH.y) < BH.r * 2.5 + rad || rocks.some(o => Math.hypot(o.x - x, o.y - y) < o.rad + rad + 40)) continue;
             rocks.push({ x, y, rad });
         }
-        for (const o of rocks) {
+        rocks.forEach((o, ri) => {
+            meta = [LV_BOB, 10 + ri];
             const b0 = R() * 6.28, b1 = R() * 6.28, k = 5 + Math.floor(R() * 4), edge = a => o.rad * (1 + 0.12 * Math.sin(k * a + b0) + 0.08 * Math.sin(3 * a + b1)), n = Math.round(o.rad * 3.5);
             for (let i = 0; i < n; i++) { const a = i / n * 6.2832 + R() * 0.05, e = edge(a); put(o.x + Math.cos(a) * e, o.y + Math.sin(a) * e, 3 + R() * 1.4 - (Math.sin(a + 0.8) > 0 ? 1 : 0)); }
             for (let i = 0; i < o.rad * o.rad * 0.03; i++) { const a = R() * 6.2832, r = Math.sqrt(R()) * edge(a) * 0.85; put(o.x + Math.cos(a) * r, o.y + Math.sin(a) * r, 0.5 + R() * 1.2); }
-        }
-        // 7) 모서리 성운: 얼룩진 구름 (오른쪽 위, 오른쪽 아래, 왼쪽 아래)
-        const cloud = (cx, cy, rx, ry, n, sd) => { for (let i = 0; i < n; i++) { const x = cx + g() * rx, y = cy + g() * ry, m = nz(x / 46, y / 46, sd); if (R() < m * m * 1.4) put(x, y, 0.8 + m * 2.6 + R() * 0.6); } };
+        });
+        // 7) 모서리 성운: 얼룩진 구름 (오른쪽 위, 오른쪽 아래, 왼쪽 아래) · 움직임: 구름째 천천히 떠다님
+        const cloud = (cx, cy, rx, ry, n, sd) => { meta = [LV_BOB, sd]; for (let i = 0; i < n; i++) { const x = cx + g() * rx, y = cy + g() * ry, m = nz(x / 46, y / 46, sd); if (R() < m * m * 1.4) put(x, y, 0.8 + m * 2.6 + R() * 0.6); } };
         cloud(1060, 230, 130, 170, 800, 41); cloud(1030, 1950, 150, 110, 600, 42); cloud(120, 1880, 140, 120, 450, 43);
-        // 8) 흩어진 별 (88% 어둡게)
+        // 8) 흩어진 별 (88% 어둡게) · 일부 반짝임
+        meta = [LV_STAR];
         for (let i = 0; i < 520; i++) { const x = R() * LOGIC_WIDTH, y = R() * LOGIC_HEIGHT; if (!inHole(x, y)) put(x, y, R() < 0.88 ? R() * 2.2 : 3 + R() * 3); }
         return pts;
     }
@@ -781,36 +873,41 @@
     function buildFleshPoints() {
         const R = galRng(20261025), g = () => { let u = 0; while (!u) u = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * R()); };
         const pts = [], N = IN_LUM.length - 1, W = LOGIC_WIDTH, H = LOGIC_HEIGHT;
-        const put = (x, y, L) => { if (x >= -10 && x <= W + 10 && y >= -10 && y <= H + 10) pts.push([x, y, Math.max(0, Math.min(N, L | 0))]); };
+        let meta = null;                                                                 // V4.56.0: 움직임용 부분 정보
+        const put = (x, y, L, m = meta) => { if (x >= -10 && x <= W + 10 && y >= -10 && y <= H + 10) pts.push([x, y, Math.max(0, Math.min(N, L | 0)), m]); };
         const wallX = y => 150 + 70 * Math.sin(y * 0.0105) + 40 * Math.sin(y * 0.031 + 1.3) + (1 - y / H) * 90;   // 벽 두께 (위로 갈수록 두꺼움 = 통로가 좁아짐)
-        // 1) 벽의 살: 가로로 휜 주름 (갈비뼈) · 벽 가장자리가 가장 밝음
+        // 1) 벽의 살: 가로로 휜 주름 (갈비뼈) · 벽 가장자리가 가장 밝음 · 움직임: 아래에서 위로 올라가는 숨 (삼키는 듯 벽이 안쪽으로 부풂) · 벽 안쪽 끝일수록 크게
         for (let side = -1; side <= 1; side += 2) for (let i = 0; i < 5200; i++) {
             const y = R() * H, w = wallX(y), u = Math.pow(R(), 0.7) * w, x = side < 0 ? u : W - u;
             const rib = 0.5 + 0.5 * Math.sin(y * 0.052 + u * 0.012 * side + 2 * inNoise(x / 90, y / 90, 3)), edge = 1 - Math.abs(w - u) / 40;
             if (R() > 0.35 + 0.6 * rib) continue;
-            put(x, y, 0.6 + 2.6 * rib * (u / w) + (edge > 0 ? edge * 2.6 : 0) + g() * 0.3);
+            put(x, y, 0.6 + 2.6 * rib * (u / w) + (edge > 0 ? edge * 2.6 : 0) + g() * 0.3, [LV_WALL, side, u / w]);
         }
-        // 2) 핏줄: 벽에서 통로 쪽으로 뻗는 갈라진 선 (끝으로 갈수록 가늘고 어두움)
-        const vein = (x, y, a, len, L, depth) => {
-            for (let s = 0; s < len; s += 4) { a += g() * 0.12; x += Math.cos(a) * 4; y += Math.sin(a) * 4; put(x + g() * 1.2, y + g() * 1.2, L * (1 - s / len * 0.6)); if (depth < 2 && R() < 0.012) vein(x, y, a + (R() < 0.5 ? -0.7 : 0.7), len * 0.55, L * 0.8, depth + 1); }
+        // 2) 핏줄: 벽에서 통로 쪽으로 뻗는 갈라진 선 (끝으로 갈수록 가늘고 어두움) · 움직임: 붙어 있는 벽과 같이 숨 쉼
+        const vein = (x, y, a, len, L, depth, side) => {
+            for (let s = 0; s < len; s += 4) { a += g() * 0.12; x += Math.cos(a) * 4; y += Math.sin(a) * 4; const px = x + g() * 1.2, py = y + g() * 1.2, w = wallX(py), d = side < 0 ? px : W - px;
+                put(px, py, L * (1 - s / len * 0.6), [LV_WALL, side, Math.max(0, Math.min(1.3, d / w))]); if (depth < 2 && R() < 0.012) vein(x, y, a + (R() < 0.5 ? -0.7 : 0.7), len * 0.55, L * 0.8, depth + 1, side); }
         };
-        for (let k = 0; k < 14; k++) { const y = 140 + R() * (H - 280), left = k % 2 === 0, x = left ? wallX(y) - 6 : W - wallX(y) + 6; vein(x, y, (left ? 0 : Math.PI) + g() * 0.5, 160 + R() * 220, 4.2, 0); }
-        // 3) 통로 깊이: 위쪽 가운데로 모이는 고리 (안쪽 깊숙한 목구멍)
+        for (let k = 0; k < 14; k++) { const y = 140 + R() * (H - 280), left = k % 2 === 0, x = left ? wallX(y) - 6 : W - wallX(y) + 6; vein(x, y, (left ? 0 : Math.PI) + g() * 0.5, 160 + R() * 220, 4.2, 0, left ? -1 : 1); }
+        // 3) 통로 깊이: 위쪽 가운데로 모이는 고리 (안쪽 깊숙한 목구멍) · 움직임: 고리마다 차례로 커졌다 작아짐 (안쪽으로 삼키는 물결)
         for (let k = 0; k < 9; k++) { const t = k / 8, cy = 260 + t * t * 1200, rx = 140 + t * 330, ry = 40 + t * 110, n = 160 + k * 30;
+            meta = [LV_PULSE, W / 2, cy, 0.045, -k * 0.7];
             for (let i = 0; i < n; i++) { const a = R() * 6.2832, rr = 1 + g() * 0.03; if (Math.sin(a) < -0.2 && R() < 0.7) continue; put(W / 2 + Math.cos(a) * rx * rr, cy + Math.sin(a) * ry * rr, 1.2 + 2.2 * (1 - t) + R() * 0.5); } }
-        // 4) 떠다니는 체액 방울 (작고 옅게)
-        for (let i = 0; i < 1500; i++) { const x = R() * W, y = R() * H, w = wallX(y); if (x < w + 10 || x > W - w - 10) continue; put(x, y, R() < 0.85 ? 0.6 + R() * 1.6 : 2.5 + R() * 1.5); }
-        // 4-1) 통로 안을 떠다니는 얇은 막 (가로로 흔들리는 옅은 줄, 살 사이에 걸린 점막)
-        for (let k = 0; k < 7; k++) { const y0 = 380 + k * 230 + g() * 30, ph = R() * 6;
+        // 4) 떠다니는 체액 방울 (작고 옅게) · 움직임: 천천히 위로 떠오름 (목구멍 쪽으로)
+        for (let i = 0; i < 1500; i++) { const x = R() * W, y = R() * H, w = wallX(y); if (x < w + 10 || x > W - w - 10) continue; put(x, y, R() < 0.85 ? 0.6 + R() * 1.6 : 2.5 + R() * 1.5, [LV_RISE, 6 + 10 * hash3(i, 31, 7)]); }   // 속도는 hash3 (R() 을 더 쓰면 뒤 그림이 바뀜)
+        // 4-1) 통로 안을 떠다니는 얇은 막 (가로로 흔들리는 옅은 줄, 살 사이에 걸린 점막) · 움직임: 막째 위아래로 출렁임
+        for (let k = 0; k < 7; k++) { const y0 = 380 + k * 230 + g() * 30, ph = R() * 6; meta = [LV_BOB, 60 + k];
             for (let x = 0; x < W; x += 3) { const y = y0 + 26 * Math.sin(x * 0.006 + ph) + 10 * Math.sin(x * 0.021 + ph * 2), w = wallX(y); if (x < w || x > W - w || R() < 0.45) continue; put(x, y + g() * 2, 1.4 + R() * 1.2); } }
-        // 5) 벽에 박힌 감은 눈의 테두리 (눈꺼풀 선은 움직이는 부분에서 그림)
-        for (const [ex, ey, er] of INA_EYES) for (let i = 0; i < er * 7; i++) { const a = R() * 6.2832, rr = er * (1.25 + Math.abs(g()) * 0.18); put(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr * 0.62, 3 + R()); }
+        // 5) 벽에 박힌 감은 눈의 테두리 (눈꺼풀 선은 움직이는 부분에서 그림) · 움직임: 눈이 박힌 벽과 같이 숨 쉼 (drawFleshLive 의 눈도 같이)
+        INA_EYES.forEach(([ex, ey, er]) => { const side = ex < W / 2 ? -1 : 1, w = wallX(ey), d = side < 0 ? ex : W - ex; meta = [LV_WALL, side, d / w];
+            for (let i = 0; i < er * 7; i++) { const a = R() * 6.2832, rr = er * (1.25 + Math.abs(g()) * 0.18); put(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr * 0.62, 3 + R()); } });
         return pts;
     }
     function drawFleshLive(c, t) {                                           // 숨 쉬는 듯 벽이 밝아졌다 어두워짐 · 벽의 눈이 가끔 뜨고 공 쪽을 봄 · 핏줄을 따라 빛이 흐름
         const breath = 0.5 + 0.5 * Math.sin(t * 0.0011), b = typeof balls !== 'undefined' && balls[0];
         for (let i = 0; i < INA_EYES.length; i++) {
-            const [ex, ey, er] = INA_EYES[i], ph = (t * 0.00012 + hash3(i, 4, 4)) % 1, op = ph < 0.18 ? Math.sin(ph / 0.18 * Math.PI) : 0;
+            const [ex0, ey, er] = INA_EYES[i], ex = ex0 + (bgLiveFx ? liveWallDx(ey, Math.min(1, (ex0 < LOGIC_WIDTH / 2 ? ex0 : LOGIC_WIDTH - ex0) / (150 + 70 * Math.sin(ey * 0.0105) + 40 * Math.sin(ey * 0.031 + 1.3) + (1 - ey / LOGIC_HEIGHT) * 90)), ex0 < LOGIC_WIDTH / 2 ? -1 : 1, t / 1000) : 0);   // V4.56.0: 벽 숨과 같이 움직임
+            const ph = (t * 0.00012 + hash3(i, 4, 4)) % 1, op = ph < 0.18 ? Math.sin(ph / 0.18 * Math.PI) : 0;
             if (op > 0.03) { const lx = b ? b3Clamp((b.x - ex) / 400) : 0, ly = b ? b3Clamp((b.y - ey) / 400) : 0; b3Eye(c, ex, ey, er, op, lx, ly, Math.floor(t / SAND_INTERVAL) % SAND_FRAMES, 0.8); }
             else for (let k = -10; k <= 10; k++) { const u = k / 10; b3Dot(c, ex + u * er, ey + (1 - u * u) * er * 0.12, 110 + 50 * breath, 2.4); }   // 감은 눈꺼풀
         }
@@ -823,25 +920,29 @@
     function buildIrisPoints() {
         const R = galRng(20261026), g = () => { let u = 0; while (!u) u = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * R()); };
         const pts = [], N = IN_LUM.length - 1, W = LOGIC_WIDTH, H = LOGIC_HEIGHT;
-        const put = (x, y, L) => { if (x >= -10 && x <= W + 10 && y >= -10 && y <= H + 10) pts.push([x, y, Math.max(0, Math.min(N, L | 0))]); };
+        let meta = null;                                                                 // V4.56.0: 움직임용 부분 정보
+        const put = (x, y, L, m = meta) => { if (x >= -10 && x <= W + 10 && y >= -10 && y <= H + 10) pts.push([x, y, Math.max(0, Math.min(N, L | 0)), m]); };
         const inPupil = (x, y) => Math.hypot(x - INB.x, y - INB.y) < INB.r * 1.08;
-        // 1) 홍채 결: 동공을 둘러싼 방사형 줄 (구불구불) + 동심원 주름
+        // 1) 홍채 결: 동공을 둘러싼 방사형 줄 (구불구불) + 동심원 주름 · 움직임: 동공이 커지면 결이 바깥으로 밀리고 작아지면 돌아옴 (같은 박자) + 아주 천천히 돎
+        meta = [LV_IRIS];
         for (let k = 0; k < 150; k++) { const a0 = k / 150 * 6.2832 + g() * 0.01, wav = R() * 6;
             for (let r = INB.r * 1.15; r < 1150; r += 5) { const a = a0 + 0.05 * Math.sin(r * 0.02 + wav), fall = Math.max(0, 1 - (r - INB.r) / 900);
                 if (R() > 0.25 + 0.5 * fall) continue; put(INB.x + Math.cos(a) * r, INB.y + Math.sin(a) * r, 0.6 + 3.6 * fall * (0.6 + 0.4 * Math.sin(r * 0.06 + a0 * 7)) + g() * 0.3); } }
         for (let k = 0; k < 8; k++) { const r = INB.r * (1.3 + k * 0.45) + g() * 6;
             for (let i = 0; i < 260; i++) { const a = R() * 6.2832, rr = r * (1 + 0.025 * Math.sin(a * 11 + k)); put(INB.x + Math.cos(a) * rr, INB.y + Math.sin(a) * rr, 3.4 - k * 0.35 + R() * 0.5); } }
-        // 2) 동공 테두리: 아주 밝고 얇음
+        // 2) 동공 테두리: 아주 밝고 얇음 · 움직임: 홍채와 같이 (동공 가장자리 꿈틀은 drawIrisLive 가 그림)
         for (let i = 0; i < 900; i++) { const a = R() * 6.2832, rr = INB.r * (1.08 + Math.abs(g()) * 0.025); put(INB.x + Math.cos(a) * rr, INB.y + Math.sin(a) * rr, 5.4 + R() * 0.6); }
-        // 3) 시신경 다발: 화면 아래에서 동공 쪽으로 꼬여 올라가는 굵은 줄 4개
-        for (let k = 0; k < 4; k++) { const x0 = 200 + k * 260, ph = R() * 6;
+        // 3) 시신경 다발: 화면 아래에서 동공 쪽으로 꼬여 올라가는 굵은 줄 4개 · 움직임: 다발마다 옆으로 천천히 물결
+        for (let k = 0; k < 4; k++) { const x0 = 200 + k * 260, ph = R() * 6; meta = [LV_SWAY, 10, k * 1.7];
             for (let s = 0; s < 1; s += 0.0022) { const y = H - s * (H - INB.y - INB.r * 1.4), x = x0 + (INB.x - x0) * s * s + 50 * Math.sin(s * 9 + ph);
                 for (let j = 0; j < 3; j++) put(x + g() * (14 - 8 * s), y + g() * 3, 1.4 + 1.8 * s + R() * 0.6); } }
-        // 4) 떠 있는 작은 눈알의 둥근 몸 (눈동자는 움직이는 부분에서 그림)
-        for (const [ex, ey, er] of INB_FLOAT) { for (let i = 0; i < er * 9; i++) { const a = R() * 6.2832, rr = er * (1 + g() * 0.03); put(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr, 3.6 + R()); }
-            for (let i = 0; i < er * 4; i++) { const a = R() * 6.2832, rr = er * (1 + R() * 1.4); put(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr + rr * 0.6, 1 + R()); } }   // 매달린 꼬리 (신경)
-        // 5) 흩어진 먼지
-        for (let i = 0; i < 500; i++) { const x = R() * W, y = R() * H; if (!inPupil(x, y)) put(x, y, R() * 1.8); }
+        // 4) 떠 있는 작은 눈알의 둥근 몸 (눈동자는 움직이는 부분에서 그림) · 움직임: drawIrisLive 의 눈동자와 똑같이 둥둥 뜸 (몸과 눈동자가 떨어지지 않게)
+        INB_FLOAT.forEach(([ex, ey, er], ei) => { meta = [LV_FOLLOW, ei];
+            for (let i = 0; i < er * 9; i++) { const a = R() * 6.2832, rr = er * (1 + g() * 0.03); put(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr, 3.6 + R()); }
+            for (let i = 0; i < er * 4; i++) { const a = R() * 6.2832, rr = er * (1 + R() * 1.4); put(ex + Math.cos(a) * rr, ey + Math.sin(a) * rr + rr * 0.6, 1 + R()); } });   // 매달린 꼬리 (신경)
+        // 5) 흩어진 먼지 · 움직임: 천천히 위로 떠오름
+        meta = null;
+        for (let i = 0; i < 500; i++) { const x = R() * W, y = R() * H; if (!inPupil(x, y)) put(x, y, R() * 1.8, [LV_RISE, 4 + 6 * hash3(i, 32, 7)]); }   // 속도는 hash3 (R() 을 더 쓰면 그림이 바뀜)
         return pts;
     }
     function drawIrisLive(c, t) {                                            // 동공이 천천히 커졌다 작아짐 (구멍 안은 완전 검정) · 떠 있는 눈알이 공을 따라봄 · 동공 가장자리가 꿈틀
@@ -1455,12 +1556,12 @@
             '.0.0.0.0.0.0.',
             '0.0.0.0.0.0.0'
         ],
-        // Stage 21 (겹 상자 · 게이트가 바깥 상자 안쪽 가운데 줄: 돌격 2 ×2 · 원거리 2 ×2 · 위는 고무 · 양옆 금색 모서리 계단) · V4.48.0
+        // Stage 21 (겹 상자 · 게이트가 바깥 상자 안쪽 가운데 줄: 돌격 3 ×2 · 원거리 3 ×2 (V4.54.0: 2단계 → 3단계, 5초마다) · 위는 고무 · 양옆 금색 모서리 계단) · V4.48.0
         [
             'XX.4444444.XX',
             'X..........X.',
             '4.bbbbbbbbb.4',
-            '4.3q.v.v.q3.4',
+            '4.3r.w.w.r3.4',
             '4.3.22222.3.4',
             '4.3.2...2.3.4',
             '4.3.2.1.2.3.4',
@@ -1471,9 +1572,9 @@
             '4...........4',
             '4444444444444'
         ],
-        // Stage 22 (다리 · 게이트가 다리 아래에 매달림: 원거리 2 ×2 · 돌격 3 ×2 · 위쪽 아치형 금색 다리 + 고무 난간) · V4.48.0
+        // Stage 22 (다리 · 게이트가 다리 아래에 매달림: 원거리 2 ×2 · 돌격 3 ×2 · 위쪽 아치형 금색 다리 + 고무 난간) · V4.48.0 · V4.54.0: 금색 다리 위에 원거리 3 ×2 추가
         [
-            '.44444444444.',
+            '.444w444w444.',
             '...XXX.XXX...',
             'X.X.......X.X',
             'X.vbr...rbv.X',
@@ -1484,18 +1585,19 @@
             '..000000000..'
         ],
         // Stage 23 (체커 · 게이트가 체커 칸 속 계단식 높이: 원거리 3 ×3 · 돌격 3 ×2 · 칸마다 금색 갓 · 고무 받침) · V4.48.0
+        //  V4.54.0: 블럭 체력 크게 올림 (일반 블럭 전부 최대 체력 5 · 이전 2~4) · 원거리 2 ×2 추가 (바로 아래 금색 블럭이 막아 줌)
         [
             'X...........X',
             'w.4.4.X.4.4.w',
             '4b4.4.w.4.4b4',
             '...X.....X...',
-            '.3r3.3.3.3r3.',
-            '3.3.3.3.3.3.3',
-            '.....b.b.....',
-            '.2.2.2.2.2.2.',
-            '2.2.2.2.2.2.2',
-            '.1.1.1.1.1.1.',
-            '1.1.1.1.1.1.1'
+            '.4r4.4.4.4r4.',
+            '4.4.v.4.v.4.4',
+            '....Xb.bX....',
+            '.4.4.4.4.4.4.',
+            '4.4.4.4.4.4.4',
+            '.4.4.4.4.4.4.',
+            '4.4.4.4.4.4.4'
         ],
         // Stage 24 (산 · 게이트가 산 비탈 높이마다: 원거리 3 ×4 · 돌격 3 ×2 · 산꼭대기 금색 봉우리 + 비탈 고무, 보스3 직전) · V4.48.0
         [
@@ -1510,9 +1612,9 @@
             '1111111111111',
             '0000000000000'
         ],
-        // Stage 25 (키 블럭 1: 금색 상자. 아래 오른쪽 한 칸 틈으로 집어넣기) · 포탑 2 · 돌격 게이트 1단계 2
+        // Stage 25 (키 블럭 1: 금색 상자. 아래 오른쪽 한 칸 틈으로 집어넣기) · 포탑 2 · 돌격 게이트 1단계 2 · V4.55.0: 금색 상자 위에 원거리 게이트 2단계 2 (레이저가 못 닿음)
         [
-            '.............',
+            '....v...v....',
             '...XXXXXXX...',
             '...X..k..X...',
             '...X.....X...',
@@ -1522,18 +1624,19 @@
             '.............',
             '..p.......p..'
         ],
-        // Stage 26 (키 블럭 2: 왼쪽 벽 속 가로 굴. 오른쪽 입구로 비스듬히 밀어 넣기) · 포탑 3 (입구 지킴이 1) · 게이트 3
+        // Stage 26 (키 블럭 2: 왼쪽 벽 속 가로 굴. 오른쪽 입구로 비스듬히 밀어 넣기) · 포탑 3 (입구 지킴이 1) · 게이트 3 · V4.55.0: 게이트 3개 모두 금색 블럭 위 (원거리는 굴 지붕 위로 옮김, 돌격 2개 아래 금색 받침)
         [
-            '.............',
-            'XXXX.....u...',
+            '..u..........',
+            'XXXX.........',
             'Xk...........',
             'XXXXL........',
             '.............',
             '............R',
             'L............',
-            '...p.....p...'
+            '...p.....p...',
+            '...X.....X...'
         ],
-        // Stage 27 (키 블럭 3: 위가 열린 금색 요새. 옆 통로로 올라가 위에서 떨어뜨리기) · 포탑 4 · 게이트 2
+        // Stage 27 (키 블럭 3: 위가 열린 금색 요새. 옆 통로로 올라가 위에서 떨어뜨리기) · 포탑 4 · 게이트 2 · V4.55.0: 게이트 2개 아래 금색 받침
         [
             '.............',
             '...XXX.XXX...',
@@ -1542,9 +1645,10 @@
             '...X.....X...',
             '...XXXXXXX...',
             '.............',
-            'L...u...q...R'
+            'L...u...q...R',
+            '....X...X....'
         ],
-        // Stage 28 (키 블럭 4: 이중 요새. 오른쪽 바깥 틈 → 위 회랑 → 안쪽 틈, 두 번 집어넣기) · 포탑 2 (3.6초) · 원거리 2단계 · 돌격 3단계
+        // Stage 28 (키 블럭 4: 이중 요새. 오른쪽 바깥 틈 → 위 회랑 → 안쪽 틈, 두 번 집어넣기) · 포탑 2 (3.6초) · 원거리 2단계 · 돌격 3단계 · V4.55.0: 게이트 2개 아래 금색 받침
         [
             '.............',
             '.XXXXXXXXXXX.',
@@ -1555,7 +1659,7 @@
             '.X.XXXXXXX.X.',
             'L............',
             '.v.........r.',
-            '....X...X....'
+            '.X..X...X..X.'
         ]
     ];
 
@@ -1689,6 +1793,8 @@
     const GATE_HP = 10, GATE_BALL_DMG = 5, GATE_LASER_DMG = 2;
     const GATE_SPAWN_MS = [0, 15000, 10000, 5000];         // 게이트 단계별 적 생성 간격
     const MAX_ENEMIES = 5, MAX_PER_KIND = 3, ENEMY_S = 80, ENEMY_R = 30;   // 화면 동시 최대: 합계 5, 종류별 3 / 그림 크기 / 충돌 반지름
+    const MAX_ENEMIES_LATE = 6, LATE_ENEMY_FROM = 20;                        // 21스테이지부터 (보스3 포함) 동시 최대 6 (V4.54.0)
+    const maxEnemies = () => currentStage >= LATE_ENEMY_FROM ? MAX_ENEMIES_LATE : MAX_ENEMIES;
     const MISSILE_SPEED = 7, MISSILE_W = 12, MISSILE_H = 28;
     const enemies = [], enemyMissiles = [];
     let enemyClock = 0;
@@ -1836,7 +1942,7 @@
             const T = BRICK_TIERS[g.tier];
             if (!g.alive || !T.gate) continue;
             g.spawnT = (g.spawnT || 0) + STEP_MS;
-            if (g.spawnT >= GATE_SPAWN_MS[T.gateLv]) { g.spawnT -= GATE_SPAWN_MS[T.gateLv]; if (enemies.length < MAX_ENEMIES && enemies.filter(e => e.kind === T.gate).length < MAX_PER_KIND) spawnEnemy(g); }
+            if (g.spawnT >= GATE_SPAWN_MS[T.gateLv]) { g.spawnT -= GATE_SPAWN_MS[T.gateLv]; if (enemies.length < maxEnemies() && enemies.filter(e => e.kind === T.gate).length < MAX_PER_KIND) spawnEnemy(g); }
         }
         const PR = paddleRect();
         for (let i = enemies.length - 1; i >= 0; i--) {
@@ -2172,7 +2278,7 @@
         B.spawnT = (B.spawnT || 0) + STEP_MS;
         if (B.spawnT >= B3_SPAWN_MS) {
             B.spawnT -= B3_SPAWN_MS;
-            if (enemies.filter(e => e.kind === 'shoot').length < B3_SPAWN_MAX && enemies.length < MAX_ENEMIES) {
+            if (enemies.filter(e => e.kind === 'shoot').length < B3_SPAWN_MAX && enemies.length < maxEnemies()) {
                 const x = B.x, y = B.y + coreR + ENEMY_R + 6, a = Math.PI / 2 + (Math.random() - 0.5) * 1.6;
                 enemies.push({ kind: 'shoot', x, y, born: enemyClock, vx: Math.cos(a) * ENEMY_SPEED, vy: Math.sin(a) * ENEMY_SPEED, hp: ENEMY_LASER_HP, flash: 0, wob: Math.random() * 6, phase: Math.floor(Math.random() * CUBE_BREATH_MS), fired: -1, ghost: true });
                 spawnBurst({ x: x - 20, y: y - 20, w: 40, h: 40 }, 30); B.flash = Math.max(B.flash, 0.6);
@@ -2407,17 +2513,17 @@
     // 가운데 눈 (몸) = 약점, 날개를 펴고 눈을 뜬 동안만 데미지 (공 = 볼 파워, 레이저 = 1). 날개를 접으면 무적 (튕기기만)
     // 바퀴 2개 = 공을 튕기고 레이저를 막음. 바퀴 위 눈이 미사일. 체력 반 이하: 바퀴가 1.6배 빨리 돌고 미사일 2발씩 더 자주
     const BOSS3_AFTER_STAGE = 23;                     // 0부터 센 번호: 24스테이지 뒤
-    const B3_HP = 50, B3_SC = 0.78 * 1.2, B3_GAME_Y = 560, B3_CORE_R = 160, B3_WHEEL_W = 14, B3_FIRE_MS = 2300, B3_FIRE2_MS = 1500;   // 크기 1.2배 (V4.38.0)
+    const B3_HP = 100, B3_SC = 0.78 * 1.2, B3_GAME_Y = 560, B3_CORE_R = 160, B3_WHEEL_W = 14, B3_FIRE_MS = Math.round(2300 / 1.2), B3_FIRE2_MS = Math.round(1500 / 1.2);   // 크기 1.2배 (V4.38.0) · 체력 50 → 100, 미사일 발사 속도 +20% (2.3초 → 1.92초, 반 이하 1.5초 → 1.25초) (V4.54.0)
     const B3_MOVE_X = 170, B3_MOVE_XF = 0.00055, B3_MOVE_Y = 40, B3_MOVE_YF = 0.0015;   // 좌우 · 위아래 움직임 (예전 120 · 0.00033 · 22 · 0.0009 보다 크고 빠르게)
     const B3_SPREAD = 300;                                                               // 미사일 2발이 좌우로 벌어지는 거리 (px)
-    const B3_SPAWN_MS = 8000, B3_SPAWN_MAX = 3;                                          // 눈 아래에서 원거리형 적: 8초마다 1마리, 최대 3마리
-    const BOSS2_HP = 50, B2_S = BOSS_S;               // 보스1 과 같은 크기 (704px)
+    const B3_SPAWN_MS = 4000, B3_SPAWN_MAX = 3;                                          // 눈 아래에서 원거리형 적: 4초마다 1마리 (8초 → 2배 빠르게, V4.54.0), 최대 3마리
+    const BOSS2_HP = 80, B2_S = BOSS_S;               // 보스1 과 같은 크기 (704px) · 체력 50 → 80 (V4.53.0)
     const B2_R = B2_S * 0.30, B2_GAP = 100, B2_W = B2_S * 0.34, B2_H = B2_S * 0.05;   // 구체 반지름 211 / 틈 100 / 그림자 반폭 239 · 반높이 35
     const B2_DY = B2_R + B2_GAP + B2_H;               // 구체 중심 -> 그림자 중심 (346)
     const B2_LASER_DMG = 1;                          // 본체 (타원) 는 위 · 아래 · 옆 어디에 맞아도 볼 파워만큼, 레이저는 무조건 1
     const B2_VORTEX_HP = 10, B2_INVULN_MS = 2000;     // 체력 10 이하: 본체가 소용돌이로 바뀌고 레이저가 막힘. 처음 10 아래로 내려갈 때 10에서 멈추고 2초 무적
     const B2_HIT_CD = 60, B2_STEEP = 0.72;   // 같은 공의 연속 데미지 간격 (ms) / 틈 안 세로 속도 비율: 클수록 천장 · 바닥을 자주 오가서 튕기는 횟수가 늘어남
-    const B2_FIRE_MS = 3600, B2_SPREAD = 230, B2_MUZZLE = [-0.22, 0, 0.22].map(v => v * B2_S);
+    const B2_FIRE_MS = Math.round(3600 / 1.15), B2_SPREAD = 230, B2_MUZZLE = [-0.22, 0, 0.22].map(v => v * B2_S);   // 발사 간격 3.6초 → 3.13초 (발사 속도 +15%, V4.53.0) · 기 모으기 연출도 같은 주기
     const B2_SPH_FRAMES = 10, B2_GLOW_STEPS = 6, B2_FLOW_MS = 2400;   // 줄무늬가 한 번 흘러가는 시간 (기를 모으면 4배 빨라짐)
     const b2Phase = t => (t % B2_FIRE_MS) / B2_FIRE_MS;                     // 0.5 = 발사 순간
     const b2Charge = t => { const p = b2Phase(t); return p < 0.3 ? 0 : p < 0.5 ? (p - 0.3) / 0.2 : p < 0.62 ? 1 - (p - 0.5) / 0.12 : 0; };   // 모으기 0 -> 1, 쏜 뒤 빠르게 꺼짐
@@ -3270,7 +3376,7 @@
 
         // 레이저 업그레이드 발사
         const laserLv = cardLevel('laser');
-        if (laserLv > 0) {
+        if (laserLv > 0 && laserOn) {                                       // 하단 LASER 버튼으로 끄면 쏘지 않음 (V4.55.0)
             paddle.laserTimer += STEP_MS;
             if (paddle.laserTimer >= LASER_INTERVALS[laserLv] - 0.001) {   // 소수점 오차로 1프레임 늦게 발사되는 것 방지
                 paddle.laserTimer -= LASER_INTERVALS[laserLv];
@@ -3729,7 +3835,7 @@
                 ctx.font = font('40px');
                 ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);
                 ctx.font = font('28px');
-                ctx.fillText('V4.52.1', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.56.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER') {
                 if (performance.now() - lostAt >= OVER_TO_TITLE_MS) goTitle();
                 ctx.font = font('bold 100px');
@@ -3762,6 +3868,10 @@
     const HUD_COLOR = 'rgb(178,178,178)';   // HUD 글씨/아이콘 밝기 70% (255 x 0.7)
     const HUD_BOTTOM_H = 96;
     const VOL_BTN = { x: LOGIC_WIDTH - 96, y: LOGIC_HEIGHT - 96 + 20, w: 80, h: 56 };   // 우측 하단
+    const LASER_BTN = { x: 785, y: LOGIC_HEIGHT - 96 + 20, w: 170, h: 56 };           // 하단: 파워 글씨와 소리 버튼 사이 · 레이저 카드가 있을 때만 (V4.55.0)
+    let laserOn = true;                                                                 // 레이저 자동 발사 켬 / 끔 (새 게임마다 켬)
+    const laserBtnShown = () => cardLevel('laser') > 0 && ['PLAY', 'LIFE_LOST', 'BOSS_WARN', 'BOSS_DIE', 'CLEAR_SEQ'].includes(gameState);
+    const onLaserBtn = (lx, ly, pad = 12) => laserBtnShown() && lx >= LASER_BTN.x - pad && lx <= LASER_BTN.x + LASER_BTN.w + pad && ly >= LASER_BTN.y - pad && ly <= LASER_BTN.y + LASER_BTN.h + pad;
     const UPG_BTN = { x: LOGIC_WIDTH - 96, y: 20, w: 80, h: 56 };                     // 우측 상단: 업그레이드
     const GEM_RIGHT = UPG_BTN.x - 22;                                                  // 보석 숫자 오른쪽 끝
     let upgHudPulse = 0;
@@ -4435,6 +4545,7 @@
 
         // 우측 하단: 볼륨 버튼 (이모지 대신 도형으로 그려 iPhone/Mac 동일하게)
         drawVolumeButton();
+        drawLaserButton();
 
         // 충격 흡수 방어력: 패들 위 작은 칸 (꽉 찬 칸 = 남은 방어력, 다음 칸은 충전 정도만큼 차오름)
         if (absorbMax() > 0 && (gameState === 'PLAY' || gameState === 'LIFE_LOST')) {
@@ -4558,6 +4669,16 @@
         }
     }
 
+    // 하단 레이저 켬 / 끔 버튼: 레이저 카드가 있을 때만. 끄면 글씨 · 테두리가 어두워짐
+    function drawLaserButton() {
+        if (!laserBtnShown()) return;
+        const { x, y, w, h } = LASER_BTN, c = laserOn ? HUD_COLOR : 'rgb(85,85,85)';
+        ctx.strokeStyle = c; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.stroke();
+        ctx.fillStyle = c; ctx.font = font('bold 24px'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(laserOn ? 'LASER ON' : 'LASER OFF', x + w / 2, y + h / 2);
+    }
+
     // 캔버스 좌표가 볼륨 버튼 안이면 토글하고 true 반환
     function hitVolumeButton(clientX, clientY) {
         const rect = canvas.getBoundingClientRect();
@@ -4620,7 +4741,7 @@
             score = 0;
             gemCount = 0;
             for (const k in upgrades) delete upgrades[k];
-            saveCode = null; saveTo = null;
+            saveCode = null; saveTo = null; laserOn = true;
             initGame(0);
             gameState = 'PROLOGUE';
             prologueStartT = performance.now();
@@ -4640,6 +4761,7 @@
         unlockAudio();
         if (hitVolumeButton(clientX, clientY)) return;
         const p = toLogic(clientX, clientY);
+        if (gameState === 'PLAY' && onLaserBtn(p.x, p.y)) { laserOn = !laserOn; return; }   // 레이저 켬 / 끔
         if (gameState === 'PROLOGUE') {
             if ((p.x > LOGIC_WIDTH - 250 && p.y < 120) || performance.now() - prologueStartT >= PR4_WAIT_AT) {   // SKIP 버튼 · 또는 마지막 문구 뒤 아무 곳이나 → 게임 방법
                 gameState = 'HOWTO'; howtoStartT = performance.now();
@@ -4798,10 +4920,11 @@
         background: {
             title: '10. 배경',
             get body() {
-                const V = BG_VIEWS[bgPage], n = BG_VIEWS.length, i = bgPage;
+                const V = BG_VIEWS[bgPage], n = BG_VIEWS.length, i = bgPage, canLive = bgPage > 0;   // 배경 1 은 원래 떠다님 (버튼 없음)
                 const nav = (k, label, off) => `<button class="dev-bg-nav" data-nav="${k}" ${off ? 'disabled' : ''} style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; cursor:${off ? 'default' : 'pointer'}; border:1px solid ${off ? '#333' : '#fff'}; background:#000; color:${off ? '#444' : '#fff'};">${label}</button>`;
-                return `<div style="font:bold 22px Menlo, monospace;">${V.name}</div>
-<div style="font-size:14px; color:#888; margin:2px 0 6px;">${V.note} · 게임 화면 그대로 축소 · 공이 지나가면 점이 흩어짐</div>
+                const live = canLive ? `<button class="dev-bg-live" style="flex:0 0 auto; padding:6px 12px; font:bold 16px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid ${bgLiveOn ? '#fff' : '#555'}; background:${bgLiveOn ? '#fff' : '#000'}; color:${bgLiveOn ? '#000' : '#888'};">움직임 ${bgLiveOn ? 'ON' : 'OFF'}</button>` : '';
+                return `<div style="display:flex; align-items:center; gap:10px;"><div style="flex:1; font:bold 22px Menlo, monospace;">${V.name}</div>${live}</div>
+<div style="font-size:14px; color:#888; margin:2px 0 6px;">${V.note}${canLive ? ' · 움직임: ' + V.live2 + ' (게임에는 아직 안 넣음)' : ''} · 게임 화면 그대로 축소 · 공이 지나가면 점이 흩어짐</div>
 <canvas class="dev-fill" id="dev-bg-canvas" width="1170" height="1400" style="width:100%; display:block; background:#000;"></canvas>
 <div class="dev-pager" style="display:flex; gap:10px; align-items:center; margin-top:10px;">${nav('prev', '◀', i === 0)}<div style="flex:1; text-align:center; font:bold 22px Menlo, monospace;">${i + 1} / ${n}</div>${nav('next', '▶', i === n - 1)}</div>`;
             }
@@ -6896,19 +7019,24 @@
     // 10. 배경 미리보기: 시연용 공 하나가 화면을 튕기며 점을 흩음
     const BG_VIEWS = [
         { name: '1세션 (1~8) · 모래 먼지', note: '게임에서 쓰는 중', make: () => makeField(Array.from({ length: DUST_COUNT }, (_, i) => [Math.random() * LOGIC_WIDTH, Math.random() * LOGIC_HEIGHT, i % DUST_LUM.length]), DUST_LUM, true) },
-        { name: '2세션 (9~16) · 점묘 은하', note: '9~16스테이지에서 씀', make: () => makeField(buildGalaxyPoints(), GAL_LUM, false), sparkle: true },
-        { name: '3세션 (17~24) · 블랙홀', note: '17~24스테이지에서 씀 · 참고 그림 기반 · 배경 2 방식 (점 겹침 허용)', make: makeBlackholeField, sparkle: 'bh' },
-        { name: '4세션 (25~26) · 살의 통로', note: '25~26스테이지에서 씀 (보스3 몸속 · 목구멍) · 갈비뼈처럼 휜 살 벽 + 핏줄 + 안쪽 목구멍 + 벽의 눈이 가끔 뜨고 공을 봄', make: makeFleshField, live: drawFleshLive },
-        { name: '4세션 (27~28) · 안쪽 눈의 방', note: '27~28스테이지에서 씀 (보스3 몸속 · 눈 안) · 동공 = 검은 구멍 (숨 쉬듯 커짐) + 홍채 결 + 시신경 + 떠다니는 눈알', make: makeIrisField, live: drawIrisLive }
+        { name: '2세션 (9~16) · 점묘 은하', note: '9~16스테이지에서 씀', make: () => makeField(buildGalaxyPoints(), GAL_LUM, false), sparkle: true,
+          live2: '은하 3개가 한 덩어리로 천천히 돎 · 성운이 떠다님 · 흩어진 별 일부가 반짝임 · 모든 점이 모래알처럼 흔들림' },
+        { name: '3세션 (17~24) · 블랙홀', note: '17~24스테이지에서 씀 · 참고 그림 기반 · 배경 2 방식 (점 겹침 허용)', make: makeBlackholeField, sparkle: 'bh',
+          live2: '소용돌이가 구멍을 돎 (안쪽일수록 빠름 · 구멍에 들어가면 사라짐) · 빛무리 · 고리가 숨 쉼 · 바위 · 구름이 떠다님 · 별 반짝임' },
+        { name: '4세션 (25~26) · 살의 통로', note: '25~26스테이지에서 씀 (보스3 몸속 · 목구멍) · 갈비뼈처럼 휜 살 벽 + 핏줄 + 안쪽 목구멍 + 벽의 눈이 가끔 뜨고 공을 봄', make: makeFleshField, live: drawFleshLive,
+          live2: '살 벽이 아래에서 위로 삼키듯 부풂 (핏줄 · 벽의 눈도 같이) · 목구멍 고리가 차례로 커졌다 작아짐 · 체액이 위로 떠오름 · 점막이 출렁임' },
+        { name: '4세션 (27~28) · 안쪽 눈의 방', note: '27~28스테이지에서 씀 (보스3 몸속 · 눈 안) · 동공 = 검은 구멍 (숨 쉬듯 커짐) + 홍채 결 + 시신경 + 떠다니는 눈알', make: makeIrisField, live: drawIrisLive,
+          live2: '동공이 커지면 홍채 결이 같이 밀려남 + 아주 천천히 돎 · 떠 있는 눈알 몸이 눈동자와 같이 둥둥 · 시신경이 물결 · 먼지가 떠오름' }
     ];
-    let bgPage = 0, bgRAF = 0;
+    let bgPage = 0, bgRAF = 0, bgLiveOn = true;                                   // V4.56.0: 배경 2 · 3 · 4 움직임 (미리보기 기본 켬)
     function startBgPreview() {
         cancelAnimationFrame(bgRAF);
         const V = BG_VIEWS[bgPage], F = V.make(), B = { x: 585, y: 1500, vx: BALL_VX, vy: -BALL_VY, r: 18 }, wake = [];
+        if (F.meta && bgLiveOn) liveInit(F);                                       // 그림 있는 배경: 부분별 움직임 준비 (배경 1 은 원래 떠다님) · 끄면 예전 그대로 (비교용)
         let wx = B.x, wy = B.y, tick = 0;
         const step = () => {
             const cv = document.getElementById('dev-bg-canvas');
-            if (!cv || devDetailScreen.style.display === 'none') { bgRAF = 0; return; }
+            if (!cv || devDetailScreen.style.display === 'none') { bgRAF = 0; bgLiveFx = false; return; }
             fitStageCanvas(cv);
             B.x += B.vx; B.y += B.vy;
             if (B.x < B.r || B.x > LOGIC_WIDTH - B.r) B.vx = -B.vx;
@@ -6920,13 +7048,17 @@
                 minX = Math.min(minX, x - r); maxX = Math.max(maxX, x + r); minY = Math.min(minY, y - r); maxY = Math.max(maxY, y + r); };
             for (const w of wake) add(w.x, w.y, WAKE_HOLE_R * Math.min(1, (w.life / WAKE_LIFE) / HOLE_CLOSE_PORTION));
             add(B.x, B.y, BALL_HOLE_R);
+            const t = performance.now(), T = t / 1000, live = bgLiveOn && F.mv;      // V4.56.0: 움직임은 같은 시계 (초) → 살아 있는 그림 (눈 · 동공) 과 박자가 맞음
+            bgLiveFx = !!live;
+            if (live) moveField(F, T);
             stepField(F, HN, minX, maxX, minY, maxY, ++tick * 0.012);
-            const c = cv.getContext('2d'), Fr = stagePreviewFrame(cv), s = Fr.s, t = performance.now();
+            const c = cv.getContext('2d'), Fr = stagePreviewFrame(cv), s = Fr.s;
             const dot = Math.max(2.6, 1.0 * LOGIC_WIDTH / Math.max(1, Fr.w * cv.clientWidth / cv.width));
             c.fillStyle = '#000'; c.fillRect(0, 0, cv.width, cv.height);
             c.save(); c.beginPath(); c.rect(Fr.x, Fr.y, Fr.w, Fr.h); c.clip(); c.translate(Fr.x, Fr.y); c.scale(s, s);
             c.fillStyle = '#020202'; c.fillRect(0, 0, LOGIC_WIDTH, LOGIC_HEIGHT);
             drawField(c, F, dot);
+            if (F.tw) drawTwinkle(c, F, dot, T);
             if (V.sparkle === 'bh') drawSparkles(c, t, BH_SPARKS); else if (V.sparkle) drawSparkles(c, t);
             if (V.live) { const keep = balls.slice(); balls.length = 0; balls.push({ x: B.x, y: B.y }); V.live(c, t); balls.length = 0; balls.push(...keep); }   // 눈이 미리보기 공을 봄
             c.fillStyle = '#ddd'; c.beginPath(); c.arc(B.x, B.y, B.r, 0, Math.PI * 2); c.fill();
@@ -6938,6 +7070,8 @@
         bgRAF = requestAnimationFrame(step);
     }
     devDetailBody.addEventListener('click', e => {
+        const lv = e.target.closest && e.target.closest('.dev-bg-live');
+        if (lv) { bgLiveOn = !bgLiveOn; devDetailBody.innerHTML = devContent.background.body; startBgPreview(); return; }   // 움직임 켬 / 끔 (비교용)
         const b = e.target.closest && e.target.closest('.dev-bg-nav');
         if (!b || b.disabled) return;
         bgPage = Math.max(0, Math.min(BG_VIEWS.length - 1, bgPage + (b.dataset.nav === 'next' ? 1 : -1)));
