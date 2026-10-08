@@ -1396,7 +1396,11 @@
     const elWarnSfx = { last: 0 };                                               // 경고음: 블럭이 선 2칸 안에 있으면 1.2초마다 (가까울수록 0.6초까지 빨라짐)
     const fmtTime = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
     // 타이틀 메뉴: PUSH START (본편) 아래에 ENDLESS 버튼 + 최고 기록
-    const TITLE_ENDLESS_BTN = { x: LOGIC_WIDTH / 2 - 260, y: LOGIC_HEIGHT / 2 + 230, w: 520, h: 110 };
+    // 타이틀 메뉴 (V4.62.2): 처음은 원래 타이틀 (PUSH START) · 한 번 누르면 같은 화면 · 같은 음악에서 STORY / ENDLESS 버튼
+    let titleMenu = false, titleMenuT = 0;
+    const TITLE_MENU_HOLD_MS = 250;
+    const TITLE_STORY_BTN = { x: LOGIC_WIDTH / 2 - 260, y: LOGIC_HEIGHT / 2 + 80, w: 520, h: 110 };      // STORY: 원래 PUSH START 자리
+    const TITLE_ENDLESS_BTN = { x: LOGIC_WIDTH / 2 - 260, y: LOGIC_HEIGHT / 2 + 230, w: 520, h: 110 };   // ENDLESS: 한 칸 아래 (110 + 간격 40)
     // 무한 모드 게임 오버 화면: 끝난 이유 · 이번 기록 / 최고 기록 표 (새 기록은 NEW) · 다시 하기 · 타이틀
     const EL_RES_BTNS = { retry: { x: LOGIC_WIDTH / 2 - 400, y: LOGIC_HEIGHT / 2 + 420, w: 370, h: 116 }, title: { x: LOGIC_WIDTH / 2 + 30, y: LOGIC_HEIGHT / 2 + 420, w: 370, h: 116 } };
     function drawElResult() {
@@ -1429,6 +1433,10 @@
         else if (inRect(EL_RES_BTNS.title, x, y)) goTitle();
     }
     function drawTitleEndless() {
+        const S = TITLE_STORY_BTN;                                                // 스토리 (본편): 실선 테두리 · 무한 모드보다 위
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(S.x, S.y, S.w, S.h, 16); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = font('bold 48px'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('STORY', S.x + S.w / 2, S.y + S.h / 2);
         const B = TITLE_ENDLESS_BTN, t = performance.now();
         ctx.save(); ctx.setLineDash([16, 10]); ctx.lineDashOffset = -(t / 50) % 26; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 3;   // 무한 모드 = 게임 오버 선과 같은 점선 테두리
         ctx.beginPath(); ctx.roundRect(B.x, B.y, B.w, B.h, 16); ctx.stroke(); ctx.restore();
@@ -4218,11 +4226,11 @@
                 ctx.font = font('bold 110px');
                 ctx.fillText('BREAKOUT', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 - 70);
                 ctx.font = font('40px');
-                ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);
-                drawTitleEndless();                                                  // V4.62.0: 무한 모드 메뉴
+                if (!titleMenu) ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);   // 처음: 원래 타이틀 · 누르면 STORY / ENDLESS 고르기 (V4.62.2, 배경 · 음악 그대로)
+                else drawTitleEndless();
                 ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = font('28px');
-                ctx.fillText('V4.62.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.62.2', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER' && endless && endless.result) {
                 drawElResult();                                                      // 무한 모드: 이번 기록 · 최고 기록 (6초 뒤 타이틀로 가지 않음 · 누르면 버튼대로)
             } else if (gameState === 'GAME_OVER') {
@@ -5148,7 +5156,7 @@
 
     // 게임 시작/재시작 - iOS에서 touchstart가 click을 막으므로 양쪽 모두 연결
     const OVER_TO_TITLE_MS = 6000;
-    function goTitle() { testStage = null; endless = null; initGame(0); gameState = 'START'; score = 0; gemCount = 0; stageGems = 0; gems.length = 0; for (const k in upgrades) delete upgrades[k]; }   // 처음 켰을 때와 같은 타이틀 화면 (지난 판의 수정 · 점수 · 카드 지움, V4.48.1)
+    function goTitle() { titleMenu = false; testStage = null; endless = null; initGame(0); gameState = 'START'; score = 0; gemCount = 0; stageGems = 0; gems.length = 0; for (const k in upgrades) delete upgrades[k]; }   // 처음 켰을 때와 같은 타이틀 화면 (지난 판의 수정 · 점수 · 카드 지움, V4.48.1)
     function tryStart() {
         if ((gameState === 'GAME_OVER' || gameState === 'LIFE_LOST') && performance.now() - lostAt < LOST_HOLD_MS) return;
         if (gameState === 'GAME_OVER') { goTitle(); return; }
@@ -5192,7 +5200,11 @@
         if (gameState === 'ENDING') { if (endingDone() && performance.now() - endingT0 > ENDING_SILENCE_MS + END_LOOP + 2500) goTitle(); return; }   // 엔딩 중에는 못 넘김, 끝난 뒤 누르면 타이틀
         if (gameState === 'EL_PICK') { elPickTap(p.x, p.y); return; }            // 무한 모드: 카드 고르기 (게임 멈춤)
         if (gameState === 'GAME_OVER' && endless && endless.result) { elResultTap(p.x, p.y); return; }   // 무한 모드 게임 오버: 다시 하기 · 타이틀
-        if (gameState === 'START' && inRect(TITLE_ENDLESS_BTN, p.x, p.y)) { startEndless(); return; }    // 타이틀: ENDLESS → 무한 모드 (프롤로그 없이 바로)
+        if (gameState === 'START' && !titleMenu) { titleMenu = true; titleMenuT = performance.now(); return; }   // 타이틀 첫 터치: STORY / ENDLESS 메뉴 열기
+        if (gameState === 'START' && performance.now() - titleMenuT < TITLE_MENU_HOLD_MS) return;            // 메뉴가 뜬 직후 같은 터치로 바로 눌리지 않게
+        if (gameState === 'START' && inRect(TITLE_ENDLESS_BTN, p.x, p.y)) { startEndless(); return; }    // ENDLESS → 무한 모드 (프롤로그 없이 바로)
+        if (gameState === 'START' && inRect(TITLE_STORY_BTN, p.x, p.y)) { tryStart(); return; }          // STORY → 본편 (프롤로그부터)
+        if (gameState === 'START') return;                                                                // 메뉴에서 버튼 밖은 무시
         if (gameState === 'SHOP') { handleShopTap(p.x, p.y); return; }
         if (gameState === 'UPG_VIEW') { handleUpgViewTap(p.x, p.y); return; }
         if (gameState === 'PLAY' && inRect({ x: UPG_BTN.x - 16, y: UPG_BTN.y - 16, w: UPG_BTN.w + 32, h: UPG_BTN.h + 32 }, p.x, p.y)) { openUpgradeView(); return; }
