@@ -580,6 +580,7 @@
             minY = Math.min(minY, holeY[k] - holeR[k]); maxY = Math.max(maxY, holeY[k] + holeR[k]);
         }
 
+        { const TF = testField(); if (TF) { moveField(TF, performance.now() / 1000); stepField(TF, HN, minX, maxX, minY, maxY, t); return; } }   // 렉 확인용 스테이지 B · C · D
         if (galaxyActive()) { stepField(getGalaxy(), HN, minX, maxX, minY, maxY, t); return; }   // 2세션: 은하 점이 공에 밀림
         if (blackholeActive()) { stepField(getBlackhole(), HN, minX, maxX, minY, maxY, t); return; }   // 3세션: 블랙홀 점이 공에 밀림
         if (insideField()) { stepField(insideField(), HN, minX, maxX, minY, maxY, t); return; }       // 4세션: 보스3 몸속 (25~26 살의 통로, 27~28 눈의 방)
@@ -619,6 +620,12 @@
     window.addEventListener('resize', updateDustDotSize);
 
     function drawDust() {
+        { const TF = testField(); if (TF) {                                   // 렉 확인용 스테이지 B · C · D: 움직이는 배경 (개발자 모드 10번 미리보기와 같음)
+            const t = performance.now(), V = BG_VIEWS[TEST_STAGES[testStage].bg];
+            drawField(ctx, TF, dustDotSize); if (TF.tw) drawTwinkle(ctx, TF, dustDotSize, t / 1000);
+            if (V.sparkle === 'bh') drawSparkles(ctx, t, BH_SPARKS); else if (V.sparkle) drawSparkles(ctx, t);
+            if (V.live) V.live(ctx, t);
+            return; } }
         if (galaxyActive()) { drawField(ctx, getGalaxy(), dustDotSize); drawSparkles(ctx, performance.now()); return; }
         if (blackholeActive()) { drawField(ctx, getBlackhole(), dustDotSize); drawSparkles(ctx, performance.now(), BH_SPARKS); return; }
         { const F = insideField(); if (F) { drawField(ctx, F, dustDotSize); (currentStage <= IN_A_LAST ? drawFleshLive : drawIrisLive)(ctx, performance.now()); return; } }
@@ -1022,10 +1029,11 @@
     // 조준: 부술 수 있는 블럭이 이 개수 이하이면 패들이 남은 블럭을 향해 공을 튕김
     const AIM_MAX_LEFT = 7;
     const aimable = q => (isKeyStage() ? isKeyTier(q) : isBreakable(q));   // 조준 · 심연의 구체 목표: 키 블럭 스테이지는 키 블럭만 (게이트는 벽처럼 피함)
-    // 심연의 구체: 패들 한가운데 5% 폭에 공 중심이 닿으면 블럭을 조준해 발사. 공이 블럭에 튕길 때마다 처음 속도의 +1%, 최대 2배. 분열한 공은 처음 속도
-    const ABYSS_CENTER = 0.05, ABYSS_STEP = 0.01, ABYSS_MAX = 2;
+    // 심연의 구체: 패들 한가운데 6.5% 폭 (V4.58.0: 5% → 30% 넓게) 에 공 중심이 닿으면 블럭을 조준해 발사 · 그 공이 처음 맞히는 블럭은 체력과 상관없이 한 방에 격파 (금색 제외)
+    //  공이 블럭 · 벽 · 천장에 튕길 때마다 처음 속도의 +1%, 최대 2.5배 (V4.58.0: 2배 → 2.5배). 분열한 공은 처음 속도
+    const ABYSS_CENTER = 0.05 * 1.3, ABYSS_STEP = 0.01, ABYSS_MAX = 2.5;
     const BALL_BASE_SPEED = Math.hypot(BALL_VX, BALL_VY);
-    function abyssBoost(ball) {   // 심연의 구체: 튕길 때마다 (블럭 · 좌우 벽 · 천장) 처음 속도의 +1%, 최대 2배
+    function abyssBoost(ball) {   // 심연의 구체: 튕길 때마다 (블럭 · 좌우 벽 · 천장) 처음 속도의 +1%, 최대 2.5배
         if (cardLevel('abyss') < 1) return;
         const sp0 = Math.hypot(ball.vx, ball.vy), sp1 = Math.min(BALL_BASE_SPEED * ABYSS_MAX, sp0 + BALL_BASE_SPEED * ABYSS_STEP);
         if (sp0 > 0) { ball.vx *= sp1 / sp0; ball.vy *= sp1 / sp0; }
@@ -1224,6 +1232,18 @@
     const isKeyTier = b => !!BRICK_TIERS[b.tier].key;
     const keyBrickAlive = () => bricks.find(b => b.alive && isKeyTier(b));
     const isKeyStage = () => bricks.some(isKeyTier);
+    // ===== V4.57.0 배경 렉 확인용 스테이지 A · B · C · D (개발자 모드 1번에서만 · 진짜 스테이지 아님) =====
+    //  배경 1 · 2 · 3 · 4 (4 = 가장 무거운 27~28 눈의 방) 를 차례로 씀. 배경 2 · 3 · 4 는 검토 중인 움직임 (V4.56.0) 을 켠 상태 · 진짜 스테이지는 그대로
+    //  블럭: 게이트 빼고 모든 종류를 7개씩 한 줄로 (체력 1~5 · 금색 · 고무 1~3 · 키 블럭) + 양 벽 포탑 7개씩
+    const TEST_STAGES = [{ name: 'A', stage: 0, bg: 0 }, { name: 'B', stage: 8, bg: 1 }, { name: 'C', stage: 16, bg: 2 }, { name: 'D', stage: 26, bg: 4 }];
+    const TEST_LAYOUT = ['L..0000000..R', 'L..1111111..R', 'L..2222222..R', 'L..3333333..R', 'L..4444444..R', 'L..XXXXXXX..R', 'L..aaaaaaa..R', '...bbbbbbb...', '...ccccccc...', '...kkkkkkk...'];
+    let testStage = null;                                                     // null = 진짜 스테이지 · 0~3 = A~D
+    const testFields = [], fpsBuf = [];
+    const testField = () => {                                                 // B · C · D 배경 (움직임 켬). A 는 원래 모래 먼지 (원래 움직임)
+        if (testStage == null || !TEST_STAGES[testStage].bg) return null;
+        const k = testStage; if (!testFields[k]) { const F = BG_VIEWS[TEST_STAGES[k].bg].make(); liveInit(F); testFields[k] = F; }
+        return testFields[k];
+    };
     // 포탑 상수 (initGame 이 처음 불리기 전에 있어야 함)
     const TURRET_A = { S: 80, period: 4000, charge: 700 };   // 벽 감시포: 크기 · 발사 간격 · 조준 고정 후 발사까지 (ms)
     const TURRET_B = { S: 90, period: 5000, charge: 800 };   // 블럭 쌍포 (시안, 안 씀): 폭 = 블럭 폭
@@ -1678,7 +1698,7 @@
             stageJinglePending = true;
             resetAbsorb();
             bricks.length = 0;
-            const layout = STAGES[currentStage];
+            const layout = testStage != null ? TEST_LAYOUT : STAGES[currentStage];   // 렉 확인용 스테이지 A~D 는 따로 (V4.57.0)
             const layoutRows = layout.length;
             
             for (let r = 0; r < layoutRows; r++) {
@@ -1743,7 +1763,7 @@
             hit.hits += power;
             if (hit.hits >= BRICK_TIERS[hit.tier].hp) {
                 hit.alive = false;
-                if (BRICK_TIERS[hit.tier].key) {   // 키 블럭: 다른 블럭과 다른 소리 · 연출 (자물쇠 철컥 + 올라가는 화음, 빛줄기)
+                if (BRICK_TIERS[hit.tier].key && testStage == null) {   // 키 블럭: 다른 블럭과 다른 소리 · 연출 (자물쇠 철컥 + 올라가는 화음, 빛줄기) · 렉 확인용은 일반 블럭처럼
                     sfx('keyBreak');
                     spawnBurst(hit, 60);
                     keyFxList.push({ x: hit.x, y: hit.y, w: hit.w, h: hit.h, t0: performance.now() });
@@ -2836,7 +2856,7 @@
         const sN = (t - 0.5) * 2, k = Math.sign(sN) * sN * sN;
         if (lv === 1) return [paddle.x + w / 2 + k * (w / 2 - LASER_EDGE)];
         const shift = k * (w * 0.28 - LASER_EDGE), a = paddle.x + w * 0.28 + shift, b = paddle.x + w * 0.72 + shift;
-        if (lv >= 4) return [a, (a + b) / 2, b];   // 4단계 이상: 3줄, 가운데는 두 줄 사이 정확히 가운데 (V4.50.0)
+        if (lv >= 5) return [a, (a + b) / 2, b];   // 5단계 (최대): 3줄, 가운데는 두 줄 사이 정확히 가운데 (V4.50.0 · V4.58.0 4단계 → 최대 단계)
         return [a, b];
     }
 
@@ -3007,7 +3027,7 @@
         shield:   [15, 25, 35, 45, 55],
         life:     [30, 45, 60],
         magnet:   [20, 25, 40],
-        interest: [30],
+        interest: [40],                                // V4.58.0: 30 → 40
         shard:    [80],
         aim:      [65],
         absorb:   [30, 50, 70],
@@ -3021,11 +3041,11 @@
         const sec = ms => (ms / 1000).toFixed(1) + '초';
         const up = (v, base) => v === base ? '' : ` (+${Math.round((v / base - 1) * 100)}%)`;
         switch (id) {
-            case 'size':   return PADDLE_SIZES.map(w => `패들 폭 ${w}px${up(w, PADDLE_SIZES[0])}`);
+            case 'size':   return PADDLE_SIZES.map((w, lv) => `패들 폭 ${w}px${up(w, PADDLE_SIZES[0])}` + (lv ? ` · 마비 ${(PADDLE_STUN_MS * (1 - 0.1 * lv) / 1000).toFixed(1)}초 (-${lv * 10}%)` : ` · 마비 ${PADDLE_STUN_MS / 1000}초`));
             case 'laser':  return LASER_INTERVALS.map((ms, lv) => {
                 if (!lv) return '레이저 없음';
-                const n = lv === 1 ? 1 : 2;
-                return `${lv === 1 ? '가운데' : '양쪽'} ${n}발 / ${sec(ms)} · 초당 ${(n * 1000 / ms).toFixed(1)}발`;
+                const n = lv === 1 ? 1 : lv >= 5 ? 3 : 2;
+                return `${lv === 1 ? '가운데' : lv >= 5 ? '양쪽 + 가운데' : '양쪽'} ${n}발 / ${sec(ms)} · 초당 ${(n * 1000 / ms).toFixed(1)}발`;
             });
             case 'clone':  return CLONE_CHANCE.map((c, lv) => lv ? `패들에 튕길 때 ${pct(c)} 확률로 공 +1 (최대 ${CLONE_MAX_BALLS[lv]}개)` : '분열 없음');
             case 'power':  return Array.from({ length: MAX_BALL_POWER }, (_, lv) =>
@@ -3170,6 +3190,7 @@
     const INTRO_CARD_W = 343, INTRO_CARD_H = 515, INTRO_SCALE = 1.25;
     let introCard = null, introT = 0, introHold = INTRO_HOLD_MS;
     function goNextStage() {
+        if (testStage != null) { initGame(currentStage); gameState = 'PLAY'; return; }   // 렉 확인용 스테이지: 깨면 같은 스테이지를 다시
         if (currentStage === BOSS_AFTER_STAGE && !boss) startBossFight(1);
         else if (currentStage === BOSS2_AFTER_STAGE && !boss) startBossFight(2);
         else if (currentStage === BOSS3_AFTER_STAGE && !boss) startBossFight(3);
@@ -3449,10 +3470,10 @@
                     // 조준: 남은 블럭이 7개 이하이면 가장 가까운 블럭을 향해 튕김
                     const plan = aimPlan(ball.x, ball.y, ball.radius);
                     if (plan) { ball.vx = speed * Math.sin(plan.a); ball.vy = -speed * Math.cos(plan.a); }
-                    // 심연의 구체: 공 중심이 패들 한가운데 5% 안이면 가장 가까운 블럭을 조준해 발사
+                    // 심연의 구체: 공 중심이 패들 한가운데 6.5% 안이면 가장 가까운 블럭을 조준해 발사 · 그 공이 처음 맞히는 블럭은 한 방에 격파 (V4.58.0)
                     else if (cardLevel('abyss') > 0 && Math.abs(ball.x - (paddle.x + paddle.width / 2)) <= paddle.width * ABYSS_CENTER / 2) {
                         const ap = abyssAimPlan(ball.x, ball.y, ball.radius);
-                        if (ap) { ball.vx = speed * Math.sin(ap.a); ball.vy = -speed * Math.cos(ap.a); ball.abyssFx = 400; sfx('laser'); }
+                        if (ap) { ball.vx = speed * Math.sin(ap.a); ball.vy = -speed * Math.cos(ap.a); ball.abyssFx = 400; ball.abyssKill = true; sfx('laser'); }
                     }
                     // 볼 복제: 부딪친 볼은 사라지고 좌우로 2개 발사 (최대 8개)
                     const cloneLv = cardLevel('clone');
@@ -3492,7 +3513,11 @@
                 }
 
                 if (hit) {
-                    const pwr = ball.power || 1;
+                    let pwr = ball.power || 1;
+                    if (ball.abyssKill) {                                          // 심연의 구체 조준 공: 처음 맞힌 블럭은 남은 체력만큼 (한 방 격파) · 금색 · 게이트에 막히면 그냥 끝
+                        ball.abyssKill = false;
+                        if (isBreakable(hit) && !BRICK_TIERS[hit.tier].gate) pwr = Math.max(pwr, BRICK_TIERS[hit.tier].hp - hit.hits);
+                    }
                     const hpLeft = isBreakable(hit) ? BRICK_TIERS[hit.tier].hp - hit.hits : Infinity;
                     // 기본은 항상 반사. '돌파' 보유 시 볼 파워 >= 남은 체력이면 파괴하고 지나감
                     const pierce = cardLevel('pierce') > 0 && isBreakable(hit) && (BRICK_TIERS[hit.tier].gate ? hpLeft <= GATE_BALL_DMG : pwr >= hpLeft);
@@ -3553,7 +3578,7 @@
 
         // 금속(파괴 불가)은 클리어 조건에서 제외
         if (boss) { if (!boss.dead) updateBoss(); return; }   // 보스전: 블럭 없음, 보스를 깨야 끝
-        if (isKeyStage() ? !keyBrickAlive() : !bricks.some(b => b.alive && isBreakable(b))) startClearSeq();   // 키 블럭 스테이지: 키 블럭만 깨면 클리어
+        if (testStage == null && isKeyStage() ? !keyBrickAlive() : !bricks.some(b => b.alive && isBreakable(b))) startClearSeq();   // 키 블럭 스테이지: 키 블럭만 깨면 클리어 · 렉 확인용 A~D 는 모두 깨야
     }
 
     // ===== 벽돌 파괴 시 모래가 흩어지는 파티클 =====
@@ -3835,7 +3860,7 @@
                 ctx.font = font('40px');
                 ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);
                 ctx.font = font('28px');
-                ctx.fillText('V4.56.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.58.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER') {
                 if (performance.now() - lostAt >= OVER_TO_TITLE_MS) goTitle();
                 ctx.font = font('bold 100px');
@@ -4525,7 +4550,13 @@
         // 좌측 상단: STAGE
         ctx.fillStyle = HUD_COLOR;
         ctx.textAlign = 'left';
-        ctx.fillText(boss ? 'STAGE : BOSS' : `STAGE : ${currentStage + 1}`, 24, HUD_TOP_H / 2);
+        ctx.fillText(boss ? 'STAGE : BOSS' : testStage != null ? `STAGE : ${TEST_STAGES[testStage].name}` : `STAGE : ${currentStage + 1}`, 24, HUD_TOP_H / 2);
+        if (testStage != null && fpsBuf.length) {                               // 렉 확인용: 최근 60프레임 평균 FPS · 가장 느린 프레임
+            const avg = fpsBuf.reduce((a, b) => a + b, 0) / fpsBuf.length, worst = Math.max(...fpsBuf);
+            ctx.font = font('bold 30px'); ctx.fillStyle = worst > 25 ? '#f66' : '#fff';
+            ctx.fillText(`FPS ${Math.round(1000 / avg)} · 가장 느린 ${Math.round(worst)}ms`, 24, HUD_TOP_H + 34);
+            ctx.font = font('bold 36px'); ctx.fillStyle = HUD_COLOR;
+        }
 
         // 상단 가운데: 점수
         ctx.textAlign = 'center';
@@ -4727,12 +4758,14 @@
         }
 
         draw();
+        if (testStage != null) { fpsBuf.push(now - (loop.prev || now)); if (fpsBuf.length > 60) fpsBuf.shift(); }   // 렉 확인용 스테이지: 실제 프레임 간격
+        loop.prev = now;
         requestAnimationFrame(loop);
     }
 
     // 게임 시작/재시작 - iOS에서 touchstart가 click을 막으므로 양쪽 모두 연결
     const OVER_TO_TITLE_MS = 6000;
-    function goTitle() { initGame(0); gameState = 'START'; score = 0; gemCount = 0; stageGems = 0; gems.length = 0; for (const k in upgrades) delete upgrades[k]; }   // 처음 켰을 때와 같은 타이틀 화면 (지난 판의 수정 · 점수 · 카드 지움, V4.48.1)
+    function goTitle() { testStage = null; initGame(0); gameState = 'START'; score = 0; gemCount = 0; stageGems = 0; gems.length = 0; for (const k in upgrades) delete upgrades[k]; }   // 처음 켰을 때와 같은 타이틀 화면 (지난 판의 수정 · 점수 · 카드 지움, V4.48.1)
     function tryStart() {
         if ((gameState === 'GAME_OVER' || gameState === 'LIFE_LOST') && performance.now() - lostAt < LOST_HOLD_MS) return;
         if (gameState === 'GAME_OVER') { goTitle(); return; }
@@ -4741,7 +4774,7 @@
             score = 0;
             gemCount = 0;
             for (const k in upgrades) delete upgrades[k];
-            saveCode = null; saveTo = null; laserOn = true;
+            saveCode = null; saveTo = null; laserOn = true; testStage = null;
             initGame(0);
             gameState = 'PROLOGUE';
             prologueStartT = performance.now();
@@ -4818,7 +4851,9 @@
                 }).join('');
                 return `<div style="display:grid; grid-template-columns:repeat(8, 1fr); gap:8px; margin:4px 0 8px;">${btns}</div>
 <div style="display:flex; gap:8px; margin-bottom:16px;"><button class="dev-stage-jump" data-stage="boss" style="flex:1; padding:12px 0; font:bold 22px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid #c33; background:#111; color:#f55;">BOSS 1 (8 뒤)</button><button class="dev-stage-jump" data-stage="boss2" style="flex:1; padding:12px 0; font:bold 22px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid #c33; background:#111; color:#f55;">BOSS 2 (16 뒤)</button><button class="dev-stage-jump" data-stage="boss3" style="flex:1; padding:12px 0; font:bold 22px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid #c33; background:#111; color:#f55;">BOSS 3 (24 뒤)</button></div>
-<div style="color:#aaa;">치트키 <b style="color:#fff;">V</b> : 깰 수 있는 블럭 모두 깨기 · 보스전은 보스 체력 0</div>`;
+<div style="color:#aaa;">치트키 <b style="color:#fff;">V</b> : 깰 수 있는 블럭 모두 깨기 · 보스전은 보스 체력 0</div>
+<div style="margin-top:14px; color:#888; font-size:14px;">배경 렉 확인용 (진짜 스테이지 아님) · 게이트 빼고 모든 블럭 7개씩 · 배경 2~4 는 움직임 켬 · 위에 FPS 표시 · 다 깨면 같은 스테이지 다시</div>
+<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:6px;">${TEST_STAGES.map((s, k) => `<button class="dev-stage-jump" data-test="${k}" style="padding:12px 0; font:bold 20px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid ${testStage === k ? '#fff' : '#4a7'}; background:${testStage === k ? '#fff' : '#111'}; color:${testStage === k ? '#000' : '#7c9'};">${s.name} · 배경 ${s.bg === 4 ? 4 : s.bg + 1}</button>`).join('')}</div>`;
             }
         },
         stageview: {
@@ -5524,8 +5559,8 @@
 
     // 업그레이드 카드 설명: [0] = 첫 구매 (SHOP_CARDS 의 desc), [1] = 2번째 구매 ... (카드 2줄)
     const CARD_DESC_UP = {
-        size:   [['패들이', '조금 더 길어진다'], ['패들이', '한층 더 길어진다'], ['패들이', '훨씬 길어진다'], ['패들이', '최대 길이가 된다']],
-        laser:  [['레이저가', '2줄로 발사'], ['레이저', '발사 속도 증가'], ['레이저가 3줄로 발사', '발사 속도 증가'], ['레이저', '발사 속도 최대']],
+        size:   [['패들이 더 길어지고', '마비 20% 감소'], ['패들이 한층 길어지고', '마비 30% 감소'], ['패들이 훨씬 길어지고', '마비 40% 감소'], ['패들 최대 길이', '마비 50% 감소']],   // V4.58.0: 단계마다 마비 10% 감소 (최대 50%)
+        laser:  [['레이저가', '2줄로 발사'], ['레이저', '발사 속도 증가'], ['레이저', '발사 속도 증가'], ['레이저가 3줄로 발사', '발사 속도 최대']],   // V4.58.0: 3줄은 최대 단계 (5단계) 에서
         clone:  [2, 3, 4, 5].map(lv => [lv === 5 ? '분열 확률 최대' : '분열 확률 증가', `볼 최대 ${CLONE_MAX_BALLS[lv]}개`]),
         power:  [2, 3, 4].map(lv => [lv === 4 ? '볼 파워 최대' : '볼 파워 +1', `(파워 ${1 + lv})`]),
         shield: [2, 3, 4, 5].map(lv => ['바닥 좌우 끝에', `보호 블럭 ${lv * 2}개`]),
@@ -5556,7 +5591,7 @@
         { id: 'aim',     name: '조준',      cat: '공격', max: 1, desc: ['블럭 7개 이하면', '남은 블럭 조준'] },
         { id: 'absorb',  name: '충격 흡수', cat: '방어', max: 3, desc: ['적 공격을 막아', '마비 방지'] },
         { id: 'save',    name: '저장',      cat: '지원', max: 99, repeat: true, desc: ['진행을 코드로 저장', '다음 스테이지부터'] },
-        { id: 'abyss',   name: '심연의 구체', cat: '보스', max: 1, reward: true, desc: ['공의 속도를', '컨트롤 할 수 없다.'] }   // 보스2 보상 (상점에 안 나옴) · 실제: 패들 한가운데 = 조준, 블럭 · 벽에 튕길 때마다 속도 +1% (최대 2배)
+        { id: 'abyss',   name: '심연의 구체', cat: '보스', max: 1, reward: true, desc: ['공의 속도를', '컨트롤 할 수 없다.'] }   // 보스2 보상 (상점에 안 나옴) · 실제: 패들 한가운데 (6.5%) = 조준 + 그 공의 첫 블럭 한 방 격파, 블럭 · 벽에 튕길 때마다 속도 +1% (최대 2.5배) (V4.58.0)
     ];
     const DEV_CARDS = SHOP_CARDS.map((c, i) => [c, i]).sort((a, b) => CARD_CAT_ORDER.indexOf(a[0].cat) - CARD_CAT_ORDER.indexOf(b[0].cat) || a[1] - b[1]).map(x => x[0]);   // 개발자 모드 정렬
 
@@ -7323,15 +7358,22 @@
 
     function jumpToBoss(kind = 1) {
         if (lives < 1) lives = START_LIVES;
-        introCard = null;
+        introCard = null; testStage = null;
         startBossFight(kind);
         gameState = 'BOSS_WARN';
         closeDevOverlay();
     }
     function jumpToStage(i) {
         if (lives < 1) lives = START_LIVES;
-        introCard = null;
+        introCard = null; testStage = null;
         initGame(i);
+        gameState = 'PLAY';
+        closeDevOverlay();
+    }
+    function jumpToTestStage(k) {                                               // 렉 확인용 A~D: 그 배경을 쓰는 스테이지 번호로 시작 (음악 · 공 속도도 그 세션)
+        if (lives < 1) lives = START_LIVES;
+        introCard = null; testStage = k; fpsBuf.length = 0;
+        initGame(TEST_STAGES[k].stage);
         gameState = 'PLAY';
         closeDevOverlay();
     }
@@ -7438,7 +7480,7 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
     });
     devDetailBody.addEventListener('click', e => {
         const b = e.target.closest && e.target.closest('.dev-stage-jump');
-        if (b) b.dataset.stage === 'boss' ? jumpToBoss(1) : b.dataset.stage === 'boss2' ? jumpToBoss(2) : b.dataset.stage === 'boss3' ? jumpToBoss(3) : jumpToStage(parseInt(b.dataset.stage, 10));
+        if (b) b.dataset.stage === 'boss' ? jumpToBoss(1) : b.dataset.stage === 'boss2' ? jumpToBoss(2) : b.dataset.stage === 'boss3' ? jumpToBoss(3) : b.dataset.test != null ? jumpToTestStage(parseInt(b.dataset.test, 10)) : jumpToStage(parseInt(b.dataset.stage, 10));
     });
 
     devDetailBody.addEventListener('click', e => {
