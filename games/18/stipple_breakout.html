@@ -213,6 +213,7 @@
                 <button class="dev-menu-btn" data-cat="background">10. 배경</button>
                 <button class="dev-menu-btn" data-cat="music">11. 음악</button>
                 <button class="dev-menu-btn" data-cat="ending">12. 엔딩</button>
+                <button class="dev-menu-btn" data-cat="elpattern">13. 무한 모드 패턴</button>
                 <div id="dev-menu-nav" style="display:flex; gap:10px; align-items:center; margin-top:14px;">
                     <button class="dev-mn-nav" data-nav="prev" style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; background:#000; color:#fff; border:1px solid #fff; cursor:pointer;">◀</button>
                     <div id="dev-menu-page" style="flex:1; text-align:center; font:bold 22px Menlo, monospace;">1 / 2</div>
@@ -628,7 +629,7 @@
             return; } }
         if (galaxyActive()) { drawField(ctx, getGalaxy(), dustDotSize); drawSparkles(ctx, performance.now()); return; }
         if (blackholeActive()) { drawField(ctx, getBlackhole(), dustDotSize); drawSparkles(ctx, performance.now(), BH_SPARKS); return; }
-        { const F = insideField(); if (F) { drawField(ctx, F, dustDotSize); (currentStage <= IN_A_LAST ? drawFleshLive : drawIrisLive)(ctx, performance.now()); return; } }
+        { const F = insideField(); if (F) { drawField(ctx, F, dustDotSize); (bgStage() <= IN_A_LAST ? drawFleshLive : drawIrisLive)(ctx, performance.now()); return; } }
         const s = dustDotSize, half = s / 2;
         const { x, y } = dust;
         for (let b = 0; b < DUST_BUCKETS; b++) {
@@ -644,9 +645,14 @@
     // 점마다 원래 자리(home)가 있고, 공 · 공의 흔적 · 깨진 벽돌 구멍이 덮으면 가장자리로 밀려났다가 돌아옴 (1세션 먼지와 같은 방식)
     const GAL_LUM = [34, 52, 74, 98, 126, 160];        // 은하 밝기 6단계 (벽돌 150~250 보다 어둡게)
     const GAL_FIRST = 8, GAL_LAST = 15;                // 은하 배경을 쓰는 스테이지 (0부터 센 번호 = 9~16스테이지)
-    const galaxyActive = () => currentStage >= GAL_FIRST && currentStage <= GAL_LAST && gameState !== 'START' && gameState !== 'PROLOGUE';
+    // V4.62.0 무한 모드: 레벨에 따라 배경 · 음악 세션 (레벨 1~3 = 배경 1 · 4~6 = 2 · 7~9 = 3 · 10~12 = 4 살의 통로 · 13+ = 4 눈의 방)
+    const EL_SESSION_LV = [1, 4, 7, 10, 13];                                     // 각 세션이 시작되는 레벨
+    const EL_SESSION_STAGE = [0, 8, 16, 24, 26];                                 // 그 세션의 본편 스테이지 번호 (배경 · 음악을 그대로 빌려 씀)
+    const elSession = lv => { let s = 0; for (let i = 0; i < EL_SESSION_LV.length; i++) if (lv >= EL_SESSION_LV[i]) s = i; return s; };
+    const bgStage = () => endless ? EL_SESSION_STAGE[elSession(endless.level)] : currentStage;   // 배경 · 음악이 볼 스테이지 번호
+    const galaxyActive = () => bgStage() >= GAL_FIRST && bgStage() <= GAL_LAST && gameState !== 'START' && gameState !== 'PROLOGUE';
     const BH_FIRST = 16, BH_LAST = 23;                 // 블랙홀 배경을 쓰는 스테이지 (0부터 센 번호 = 17~24스테이지)
-    const blackholeActive = () => currentStage >= BH_FIRST && currentStage <= BH_LAST && gameState !== 'START' && gameState !== 'PROLOGUE';
+    const blackholeActive = () => bgStage() >= BH_FIRST && bgStage() <= BH_LAST && gameState !== 'START' && gameState !== 'PROLOGUE';
     function galRng(seed) { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
     // pts: [x, y, 밝기 단계]. drift = 1세션 먼지처럼 원래 자리가 천천히 떠다님
     function makeField(pts, lum, drift) {
@@ -676,25 +682,29 @@
     //  STAR                        흩어진 별: 흔들림 + 일부는 반짝임
     //  STILL                       움직이는 그림 (눈) 에 붙은 테두리: 아주 조금만
     let bgLiveFx = false;                                                       // 미리보기에서 움직임 켬 (게임은 아직 꺼짐 · drawFleshLive 의 벽 눈도 같이 움직임)
+    // V4.58.1: 배경 2 · 3 이 너무 조용함 → 흔들림 크기 · 속도를 키우고, 은하는 팔 물결 · 블랙홀은 소용돌이 2배 · 바위 · 구름 · 빛무리를 더 크게
+    const BG_LIVE_OPT = { galaxy: { amp: 1.6, frq: 2.2, wave: 7, bob: 1.6 }, blackhole: { amp: 1.5, frq: 2.0, orb: 2, bob: 1.6, pulse: 1.6 } };
     const liveWallDx = (y, w, side, T) => -side * w * 13 * (0.5 + 0.5 * Math.sin(T * 1.1 + y * 0.0045));   // 살 벽 숨 (drawFleshLive 의 숨과 같은 박자 1.1 rad/초)
-    function liveInit(F) {
+    function liveInit(F, o = F.lvOpt || {}) {                                   // o = 배경별 세기 (V4.58.1: 배경 2 · 3 을 더 크게) · amp 흔들림 크기 · frq 흔들림 속도 · wave 은하 팔 물결 (px) · orb 소용돌이 속도 · bob 떠다님 · pulse 숨
         const n = F.n, k = new Uint8Array(n), p = new Float32Array(n * 8), ph = new Float32Array(n), fr = new Float32Array(n), am = new Float32Array(n), hid = new Uint8Array(n);
-        const ox = Float32Array.from(F.hx), oy = Float32Array.from(F.hy), tw = [];
+        const ox = Float32Array.from(F.hx), oy = Float32Array.from(F.hy), tw = [], ang = new Float32Array(n), rad = new Float32Array(n);
+        const O = { amp: o.amp || 1, frq: o.frq || 1, wave: o.wave || 0, orb: o.orb || 1, bob: o.bob || 1, pulse: o.pulse || 1 };
         for (let i = 0; i < n; i++) {
             const m = F.meta && F.meta[i];
             k[i] = m ? m[0] : LV_SHIM;
             if (m) for (let j = 1; j <= 8 && j < m.length; j++) p[i * 8 + j - 1] = m[j];
-            ph[i] = hash3(i, 17, 3) * 6.2832; fr[i] = 0.22 + 0.33 * hash3(i, 5, 9); am[i] = 2.5 + 2.5 * hash3(i, 8, 1);
+            ph[i] = hash3(i, 17, 3) * 6.2832; fr[i] = (0.22 + 0.33 * hash3(i, 5, 9)) * O.frq; am[i] = (2.5 + 2.5 * hash3(i, 8, 1)) * O.amp;
+            if (k[i] === LV_DISK) { const u = p[i * 8 + 2], v = p[i * 8 + 3]; ang[i] = Math.atan2(v, u); rad[i] = Math.hypot(u, v); }   // 은하 팔 물결용 (원반 안 각도 · 거리)
             if (k[i] === LV_STAR && hash3(i, 2, 7) < 0.45) tw.push(i);           // 별의 45% 는 반짝임
         }
         if (tw.length) {                                                           // 반짝이는 별은 따로 그림 (drawTwinkle) · 원래 밝기를 기억해서 그 주변에서만 오르내림 (구도가 바뀌지 않게)
             const bOf = new Int8Array(n); F.idx.forEach((a, b) => { for (let j = 0; j < a.length; j++) bOf[a[j]] = b; });
             const s = new Set(tw); F.idx = F.idx.map(a => a.filter(i => !s.has(i))); F.tw = Int32Array.from(tw); F.twL = Float32Array.from(tw, i => F.lum[bOf[i]]);
         }
-        F.mv = { k, p, ph, fr, am, ox, oy, hid };
+        F.mv = { k, p, ph, fr, am, ox, oy, hid, ang, rad, O };
     }
     function moveField(F, T) {
-        const M = F.mv, { k, p, ph, fr, am, ox, oy, hid } = M, H = LOGIC_HEIGHT;
+        const M = F.mv, { k, p, ph, fr, am, ox, oy, hid, ang, rad, O } = M, H = LOGIC_HEIGHT;
         let lastA = NaN, ca = 1, sa = 0;
         const ibr = INB.r * 0.12 * Math.sin(T * 0.7), ia = 0.035 * Math.sin(T * 0.105), ica = Math.cos(ia), isa = Math.sin(ia);   // 홍채: drawIrisLive 의 동공 (1 + 0.12 sin(t ms x 0.0007)) 과 같은 박자로 밀려남 · 천천히 ±2° 흔들리듯 돎 (60초에 한 번)
         for (let i = 0; i < F.n; i++) {
@@ -702,18 +712,23 @@
             let x = ox[i], y = oy[i], s = 1;                                        // s = 모래알 흔들림 크기 비율
             if (kind === LV_DISK || kind === LV_ORBIT) {
                 // 은하 (DISK) = 천천히 흔들리듯 돎 (큰 은하 ±2.3° = 가장자리 ±33px · 작은 은하 ±14° = ±17px · 90초에 한 번 → 대각선 구도가 언제나 그대로) · 블랙홀 소용돌이 (ORBIT) = 계속 돎 (소용돌이다움)
-                const w = p[q + 7], a = kind === LV_ORBIT ? w * T : (Math.abs(w) > 0.02 ? 0.25 : 0.04) * Math.sin(T * 0.0698 + p[q] * 0.01);   // |w| > 0.02 = 작은 은하
+                const w = p[q + 7], a = kind === LV_ORBIT ? w * T * O.orb : (Math.abs(w) > 0.02 ? 0.25 : 0.04) * Math.sin(T * 0.0698 + p[q] * 0.01);   // |w| > 0.02 = 작은 은하
                 if (a !== lastA) { lastA = a; ca = Math.cos(a); sa = Math.sin(a); }
-                const u = p[q + 2], v = p[q + 3], u2 = u * ca - v * sa, v2 = (u * sa + v * ca) * p[q + 4];
+                let u = p[q + 2], v = p[q + 3];
+                if (O.wave && kind === LV_DISK) {                                  // 은하 팔 물결: 팔을 따라 밝은 물결이 바깥으로 흘러가듯 (원반 안에서 거리 방향으로 ±wave px, 모양은 그대로)
+                    const th = ang[i], d = O.wave * Math.min(1, rad[i] / 60) * Math.sin(2 * th - T * 0.55 + rad[i] * 0.012);
+                    u += Math.cos(th) * d; v += Math.sin(th) * d;
+                }
+                const u2 = u * ca - v * sa, v2 = (u * sa + v * ca) * p[q + 4];
                 x = p[q] + u2 * p[q + 5] - v2 * p[q + 6]; y = p[q + 1] + u2 * p[q + 6] + v2 * p[q + 5]; s = 0.45;
                 if (kind === LV_ORBIT) {
                     const inH = Math.hypot(x - BH.x, (y - BH.y) / 1.04) < BH.r;
                     if (inH) { hid[i] = 1; F.x[i] = F.hx[i] = -999; F.y[i] = F.hy[i] = -999; continue; }
                     if (hid[i]) { hid[i] = 0; F.x[i] = x; F.y[i] = y; }               // 구멍에서 나올 때는 바로 그 자리 (먼 곳에서 날아오지 않게)
                 }
-            } else if (kind === LV_BOB) { const g = p[q]; x += 9 * Math.sin(T * 0.11 + g * 2.1); y += 7 * Math.cos(T * 0.09 + g * 1.7); }
+            } else if (kind === LV_BOB) { const g = p[q], b = O.bob; x += 9 * b * Math.sin(T * 0.11 * b + g * 2.1); y += 7 * b * Math.cos(T * 0.09 * b + g * 1.7); }
             else if (kind === LV_WALL) x += liveWallDx(y, Math.min(1, p[q + 1]), p[q], T);   // 무게 최대 1 = 벽 안쪽 끝 (통로로 뻗은 핏줄 끝 · 벽 눈은 벽 끝과 같이)
-            else if (kind === LV_PULSE) { const g = p[q + 2] * Math.sin(T * 0.9 + p[q + 3]); x += (x - p[q]) * g; y += (y - p[q + 1]) * g; s = 0.6; }
+            else if (kind === LV_PULSE) { const g = p[q + 2] * O.pulse * Math.sin(T * 0.9 + p[q + 3]); x += (x - p[q]) * g; y += (y - p[q + 1]) * g; s = 0.6; }
             else if (kind === LV_RISE) { const ny = ((oy[i] - T * p[q]) % H + H) % H; if (Math.abs(ny - F.hy[i]) > H / 2) F.y[i] += ny - F.hy[i]; y = ny; x += 6 * Math.sin(T * 0.45 + ph[i]); }
             else if (kind === LV_IRIS) {
                 const dx = x - INB.x, dy = y - INB.y, r = Math.hypot(dx, dy) || 1, f = (r + ibr * Math.max(0, 1 - (r - INB.r) / 700)) / r;
@@ -968,8 +983,9 @@
     const IN_FIRST = 24, IN_A_LAST = 25, IN_LAST = 27;                  // 0부터 센 번호
     let fleshField = null, irisField = null;
     const insideField = () => {
-        if (currentStage < IN_FIRST || currentStage > IN_LAST || gameState === 'START' || gameState === 'PROLOGUE') return null;
-        return currentStage <= IN_A_LAST ? (fleshField || (fleshField = makeFleshField())) : (irisField || (irisField = makeIrisField()));
+        const st = bgStage();
+        if (st < IN_FIRST || st > IN_LAST || gameState === 'START' || gameState === 'PROLOGUE') return null;
+        return st <= IN_A_LAST ? (fleshField || (fleshField = makeFleshField())) : (irisField || (irisField = makeIrisField()));
     };
     // 구멍 버퍼 (holeX / holeY / holeR / holeType, 개수 HN) 를 채운 뒤 부름
     function stepField(F, HN, minX, maxX, minY, maxY, t) {
@@ -1038,10 +1054,11 @@
         const sp0 = Math.hypot(ball.vx, ball.vy), sp1 = Math.min(BALL_BASE_SPEED * ABYSS_MAX, sp0 + BALL_BASE_SPEED * ABYSS_STEP);
         if (sp0 > 0) { ball.vx *= sp1 / sp0; ball.vy *= sp1 / sp0; }
     }
-    function abyssAimPlan(bx, by, r) {   // 가장 가까운 부술 수 있는 블럭 (금색에 막히지 않는 직선 · 벽 · 천장 한 번 반사 중 가장 짧은 길)
+    function abyssAimPlan(bx, by, r, lowest = false) {   // 가장 가까운 부술 수 있는 블럭 (금색에 막히지 않는 직선 · 벽 · 천장 한 번 반사 중 가장 짧은 길) · lowest = 심연의 구체 2: 가장 아래 블럭부터 (게이트는 피함)
         const left = [], walls = [];
-        for (const q of bricks) { if (!q.alive) continue; (aimable(q) ? left : walls).push(q); }
+        for (const q of bricks) { if (!q.alive) continue; (aimable(q) && !(lowest && BRICK_TIERS[q.tier].gate) ? left : walls).push(q); }
         if (!left.length) return null;
+        if (lowest) left.sort((a, b) => (b.y + b.h) - (a.y + a.h));
         const W = LOGIC_WIDTH; let best = null;
         for (const q of left) {
             const tx = q.x + q.w / 2, ty = q.y + q.h / 2;
@@ -1057,6 +1074,7 @@
                 }
                 if (ok) best = { tgt: q, a, len, wx, wy, kind };
             }
+            if (lowest && best) return best;                                     // 심연의 구체 2: 가장 아래 블럭 중 길이 있는 첫 블럭 (가까운 블럭이 아님)
         }
         return best;
     }
@@ -1226,12 +1244,346 @@
         { name: '포탑 (왼쪽에 붙음)', hp: Infinity, turret: 1, side: 1, density: 1, lum: 200, dAmp: 0, lAmp: 0, pattern: () => 1,
           desc: '벽 감시포 - 왼쪽 벽 · 블럭에 붙음, 공 · 레이저로 안 깨짐' },
         { name: '포탑 (오른쪽에 붙음)', hp: Infinity, turret: 1, side: -1, density: 1, lum: 200, dAmp: 0, lAmp: 0, pattern: () => 1,
-          desc: '벽 감시포 - 오른쪽 벽 · 블럭에 붙음, 공 · 레이저로 안 깨짐' }
+          desc: '벽 감시포 - 오른쪽 벽 · 블럭에 붙음, 공 · 레이저로 안 깨짐' },
+        // V4.60.0 무한 모드 전용 체력 6 · 7 · 8 (문자 5 · 6 · 7). 은색 (5) 보다 단단해 보이게: 촘촘하고 밝고, 무늬가 겹겹이 (안쪽 테 · 대각 홈 · 가운데 핵)
+        { name: 'OBSIDIAN', hp: 6, endless: 1, density: 0.99, lum: 245, dAmp: 0.35, lAmp: 0.55, desc: '6타 파괴 - 무한 모드 전용, 안쪽 테 흑요석',
+          pattern: (nx, ny) => (Math.min(nx, 1 - nx) < 0.12 || Math.min(ny, 1 - ny) < 0.2) ? 1 : (Math.sin(nx * Math.PI * 10) > 0.2 ? 1 : 0) },
+        { name: 'TITAN',    hp: 7, endless: 1, density: 1,    lum: 252, dAmp: 0.2,  lAmp: 0.6,  desc: '7타 파괴 - 무한 모드 전용, 대각 장갑판 무늬',
+          pattern: (nx, ny, w, h) => { const u = nx * w / 14, v = ny * h / 14; return (Math.abs(((u + v) % 1) - 0.5) < 0.16) ? 0 : 1; } },
+        { name: 'CORE',     hp: 8, endless: 1, density: 1,    lum: 255, dAmp: 0.15, lAmp: 0.7,  desc: '8타 파괴 - 무한 모드 전용, 빛나는 핵',
+          pattern: (nx, ny) => { const d = Math.hypot((nx - 0.5) * 2.4, (ny - 0.5) * 1.2); return d < 0.45 ? 1 : d < 0.62 ? 0 : (Math.sin(Math.atan2(ny - 0.5, nx - 0.5) * 6) > 0 ? 1 : 0.7); } }
     ];
-    const STAGE_CHAR_TIER = { X: 5, a: 6, b: 7, c: 8, p: 9, q: 10, r: 11, u: 12, v: 13, w: 14, k: 15, L: 16, R: 17 };   // 숫자 0~4 는 그대로, 나머지 문자
+    const STAGE_CHAR_TIER = { X: 5, a: 6, b: 7, c: 8, p: 9, q: 10, r: 11, u: 12, v: 13, w: 14, k: 15, L: 16, R: 17, '5': 18, '6': 19, '7': 20 };   // 숫자 0~4 는 그대로 (체력 1~5), 5 · 6 · 7 = 체력 6 · 7 · 8 (무한 모드), 나머지 문자
     const isKeyTier = b => !!BRICK_TIERS[b.tier].key;
     const keyBrickAlive = () => bricks.find(b => b.alive && isKeyTier(b));
     const isKeyStage = () => bricks.some(isKeyTier);
+    // ===== V4.59.0 무한 모드 1단계 (개발자 모드 1번 "무한 모드 (시험)" · 아직 타이틀 메뉴에는 없음) =====
+    //  블럭이 위에서 EL_STEP_MS 마다 한 칸씩 내려옴 · 목숨 1개 · 공을 놓치거나 블럭이 게임 오버 선 (점선) 에 닿으면 끝
+    //  금색은 선 바로 위에서 모래로 흩어지며 사라짐 · 블럭 1개 = 수정 1개 = 경험치 1 · 레벨업하면 멈추고 카드 3장 중 1장 (가격 없음)
+    //  공 속도: 블럭을 깰 때마다 처음 속도의 +1%, 최대 400% · 분열해도 속도 유지
+    const EL_STEP_MS = 4000;                                                    // 한 칸 내려오는 간격 (2단계에서 점점 짧아짐)
+    const EL_ROW_H = brickHeight + rowGap;                                      // 한 칸 = 블럭 한 줄 (본편 스테이지 줄 간격과 같음)
+    const EL_TOP_Y = 96 + 40;                                                   // 새 줄이 생기는 높이 (위 HUD 96px 아래)
+    const EL_LINE_Y = LOGIC_HEIGHT - 200 - 230;                                 // 게임 오버 선 (패들 230px 위)
+    const EL_WARN_ROWS = 2;                                                      // 선에서 2칸 안이면 빨간 경고
+    const EL_SPEED_STEP = 0.01, EL_SPEED_MAX = 4;                                // 공: 블럭마다 처음 속도의 +1%, 최대 400%
+    const EL_NO_CARDS = ['life', 'interest', 'save', 'aim'];                     // 무한 모드에서 안 나오는 카드
+    const EL_ABYSS2_LV = 10, EL_ABYSS2_CHANCE = 0.2;                             // 심연의 구체 2: 레벨 10부터 레벨업 카드 고르기의 20% 에 한 장 섞임 (한 번 가지면 끝)
+    // 블럭 위 포탑 (V4.61.0): 패턴 블럭 위에 앉아 같이 내려옴 · 블럭이 깨지면 같이 사라짐 · 레벨 5부터, 레벨이 오를수록 많이 · 빨리 쏨
+    //  레벨 5 = 패턴마다 블럭의 4% (최대 1개) → 레벨마다 +2% · 최대 3개 · 발사 간격 5초 → 레벨마다 -0.25초 (최소 3초)
+    const EL_TURRET_LV = 5;
+    const elTurretPlan = lv => lv < EL_TURRET_LV ? { rate: 0, max: 0, period: 0 } : { rate: Math.min(0.12, 0.04 + 0.02 * (lv - EL_TURRET_LV)), max: Math.min(3, 1 + Math.floor((lv - EL_TURRET_LV) / 3)), period: Math.max(3000, 5000 - 250 * (lv - EL_TURRET_LV)) };
+    const EL_TURRET_S = 56;                                                     // 블럭 위 포탑 크기 (블럭 높이 · 폭에 맞춤)
+    const EL_XP_NEED = [25, 40, 48, 55, 62, 68, 78, 88, 95, 100];              // 레벨 k → k+1 에 필요한 수정 · V4.60.0 패턴 기준 시뮬레이션 (죽지 않게 12분): 90초에 받는 수정 26 · 50 · 40 · 53 · 66 · 69 · 70 · 105 (앞뒤 평균으로 고름) · 끝 뒤는 +5씩
+    const elXpNeed = lv => lv <= EL_XP_NEED.length ? EL_XP_NEED[lv - 1] : EL_XP_NEED[EL_XP_NEED.length - 1] + 5 * (lv - EL_XP_NEED.length);
+    // ===== V4.60.0 무한 모드 2단계: 디자인 패턴 · 변형 · 난이도 · 내려오는 간격 =====
+    //  패턴 = 손으로 그린 그림 덩어리. 위에서 한 줄씩 차례로 나옴 (맨 아래 줄부터 → 화면에 그림이 그대로 서서히 나타남) · 패턴 사이엔 빈 줄 (숨 돌림)
+    //  글자: 0~3 = 패턴 안의 상대 체력 (실제 체력 = 레벨 기준 + 이 값, 최대 8) · X = 금색 · g = 게이트 (레벨이 오르면 등장, 아니면 0) · . = 빈칸
+    //  tier: 1 쉬움 (레벨 1부터) · 2 보통 (레벨 3부터) · 3 어려움 (레벨 6부터) · 4 매우 어려움 (레벨 9부터)
+    const EL_PATTERNS = [
+        { name: '화살', tier: 1, rows: ['......0......', '.....000.....', '....0.0.0....', '...0..0..0...', '......0......', '......0......'] },
+        { name: '물결', tier: 1, rows: ['0...........0', '.0.........0.', '..0...0...0..', '...0.0.0.0...', '....0...0....'] },
+        { name: '사다리', tier: 1, rows: ['.0.........0.', '.00000000000.', '.0.........0.', '.0.........0.', '.00000000000.', '.0.........0.'] },
+        { name: '다이아몬드', tier: 1, rows: ['......0......', '.....010.....', '....01110....', '.....010.....', '......0......'] },
+        { name: '체커', tier: 2, rows: ['0.0.0.0.0.0.0', '.1.1.1.1.1.1.', '0.0.0.0.0.0.0', '.1.1.1.1.1.1.'] },
+        { name: '계단', tier: 2, rows: ['00...........', '1100.........', '..1100.......', '....1100.....', '......1100...', '........1100.', '..........11.'] },
+        { name: '기둥 사이', tier: 2, rows: ['X...0000...X.', 'X...0110...X.', 'X...0110...X.', 'X...0000...X.'] },
+        { name: '눈', tier: 2, rows: ['....00000....', '..00.....00..', '.0...222...0.', '..00.....00..', '....00000....'] },
+        { name: '껍질과 핵', tier: 3, rows: ['...0000000...', '...0111110...', '...0123210...', '...0111110...', '...0000000...'] },
+        { name: '둥지', tier: 3, rows: ['..000...000..', '..0g0...0g0..', '..000...000..', '.............', '....11111....'] },
+        { name: '해골', tier: 3, rows: ['...0000000...', '..011111110..', '..1X21112X1..', '..011111110..', '...0.1.1.0...', '...0.1.1.0...'] },
+        { name: '요새', tier: 3, rows: ['.X.X.X.X.X.X.', '.XXXXXXXXXXX.', '.X111g1g111X.', '.X000000000X.', '.XX.......XX.'] },
+        { name: '지그재그', tier: 3, rows: ['2.....2......', '.1...1.1.....', '..0.0...0.0..', '...0.....0.0.', '.........1..1', '..........2..'] },
+        { name: '왕관', tier: 4, rows: ['.2...2...2...', '.22..2..22...', '.212121212...', '.111111111...', '.000000000...'] },
+        { name: '격자 성채', tier: 4, rows: ['X1X1X1X1X1X1X', '1.1.1g1.1.1.1', 'X1X1X1X1X1X1X', '1.1.1.1.1.1.1', 'X0X0X0X0X0X0X'] },
+        { name: '심장', tier: 4, rows: ['..222...222..', '.23332.23332.', '.233333333332', '..2333333332.', '...23333332..', '....233332...', '.....2332....', '......22.....'] }
+    ];
+    // 레벨 → 난이도: 기본 체력 (0 에 더해짐) · 쓸 수 있는 패턴 등급 · 게이트 단계 · 패턴 사이 빈 줄 · 내려오는 간격
+    const elDiff = lv => ({
+        base: Math.min(5, Math.floor((lv - 1) / 2)),                             // 레벨 1~2 → +0 (체력 1부터) · 3~4 → +1 · … · 11+ → +5 (가장 단단한 칸이 8)
+        maxTier: lv >= 9 ? 4 : lv >= 6 ? 3 : lv >= 3 ? 2 : 1,
+        gate: lv >= 10 ? 3 : lv >= 7 ? 2 : lv >= 4 ? 1 : 0,                     // 0 = 게이트 안 나옴 (g 는 일반 블럭)
+        gap: lv >= 8 ? 1 : 2,                                                    // 패턴 사이 빈 줄
+        step: Math.max(1500, 4000 - (lv - 1) * 250)                             // 4초 → 레벨마다 0.25초 짧게 → 레벨 11 부터 1.5초
+    });
+    // 변형: 좌우 뒤집기 · 옆으로 밀기 (빈 칸이 있으면) · 체력 한 단계 위/아래로 섞기 → 같은 패턴도 매번 조금씩 다름
+    function elVariant(P, rnd) {
+        let rows = P.rows.map(r => r.padEnd(cols, '.').slice(0, cols));
+        if (rnd() < 0.5) rows = rows.map(r => r.split('').reverse().join(''));
+        let minC = cols, maxC = -1; rows.forEach(r => r.split('').forEach((ch, c) => { if (ch !== '.') { minC = Math.min(minC, c); maxC = Math.max(maxC, c); } }));
+        const room = [-minC, cols - 1 - maxC], sh = Math.round(room[0] + rnd() * (room[1] - room[0]));
+        if (sh) rows = rows.map(r => { const a = r.split(''), o = Array(cols).fill('.'); a.forEach((ch, c) => { if (ch !== '.' && c + sh >= 0 && c + sh < cols) o[c + sh] = ch; }); return o.join(''); });
+        const bump = rnd() < 0.3 ? 1 : 0;                                       // 30% 는 한 단계 단단하게
+        return { name: P.name, rows, bump, flip: rows !== P.rows, shift: sh };
+    }
+    function elPickPattern(lv, rnd = Math.random, last = null) {                 // 레벨에 맞는 패턴 고르기 (직전과 같은 건 피함 · 높은 등급일수록 조금 더 자주)
+        const D = elDiff(lv), pool = EL_PATTERNS.filter(P => P.tier <= D.maxTier && P.name !== last);
+        const wsum = pool.reduce((s, P) => s + P.tier, 0); let r = rnd() * wsum;
+        for (const P of pool) { r -= P.tier; if (r <= 0) return P; }
+        return pool[pool.length - 1];
+    }
+    // 글자 → 실제 블럭 종류 (레벨 기준 체력 + 패턴 상대 체력 + 변형 bump, 1~8 · 게이트 · 금색)
+    function elCellTier(ch, lv, bump) {
+        if (ch === 'X') return 5;
+        const D = elDiff(lv);
+        if (ch === 'g') return D.gate ? (lv % 2 ? STAGE_CHAR_TIER['p'] + D.gate - 1 : STAGE_CHAR_TIER['u'] + D.gate - 1) : 0;   // 돌격 / 원거리 번갈아
+        const hp = Math.min(8, 1 + D.base + parseInt(ch, 10) + bump);
+        return hp <= 5 ? hp - 1 : STAGE_CHAR_TIER[String(hp - 1)];               // 체력 1~5 → 0~4 · 6~8 → OBSIDIAN · TITAN · CORE
+    }
+    let endless = null;                                                          // null = 무한 모드 아님
+    const elSpeed = () => BALL_BASE_SPEED * Math.min(EL_SPEED_MAX, 1 + EL_SPEED_STEP * (endless ? endless.kills : 0));
+    const elRowY = r => EL_TOP_Y + r * EL_ROW_H;                                 // 위에서 r 번째 칸의 y (r = 0 이 맨 위)
+    function elSpawnRow() {                                                      // 맨 위 칸에 새 줄: 지금 패턴의 다음 줄 (맨 아래 줄부터) · 패턴이 끝나면 빈 줄 → 다음 패턴
+        const E = endless, row = elNextRow(E); E.rowIdx++;
+        const TP = elTurretPlan(E.level), made = [];
+        for (let c = 0; c < cols; c++) {
+            const ch = row.s[c]; if (ch === '.') continue;
+            const tier = elCellTier(ch, E.level, row.bump);
+            const b = { x: offsetX + c * brickWidth, y: elRowY(0), w: brickWidth, h: brickHeight, alive: true, tier, hits: 0, phase: (E.rowIdx * cols + c) % SAND_FRAMES, r: 0, c, elY: elRowY(0), spawnT: 0 };   // r = 위에서 몇 번째 칸 (파편 카드 이웃 찾기)
+            bricks.push(b); made.push(b);
+        }
+        // 블럭 위 포탑: 이 줄 위에 블럭이 없는 (패턴의 윗면) 깰 수 있는 일반 블럭에만 · 패턴마다 최대 TP.max 개
+        if (TP.rate > 0) {
+            for (const b of made) {
+                const T = BRICK_TIERS[b.tier];
+                if (!isBreakable(b) || T.gate || (E.patTurrets || 0) >= TP.max || Math.random() >= TP.rate) continue;
+                if (E.curRow >= 0 && E.cur && E.cur.rows[E.curRow] && E.cur.rows[E.curRow][b.c] !== '.') continue;   // 위 칸에 다음 줄 블럭이 올 자리면 안 됨 (포탑이 블럭에 묻힘)
+                b.top = { aim: Math.PI / 2, tT: Math.random() * TP.period * 0.5, period: TP.period, lock: false, zx: null, flash: 0 };
+                E.patTurrets = (E.patTurrets || 0) + 1; E.turretsMade = (E.turretsMade || 0) + 1;
+            }
+        }
+    }
+    function elNextRow(E) {                                                      // 패턴을 맨 아래 줄부터 한 줄씩 꺼냄 (그림이 위에서 그대로 내려오며 완성됨)
+        if (E.gapLeft > 0) { E.gapLeft--; return { s: '.'.repeat(cols), bump: 0 }; }
+        if (!E.cur || E.curRow < 0) {
+            const P = elPickPattern(E.level, Math.random, E.lastPat), V = elVariant(P, Math.random);
+            E.cur = V; E.curRow = V.rows.length - 1; E.lastPat = P.name; E.patterns.push(P.name);
+        }
+        const s = E.cur.rows[E.curRow--];
+        if (E.curRow < 0) { E.cur = null; E.gapLeft = elDiff(E.level).gap; E.patTurrets = 0; }
+        return { s, bump: E.cur ? E.cur.bump : 0 };
+    }
+    function startEndless() {                                                    // 개발자 모드 "무한 모드 (시험)"
+        for (const k in upgrades) delete upgrades[k];
+        lives = 1; score = 0; gemCount = 0; testStage = null; introCard = null; laserOn = true;
+        initGame(0);                                                             // 패들 · 공 · 보호 블럭 · 배경 (1세션) 초기화
+        bricks.length = 0; gems.length = 0;
+        endless = { level: 1, xp: 0, kills: 0, t: 0, stepT: 0, rowIdx: 0, warn: 0, over: null, pick: null, cur: null, curRow: -1, gapLeft: 0, lastPat: null, patterns: [], result: null };
+        elWarnSfx.last = -1e9;
+        for (let k = 0; k < 4; k++) { for (const b of bricks) { b.y += EL_ROW_H; b.elY = b.y; b.r++; } elSpawnRow(); }   // 처음 4줄은 미리 내려 둠 (맨 위 칸 + 3칸 아래까지)
+        gemPlan = { total: 1e9, n: 1e9, broken: 0, u: 0 };                       // 무한 모드 수정은 블럭마다 1개 (elGem)
+        balls[0].vx = Math.sign(balls[0].vx) * BALL_VX; balls[0].vy = -BALL_VY;
+        gameState = 'PLAY';
+    }
+    function elStepDown() {                                                      // 한 칸 내려오기 (블럭이 부드럽게 미끄러지도록 목표 y 만 바꿈) · 깨진 블럭은 목록에서 정리
+        for (let i = bricks.length - 1; i >= 0; i--) if (!bricks[i].alive) bricks.splice(i, 1);
+        for (const b of bricks) { b.elY += EL_ROW_H; b.r++; }
+        elSpawnRow();
+        if (gameState === 'PLAY') sfx('stepDown');
+    }
+    // ===== V4.62.0 무한 모드 4단계: 점수 · 최고 기록 · 효과음 · 타이틀 메뉴 =====
+    //  점수 = 블럭을 깰 때 체력 x 100 (본편과 같음) + 레벨업마다 레벨 x 1000 · 버틴 시간 1초마다 10
+    //  최고 기록은 세 가지를 따로 저장 (최고 레벨 · 가장 오래 버틴 시간 · 최고 점수) · localStorage 'sb_endless_best'
+    const EL_BEST_KEY = 'sb_endless_best', EL_LV_SCORE = 1000, EL_SEC_SCORE = 10;
+    function elLoadBest() { try { const b = JSON.parse(localStorage.getItem(EL_BEST_KEY) || 'null'); if (b && [b.level, b.time, b.score].every(Number.isFinite)) return b; } catch (e) {} return { level: 0, time: 0, score: 0 }; }
+    let elBest = elLoadBest();
+    function elSaveRecord() {                                                    // 게임 오버 때 한 번: 이번 기록 · 새 기록 표시 · 저장
+        const E = endless, cur = { level: E.level, time: Math.floor(E.t / 1000), score }, prev = Object.assign({}, elBest);
+        E.result = { cur, prev, newLevel: cur.level > prev.level, newTime: cur.time > prev.time, newScore: cur.score > prev.score };
+        elBest = { level: Math.max(prev.level, cur.level), time: Math.max(prev.time, cur.time), score: Math.max(prev.score, cur.score) };
+        try { localStorage.setItem(EL_BEST_KEY, JSON.stringify(elBest)); } catch (e) {}
+    }
+    const elWarnSfx = { last: 0 };                                               // 경고음: 블럭이 선 2칸 안에 있으면 1.2초마다 (가까울수록 0.6초까지 빨라짐)
+    const fmtTime = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    // 타이틀 메뉴: PUSH START (본편) 아래에 ENDLESS 버튼 + 최고 기록
+    const TITLE_ENDLESS_BTN = { x: LOGIC_WIDTH / 2 - 260, y: LOGIC_HEIGHT / 2 + 230, w: 520, h: 110 };
+    // 무한 모드 게임 오버 화면: 끝난 이유 · 이번 기록 / 최고 기록 표 (새 기록은 NEW) · 다시 하기 · 타이틀
+    const EL_RES_BTNS = { retry: { x: LOGIC_WIDTH / 2 - 400, y: LOGIC_HEIGHT / 2 + 420, w: 370, h: 116 }, title: { x: LOGIC_WIDTH / 2 + 30, y: LOGIC_HEIGHT / 2 + 420, w: 370, h: 116 } };
+    function drawElResult() {
+        const R = endless.result, cx = LOGIC_WIDTH / 2, cy = LOGIC_HEIGHT / 2, ready = performance.now() - lostAt >= LOST_HOLD_MS;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, HUD_TOP_H, LOGIC_WIDTH, LOGIC_HEIGHT - HUD_TOP_H - HUD_BOTTOM_H);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff'; ctx.font = font('bold 100px'); ctx.fillText('SYSTEM_FAILURE', cx, cy - 420);
+        ctx.fillStyle = 'rgb(190,190,190)'; ctx.font = font('36px'); ctx.fillText(endless.over === 'line' ? '블럭이 선을 넘었습니다' : '공을 놓쳤습니다', cx, cy - 320);
+        const colX = [cx - 330, cx + 30, cx + 330], rowY = [cy - 190, cy - 90, cy + 10, cy + 110];
+        ctx.font = font('bold 32px'); ctx.fillStyle = 'rgb(130,130,130)';
+        ctx.fillText('이번', colX[1], rowY[0]); ctx.fillText('최고', colX[2], rowY[0]);
+        const rows = [['레벨', R.cur.level, Math.max(R.prev.level, R.cur.level), R.newLevel], ['버틴 시간', fmtTime(R.cur.time), fmtTime(Math.max(R.prev.time, R.cur.time)), R.newTime], ['점수', R.cur.score, Math.max(R.prev.score, R.cur.score), R.newScore]];
+        rows.forEach(([k, a, b, nw], i) => {
+            const y = rowY[i + 1];
+            ctx.textAlign = 'left'; ctx.fillStyle = 'rgb(170,170,170)'; ctx.font = font('34px'); ctx.fillText(k, colX[0] - 90, y);
+            ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = font('bold 44px'); ctx.fillText(String(a), colX[1], y);
+            ctx.fillStyle = nw ? '#fff' : 'rgb(150,150,150)'; ctx.fillText(String(b), colX[2], y);
+            if (nw) { const blink = 0.55 + 0.45 * Math.abs(Math.sin(performance.now() * 0.005)); ctx.fillStyle = `rgba(255,255,255,${blink})`; ctx.font = font('bold 26px'); ctx.fillText('NEW', colX[2] + 150, y); }
+        });
+        ctx.fillStyle = 'rgb(130,130,130)'; ctx.font = font('28px'); ctx.fillText(`깬 블럭 ${endless.kills}개 · 공 속도 ${Math.round(elSpeed() / BALL_BASE_SPEED * 100)}%`, cx, cy + 230);
+        for (const [k, label] of [['retry', '다시 하기'], ['title', '타이틀']]) {
+            const B = EL_RES_BTNS[k];
+            ctx.strokeStyle = ready ? '#fff' : 'rgb(80,80,80)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.roundRect(B.x, B.y, B.w, B.h, 16); ctx.stroke();
+            ctx.fillStyle = ready ? '#fff' : 'rgb(90,90,90)'; ctx.font = font('bold 46px'); ctx.fillText(label, B.x + B.w / 2, B.y + B.h / 2);
+        }
+    }
+    function elResultTap(x, y) {
+        if (performance.now() - lostAt < LOST_HOLD_MS) return;
+        if (inRect(EL_RES_BTNS.retry, x, y)) startEndless();
+        else if (inRect(EL_RES_BTNS.title, x, y)) goTitle();
+    }
+    function drawTitleEndless() {
+        const B = TITLE_ENDLESS_BTN, t = performance.now();
+        ctx.save(); ctx.setLineDash([16, 10]); ctx.lineDashOffset = -(t / 50) % 26; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 3;   // 무한 모드 = 게임 오버 선과 같은 점선 테두리
+        ctx.beginPath(); ctx.roundRect(B.x, B.y, B.w, B.h, 16); ctx.stroke(); ctx.restore();
+        ctx.fillStyle = '#fff'; ctx.font = font('bold 48px'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('ENDLESS', B.x + B.w / 2, B.y + B.h / 2);
+        if (elBest.level > 0) {
+            ctx.fillStyle = 'rgb(150,150,150)'; ctx.font = font('28px');
+            ctx.fillText(`BEST  LV ${elBest.level} · ${fmtTime(elBest.time)} · ${elBest.score}`, LOGIC_WIDTH / 2, B.y + B.h + 46);
+        }
+    }
+    function updateEndless() {                                                   // update() 안에서 매 프레임 (PLAY 일 때)
+        const E = endless; E.t += STEP_MS; E.stepT += STEP_MS;
+        if (E.stepT >= elDiff(E.level).step) { E.stepT -= elDiff(E.level).step; elStepDown(); }   // 내려오는 간격: 레벨마다 짧아짐 (4초 → 1.5초)
+        let lowest = -1e9;
+        for (const b of bricks) {
+            if (!b.alive) continue;
+            if (b.y < b.elY) b.y = Math.min(b.elY, b.y + EL_ROW_H / 12);          // 0.2초 동안 미끄러져 내려옴
+            const bottom = b.y + b.h;
+            if (!isBreakable(b)) {                                               // 금색: 선 1칸 위에 닿으면 모래로 흩어지며 사라짐
+                if (b.elY + b.h >= EL_LINE_Y - EL_ROW_H * 0.5) { b.alive = false; spawnBurst(b, 60); addBrickDustHole(b, 'NORMAL'); }
+                continue;
+            }
+            lowest = Math.max(lowest, bottom);
+            if (bottom >= EL_LINE_Y) { elGameOver('line'); return; }
+        }
+        E.warn = lowest > EL_LINE_Y - EL_ROW_H * EL_WARN_ROWS ? Math.min(1, (lowest - (EL_LINE_Y - EL_ROW_H * EL_WARN_ROWS)) / (EL_ROW_H * EL_WARN_ROWS)) : 0;
+        if (E.warn > 0 && E.t - elWarnSfx.last >= 1200 - 600 * E.warn) { elWarnSfx.last = E.t; sfx('lineWarn'); }   // 경고음
+        if (Math.floor(E.t / 1000) !== Math.floor((E.t - STEP_MS) / 1000)) score += EL_SEC_SCORE;                      // 버틴 1초마다 +10
+        elUpdateTopTurrets();
+    }
+    // 블럭 위 포탑: 포신이 패들을 따라 돌다가 발사 0.7초 전 조준 고정 (바닥 표시) → 1발 (벽 감시포와 같은 미사일 · 맞으면 마비)
+    const elTopCenter = b => [b.x + b.w / 2, b.y - EL_TURRET_S * 0.32];
+    function elUpdateTopTurrets() {
+        const tx = paddle.x + paddle.width / 2, ty = paddle.y, CH = TURRET_A.charge;
+        for (const b of bricks) {
+            const T = b.alive && b.top; if (!T) continue;
+            const [cx, cy] = elTopCenter(b);
+            T.tT += STEP_MS; if (T.flash > 0) T.flash -= STEP_MS;
+            if (!T.lock) {
+                const want = Math.atan2(ty - cy, tx - cx);
+                let d = want - T.aim; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+                T.aim += Math.max(-0.05, Math.min(0.05, d));
+                if (T.tT >= T.period - CH) {
+                    T.lock = true; const sa = Math.sin(T.aim);
+                    T.zx = sa > 0.05 ? cx + Math.cos(T.aim) * (paddle.y - cy) / sa : null; if (T.zx != null && (T.zx < 0 || T.zx > LOGIC_WIDTH)) T.zx = null;
+                    sfx('hit');
+                }
+            }
+            if (T.tT >= T.period) {
+                const m = EL_TURRET_S * 0.62;
+                enemyMissiles.push({ x: cx + Math.cos(T.aim) * m, y: cy + Math.sin(T.aim) * m, dx: Math.cos(T.aim) * MISSILE_SPEED, dy: Math.sin(T.aim) * MISSILE_SPEED, zx: T.zx });
+                sfx('laser'); T.tT -= T.period; T.lock = false; T.zx = null; T.flash = 150;
+            }
+        }
+    }
+    // 그림: 블럭 윗면에 붙은 받침 + 반구 몸통 (점묘 금속) + 패들을 향해 도는 포신 + 충전되면 밝아지는 렌즈
+    function drawTopTurret(c, cx, cy, S, f, aim, charge = 0, flash = 0) {
+        const sp = Math.max(1.6, S * 0.028);
+        tDots(c, cx - 0.5 * S, cy + 0.2 * S, cx + 0.5 * S, cy + 0.34 * S, sp, 9861, f, () => true, (px, py) => 200 - 90 * (py - cy - 0.2 * S) / (0.14 * S));   // 받침 (블럭 윗면)
+        [-0.38, 0.38].forEach((k, i) => tDisc(c, cx + k * S, cy + 0.27 * S, 0.035 * S + 1, sp * 0.8, 9862 + i, f, 255));                                  // 볼트
+        c.save(); c.translate(cx, cy); c.rotate(aim);                                                                                                    // 포신 (몸통 뒤에서 나옴)
+        tDots(c, 0.05 * S, -0.075 * S, 0.62 * S, 0.075 * S, sp, 9864, f, () => true, (px, py) => px > 0.55 * S ? 250 : 110 + 120 * (1 - Math.abs(py) / (0.075 * S)));
+        if (flash > 0) tDisc(c, 0.7 * S, 0, 0.14 * S * flash + 1, sp, 9865, f, 255);
+        c.restore();
+        tDots(c, cx - 0.36 * S, cy - 0.36 * S, cx + 0.36 * S, cy + 0.2 * S, sp, 9866, f,                                                                // 반구 몸통
+            (px, py) => (px - cx) ** 2 + (py - cy - 0.2 * S) ** 2 < (0.36 * S) ** 2,
+            (px, py) => 70 + 150 * Math.exp(-(((px - cx + 0.12 * S) / (0.16 * S)) ** 2 + ((py - cy + 0.1 * S) / (0.2 * S)) ** 2)));
+        const lens = charge > 0 ? 140 + 115 * charge : 90;                                                                                              // 렌즈: 조준 고정되면 밝아짐
+        tDisc(c, cx + Math.cos(aim) * 0.16 * S, cy + 0.02 * S + Math.sin(aim) * 0.1 * S, 0.09 * S + charge * 0.04 * S, sp * 0.8, 9867, f, lens);
+    }
+    function drawElTopTurrets(f, t) {
+        const CH = TURRET_A.charge;
+        for (const b of bricks) {
+            const T = b.alive && b.top; if (!T) continue;
+            const [cx, cy] = elTopCenter(b), charge = T.lock ? Math.max(0, Math.min(1, (T.tT - (T.period - CH)) / CH)) : 0;
+            drawTopTurret(ctx, cx, cy, EL_TURRET_S, f, T.aim, charge, Math.max(0, T.flash / 150));
+            if (T.lock && T.zx != null && gameState === 'PLAY') drawTurretZone(ctx, T.zx, paddle.y + paddle.height + 30, 120, t);
+        }
+    }
+    function elOnKill(b) {                                                       // damageBrick 에서 블럭이 깨질 때: 수정 1개 · 공 빨라짐 · 위 포탑도 같이 부서짐
+        const E = endless; E.kills++;
+        if (b.top) { spawnBurst({ x: b.x + b.w / 2 - EL_TURRET_S / 2, y: b.y - EL_TURRET_S * 0.6, w: EL_TURRET_S, h: EL_TURRET_S * 0.6 }, 50); b.top = null; }
+        gems.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, phase: Math.random() * 1400 });
+        const sp = elSpeed();
+        for (const q of balls) { const s0 = Math.hypot(q.vx, q.vy); if (s0 > 0) { q.vx *= sp / s0; q.vy *= sp / s0; } }
+    }
+    function elOnGem() {                                                         // updateGems 에서 수정을 받을 때
+        const E = endless; E.xp++;
+        if (E.xp >= elXpNeed(E.level)) { E.xp -= elXpNeed(E.level); E.level++; score += E.level * EL_LV_SCORE; elOpenPick(); }
+    }
+    function elOpenPick() {                                                      // 레벨업: 게임 멈추고 카드 3장 (가격 없음) · 심연의 구체 2 는 레벨 10부터 드물게 (EL_ABYSS2_CHANCE)
+        const pool = SHOP_CARDS.filter(c => !c.reward && !EL_NO_CARDS.includes(c.id) && cardLevel(c.id) < c.max).map(c => c.id);
+        for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+        const cards = pool.slice(0, 3);
+        if (endless.level >= EL_ABYSS2_LV && cardLevel('abyss2') < 1 && Math.random() < EL_ABYSS2_CHANCE) { if (cards.length < 3) cards.push('abyss2'); else cards[Math.floor(Math.random() * 3)] = 'abyss2'; }
+        endless.pick = { cards, sel: -1, t0: performance.now() };
+        gameState = endless.pick.cards.length ? 'EL_PICK' : 'PLAY';
+        sfx('levelUp');
+    }
+    function elLayout() {
+        const pad = 40, gap = 30, cw = (LOGIC_WIDTH - pad * 2 - gap * 2) / 3, ch = cw * 1.5, cy = 520;
+        return { cards: [0, 1, 2].map(i => ({ x: pad + i * (cw + gap), y: cy, w: cw, h: ch })), ok: { x: LOGIC_WIDTH / 2 - 260, y: cy + ch + 110, w: 520, h: 116 } };
+    }
+    function elPickTap(x, y) {
+        const P = endless.pick, L = elLayout(), ci = L.cards.findIndex((r, i) => i < P.cards.length && inRect(r, x, y));
+        if (ci >= 0) { P.sel = ci === P.sel ? -1 : ci; return; }
+        if (P.sel >= 0 && inRect(L.ok, x, y)) {
+            const id = P.cards[P.sel];
+            upgrades[id] = cardLevel(id) + 1;
+            if (id === 'absorb') absorbCharge = absorbMax();
+            if (id === 'size') paddle.targetWidth = PADDLE_SIZES[cardLevel('size')];
+            if (id === 'shield') buildShields();
+            if (id === 'power') for (const q of balls) q.power = ballPower();
+            endless.pick = null; gameState = 'PLAY';
+        }
+    }
+    function drawElPick() {
+        const P = endless.pick, L = elLayout(), now = performance.now(), f = Math.floor(now / SAND_INTERVAL) % SAND_FRAMES;
+        ctx.fillStyle = 'rgba(0,0,0,0.86)'; ctx.fillRect(0, HUD_TOP_H, LOGIC_WIDTH, LOGIC_HEIGHT - HUD_TOP_H - HUD_BOTTOM_H);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff'; ctx.font = font('bold 96px'); ctx.fillText(`LEVEL ${endless.level}`, LOGIC_WIDTH / 2, 300);
+        ctx.fillStyle = 'rgb(150,150,150)'; ctx.font = font('34px'); ctx.fillText('카드 1장을 고르세요', LOGIC_WIDTH / 2, 400);
+        P.cards.forEach((id, i) => {
+            const r = L.cards[i], t = Math.min(1, Math.max(0, (now - P.t0 - i * 120) / 350)), e = 1 - Math.pow(1 - t, 3), sel = i === P.sel;
+            ctx.save(); ctx.globalAlpha = e; ctx.translate(0, (1 - e) * 60 + (sel ? -18 : 0));
+            drawShopCard(ctx, r.x, r.y, r.w, r.h, cardById(id), cardLevel(id), f, { noPrice: true });
+            if (sel) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 6; ctx.beginPath(); ctx.roundRect(r.x - 8, r.y - 8, r.w + 16, r.h + 16, 20); ctx.stroke(); }
+            ctx.restore();
+        });
+        const on = P.sel >= 0;
+        ctx.strokeStyle = on ? '#fff' : 'rgb(80,80,80)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.roundRect(L.ok.x, L.ok.y, L.ok.w, L.ok.h, 16); ctx.stroke();
+        ctx.fillStyle = on ? '#fff' : 'rgb(90,90,90)'; ctx.font = font('bold 48px'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('선택', L.ok.x + L.ok.w / 2, L.ok.y + L.ok.h / 2);
+    }
+    function elGameOver(why) { if (gameState !== 'PLAY') return; endless.over = why; balls.length = 0; gameState = 'GAME_OVER'; lostAt = performance.now(); sfx('stun'); elSaveRecord(); }
+    // 게임 오버 선 (점선 · 블럭이 2칸 안으로 오면 빨갛게 깜빡임) + 왼쪽 위 레벨 · 경험치 막대 · 버틴 시간
+    function drawElLine() {
+        const E = endless, w = E.warn, blink = w > 0 ? 0.55 + 0.45 * Math.abs(Math.sin(performance.now() * (0.006 + 0.01 * w))) : 1;
+        ctx.save(); ctx.setLineDash([22, 16]); ctx.lineDashOffset = -(performance.now() / 40) % 38; ctx.lineWidth = 4;
+        const R = Math.round(150 + 105 * w), G = Math.round(150 * (1 - w)), B = Math.round(150 * (1 - w));
+        ctx.strokeStyle = `rgba(${R},${G},${B},${(0.55 + 0.45 * w) * blink})`;
+        ctx.beginPath(); ctx.moveTo(0, EL_LINE_Y); ctx.lineTo(LOGIC_WIDTH, EL_LINE_Y); ctx.stroke(); ctx.restore();
+        if (w > 0) { const g = ctx.createLinearGradient(0, EL_LINE_Y - EL_ROW_H * 2, 0, EL_LINE_Y); g.addColorStop(0, 'rgba(255,40,40,0)'); g.addColorStop(1, `rgba(255,40,40,${0.22 * w * blink})`); ctx.fillStyle = g; ctx.fillRect(0, EL_LINE_Y - EL_ROW_H * 2, LOGIC_WIDTH, EL_ROW_H * 2); }
+    }
+    function drawElHud() {
+        const E = endless, need = elXpNeed(E.level), y = HUD_TOP_H + 14, w = 360, x = 24;
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = '#fff'; ctx.font = font('bold 34px');
+        ctx.fillText(`LV ${E.level}`, x, y);
+        ctx.fillStyle = 'rgb(60,60,60)'; ctx.fillRect(x + 120, y + 10, w, 18);
+        ctx.fillStyle = '#ddd'; ctx.fillRect(x + 120, y + 10, w * Math.min(1, E.xp / need), 18);
+        ctx.fillStyle = 'rgb(150,150,150)'; ctx.font = font('24px'); ctx.fillText(`${E.xp} / ${need}`, x + 120 + w + 14, y + 6);
+        const s = Math.floor(E.t / 1000); ctx.textAlign = 'right'; ctx.fillStyle = '#fff'; ctx.font = font('bold 34px');
+        ctx.fillText(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`, LOGIC_WIDTH - 24, y);
+        ctx.fillStyle = 'rgb(150,150,150)'; ctx.font = font('24px'); ctx.fillText(`공 속도 ${Math.round(elSpeed() / BALL_BASE_SPEED * 100)}%`, LOGIC_WIDTH - 24, y + 44);
+    }
     // ===== V4.57.0 배경 렉 확인용 스테이지 A · B · C · D (개발자 모드 1번에서만 · 진짜 스테이지 아님) =====
     //  배경 1 · 2 · 3 · 4 (4 = 가장 무거운 27~28 눈의 방) 를 차례로 씀. 배경 2 · 3 · 4 는 검토 중인 움직임 (V4.56.0) 을 켠 상태 · 진짜 스테이지는 그대로
     //  블럭: 게이트 빼고 모든 종류를 7개씩 한 줄로 (체력 1~5 · 금색 · 고무 1~3 · 키 블럭) + 양 벽 포탑 7개씩
@@ -1788,8 +2140,9 @@
                 // 점수 획득
                 score += BRICK_TIERS[hit.tier].hp * 100;
                 
-                // 보석 드롭: 스테이지 총량을 깨는 순서대로 나눔. 2개 이상이면 옆으로 조금 벌려서
-                const gn = gemsForBreak();
+                // 보석 드롭: 스테이지 총량을 깨는 순서대로 나눔. 2개 이상이면 옆으로 조금 벌려서 · 무한 모드는 블럭마다 1개
+                const gn = endless ? 0 : gemsForBreak();
+                if (endless) elOnKill(hit);
                 for (let k = 0; k < gn; k++) {
                     gems.push({ x: hit.x + hit.w / 2 + (k - (gn - 1) / 2) * GEM_SIZE * 0.9, y: hit.y + hit.h / 2, phase: Math.random() * 1400 });
                 }
@@ -2887,6 +3240,7 @@
                 gemCount++;
                 stageGems++;
                 gems.splice(i, 1);
+                if (endless) elOnGem();
             }
         }
     }
@@ -3032,6 +3386,7 @@
         aim:      [65],
         absorb:   [30, 50, 70],
         abyss:    [0],                                 // 보스2 보상 (팔지 않음)
+        abyss2:   [0],                                 // 무한 모드 레벨업 카드 (팔지 않음)
         save:     [50]                                 // 저장: 살 때마다 50 (여러 번)
     };
     const PRICE_KEY = 'sb_shop_prices';
@@ -3471,8 +3826,9 @@
                     const plan = aimPlan(ball.x, ball.y, ball.radius);
                     if (plan) { ball.vx = speed * Math.sin(plan.a); ball.vy = -speed * Math.cos(plan.a); }
                     // 심연의 구체: 공 중심이 패들 한가운데 6.5% 안이면 가장 가까운 블럭을 조준해 발사 · 그 공이 처음 맞히는 블럭은 한 방에 격파 (V4.58.0)
-                    else if (cardLevel('abyss') > 0 && Math.abs(ball.x - (paddle.x + paddle.width / 2)) <= paddle.width * ABYSS_CENTER / 2) {
-                        const ap = abyssAimPlan(ball.x, ball.y, ball.radius);
+                    // 심연의 구체 2 (무한 모드, V4.61.0): 같은 가운데 · 가장 아래에 있는 깰 수 있는 블럭을 조준 + 한 방 격파 · 속도 페널티 없음
+                    else if ((cardLevel('abyss') > 0 || (endless && cardLevel('abyss2') > 0)) && Math.abs(ball.x - (paddle.x + paddle.width / 2)) <= paddle.width * ABYSS_CENTER / 2) {
+                        const ap = abyssAimPlan(ball.x, ball.y, ball.radius, !!(endless && cardLevel('abyss2') > 0));
                         if (ap) { ball.vx = speed * Math.sin(ap.a); ball.vy = -speed * Math.cos(ap.a); ball.abyssFx = 400; ball.abyssKill = true; sfx('laser'); }
                     }
                     // 볼 복제: 부딪친 볼은 사라지고 좌우로 2개 발사 (최대 8개)
@@ -3514,7 +3870,7 @@
 
                 if (hit) {
                     let pwr = ball.power || 1;
-                    if (ball.abyssKill) {                                          // 심연의 구체 조준 공: 처음 맞힌 블럭은 남은 체력만큼 (한 방 격파) · 금색 · 게이트에 막히면 그냥 끝
+                    if (ball.abyssKill) {                                          // 심연의 구체 조준 공: 처음 맞힌 블럭은 남은 체력만큼 (한 방 격파) · 금색 · 게이트에 막히면 그냥 끝 · 블럭 위 포탑도 블럭 쪽을 깸
                         ball.abyssKill = false;
                         if (isBreakable(hit) && !BRICK_TIERS[hit.tier].gate) pwr = Math.max(pwr, BRICK_TIERS[hit.tier].hp - hit.hits);
                     }
@@ -3546,7 +3902,7 @@
             if (ball.cloneMe) {
                 const a = Math.atan2(ball.vy, ball.vx), spd = Math.hypot(ball.vx, ball.vy);
                 balls.splice(bIdx, 1);
-                const cs = cardLevel('abyss') > 0 ? BALL_BASE_SPEED : spd;   // 심연의 구체: 분열한 공은 처음 속도
+                const cs = endless ? spd : cardLevel('abyss') > 0 ? BALL_BASE_SPEED : spd;   // 심연의 구체: 분열한 공은 처음 속도 · 무한 모드는 분열해도 속도 유지
                 [-CLONE_SPREAD, CLONE_SPREAD].forEach(d => balls.push({
                     x: ball.x, y: ball.y, vx: Math.cos(a + d) * cs, vy: Math.sin(a + d) * cs,
                     radius: ball.radius, power: ball.power, trail: []
@@ -3569,6 +3925,7 @@
 
         updateEnemies();
         if (balls.length === 0) {
+            if (endless) { elGameOver('ball'); return; }                         // 무한 모드: 목숨 1개
             lives--;
             gameState = lives > 0 ? 'LIFE_LOST' : 'GAME_OVER';
             lostAt = performance.now();
@@ -3576,6 +3933,7 @@
 
         updateBurst();
 
+        if (endless) { updateEndless(); return; }                                // 무한 모드: 클리어 없음
         // 금속(파괴 불가)은 클리어 조건에서 제외
         if (boss) { if (!boss.dead) updateBoss(); return; }   // 보스전: 블럭 없음, 보스를 깨야 끝
         if (testStage == null && isKeyStage() ? !keyBrickAlive() : !bricks.some(b => b.alive && isBreakable(b))) startClearSeq();   // 키 블럭 스테이지: 키 블럭만 깨면 클리어 · 렉 확인용 A~D 는 모두 깨야
@@ -3830,6 +4188,7 @@
             const displayHits = Math.min(brick.hits, BT.hp === Infinity ? 0 : BT.hp - 1);
             ctx.drawImage(brickSprites[brick.tier][displayHits][f], brick.x, brick.y);
         }
+        if (endless) drawElTopTurrets(baseFrame, performance.now());              // 무한 모드: 블럭 위 포탑 (블럭 다음에 그려서 위에 앉음)
 
         drawBurst();
         for (let i = keyFxList.length - 1; i >= 0; i--) if (!drawKeyFx(ctx, keyFxList[i], performance.now())) keyFxList.splice(i, 1);
@@ -3838,6 +4197,7 @@
         drawAimGuide();
         drawEnemies();
         drawBoss();
+        if (endless) drawElLine();                                                // 무한 모드: 게임 오버 선 (점선)
         drawPaddle();
         drawBall();
         ctx.restore();
@@ -3859,8 +4219,12 @@
                 ctx.fillText('BREAKOUT', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 - 70);
                 ctx.font = font('40px');
                 ctx.fillText('PUSH START', LOGIC_WIDTH / 2, LOGIC_HEIGHT / 2 + 120);
+                drawTitleEndless();                                                  // V4.62.0: 무한 모드 메뉴
+                ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = font('28px');
-                ctx.fillText('V4.58.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.62.0', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+            } else if (gameState === 'GAME_OVER' && endless && endless.result) {
+                drawElResult();                                                      // 무한 모드: 이번 기록 · 최고 기록 (6초 뒤 타이틀로 가지 않음 · 누르면 버튼대로)
             } else if (gameState === 'GAME_OVER') {
                 if (performance.now() - lostAt >= OVER_TO_TITLE_MS) goTitle();
                 ctx.font = font('bold 100px');
@@ -3884,6 +4248,8 @@
         drawBoss1OutroFx();                                                       // 보스1 마무리: 번쩍 · 워프 하얀 화면 · 걷힘 (HUD 위)
         if (gameState === 'CLEAR_SEQ' || gameState === 'SHOP') drawClearSeq();
         if (gameState === 'CARD_INTRO') drawCardIntro();
+        if (endless && (gameState === 'PLAY' || gameState === 'EL_PICK')) drawElHud();   // 무한 모드: 레벨 · 경험치 · 시간 · 공 속도
+        if (gameState === 'EL_PICK') drawElPick();                               // 무한 모드: 레벨업 카드 고르기
         if (gameState === 'UPG_VIEW') drawUpgradeView();
         if (gameState === 'BOSS_WARN') drawBossWarn();
     }
@@ -4120,6 +4486,23 @@
                 tone(ac, out, t, { type: 'square', f0: hz(83), dur: 0.07, gain: 0.09, lp: 6000 });
                 tone(ac, out, t + 0.07, { type: 'square', f0: hz(88), dur: 0.35, gain: 0.09, lp: 6000 });
                 tone(ac, out, t + 0.07, { type: 'triangle', f0: hz(100), dur: 0.3, gain: 0.05 });
+            },
+            // 무한 모드 (V4.62.0, 16비트 사각파 · 삼각파)
+            // 레벨업: 4음 빠르게 올라감 (도 미 솔 도) + 마지막 음 길게 + 높은 반짝임
+            levelUp(ac, out, t) {
+                [72, 76, 79, 84].forEach((m, i) => tone(ac, out, t + i * 0.06, { type: 'square', f0: hz(m), dur: i === 3 ? 0.42 : 0.08, gain: 0.08, lp: 5000 }));
+                tone(ac, out, t + 0.18, { type: 'triangle', f0: hz(96), dur: 0.4, gain: 0.05 });
+                tone(ac, out, t + 0.3, { type: 'square', f0: hz(91), dur: 0.05, gain: 0.03, lp: 7000 });
+            },
+            // 한 칸 내려옴: 짧고 낮은 쿵 (자주 나서 작게)
+            stepDown(ac, out, t) {
+                tone(ac, out, t, { type: 'triangle', f0: hz(43), f1: hz(36), bend: 0.08, dur: 0.12, gain: 0.12 });
+                noise(ac, out, t, { dur: 0.06, gain: 0.025, lp: 350 });
+            },
+            // 게임 오버 선 경고: 높낮이 두 음 사이렌 (짧게)
+            lineWarn(ac, out, t) {
+                tone(ac, out, t, { type: 'square', f0: hz(81), dur: 0.1, gain: 0.05, lp: 3500 });
+                tone(ac, out, t + 0.12, { type: 'square', f0: hz(76), dur: 0.12, gain: 0.05, lp: 3500 });
             }
         };
 
@@ -4407,7 +4790,7 @@
     const SFX_MIN_GAP = { break: 0.025, hit: 0.03, rubber: 0.04, laserBlock: 0.04, laser: 0.05, metal: 0.04, metalLaser: 0.04 };
     // 음량: 모든 소리를 같은 크기 (가장 큰 50ms 구간 -20dB) 로 맞춘 뒤 (SND_TRIM), 음악 30% · 효과음 70%
     const MUSIC_VOLUME = 0.3, SFX_VOLUME = 0.7, BGM_VOLUME = 1, MASTER_VOLUME = 1;
-    const SND_TRIM = { break: 0.98, hit: 5.14, rubber: 1.47, laserBlock: 4.07, laser: 6.14, metal: 2.99, metalLaser: 2.99 * 0.8, drop: 1.23, clear: 1.41, buy: 2.12, bgm1: 2.41, bgm2: 2.03, bgm3: 1.94, bgm4: 1.2, boss: 1.22, tense: 1.53, title: 1.52, stun: 1.08, absorb: 2.57, shield: 1.07, enemyDie: 0.81, start: 1.19, lose: 2.33, over: 1.27, myth: 1.0 };   // backups/loudness_test.js 로 잰 값
+    const SND_TRIM = { break: 0.98, hit: 5.14, rubber: 1.47, laserBlock: 4.07, laser: 6.14, metal: 2.99, metalLaser: 2.99 * 0.8, drop: 1.23, clear: 1.41, buy: 2.12, levelUp: 1.97, stepDown: 1.81, lineWarn: 5.06, bgm1: 2.41, bgm2: 2.03, bgm3: 1.94, bgm4: 1.2, boss: 1.22, tense: 1.53, title: 1.52, stun: 1.08, absorb: 2.57, shield: 1.07, enemyDie: 0.81, start: 1.19, lose: 2.33, over: 1.27, myth: 1.0 };   // backups/loudness_test.js 로 잰 값
     function unlockAudio() {
         try {
             if (!AC) {
@@ -4463,7 +4846,7 @@
         if (AC.currentTime < jingleUntil) return null;
         if (boss && !boss.dead) return 'boss';
         if (gameState === 'START') return 'title';                              // 타이틀 화면 전용 곡 (V4.52.0)
-        return ['bgm1', 'bgm2', 'bgm3', 'bgm4'][Math.min(3, Math.floor(currentStage / STAGES_PER_SESSION))];
+        return ['bgm1', 'bgm2', 'bgm3', 'bgm4'][Math.min(3, Math.floor(bgStage() / STAGES_PER_SESSION))];
     }
     let bgmP = null, jingleUntil = 0, tensNext = 0, dirPrevState = null, jingleBus = null;
     let mythBus = null;
@@ -4501,7 +4884,7 @@
         if (tensionActive()) { if (tensNext < now) tensNext = now + 0.05; while (tensNext < now + 0.3) { SND.tensionBeat(AC, bgmBus, tensNext); tensNext += SND.S16 * 4; } }
         else tensNext = 0;
     }
-    const tensionActive = () => gameState === 'PLAY' && !isKeyStage() && bricks.some(b => b.alive && isBreakable(b)) &&
+    const tensionActive = () => gameState === 'PLAY' && !endless && !isKeyStage() && bricks.some(b => b.alive && isBreakable(b)) &&
                                 bricks.filter(b => b.alive && isBreakable(b)).length <= TENSION_LEFT;
     const TENSION_LEFT = 5;
     // 긴장 음악 재생 (보스2 결말): 게임 배경음악은 끄고 따로 재생
@@ -4550,7 +4933,7 @@
         // 좌측 상단: STAGE
         ctx.fillStyle = HUD_COLOR;
         ctx.textAlign = 'left';
-        ctx.fillText(boss ? 'STAGE : BOSS' : testStage != null ? `STAGE : ${TEST_STAGES[testStage].name}` : `STAGE : ${currentStage + 1}`, 24, HUD_TOP_H / 2);
+        ctx.fillText(boss ? 'STAGE : BOSS' : endless ? 'ENDLESS' : testStage != null ? `STAGE : ${TEST_STAGES[testStage].name}` : `STAGE : ${currentStage + 1}`, 24, HUD_TOP_H / 2);
         if (testStage != null && fpsBuf.length) {                               // 렉 확인용: 최근 60프레임 평균 FPS · 가장 느린 프레임
             const avg = fpsBuf.reduce((a, b) => a + b, 0) / fpsBuf.length, worst = Math.max(...fpsBuf);
             ctx.font = font('bold 30px'); ctx.fillStyle = worst > 25 ? '#f66' : '#fff';
@@ -4765,7 +5148,7 @@
 
     // 게임 시작/재시작 - iOS에서 touchstart가 click을 막으므로 양쪽 모두 연결
     const OVER_TO_TITLE_MS = 6000;
-    function goTitle() { testStage = null; initGame(0); gameState = 'START'; score = 0; gemCount = 0; stageGems = 0; gems.length = 0; for (const k in upgrades) delete upgrades[k]; }   // 처음 켰을 때와 같은 타이틀 화면 (지난 판의 수정 · 점수 · 카드 지움, V4.48.1)
+    function goTitle() { testStage = null; endless = null; initGame(0); gameState = 'START'; score = 0; gemCount = 0; stageGems = 0; gems.length = 0; for (const k in upgrades) delete upgrades[k]; }   // 처음 켰을 때와 같은 타이틀 화면 (지난 판의 수정 · 점수 · 카드 지움, V4.48.1)
     function tryStart() {
         if ((gameState === 'GAME_OVER' || gameState === 'LIFE_LOST') && performance.now() - lostAt < LOST_HOLD_MS) return;
         if (gameState === 'GAME_OVER') { goTitle(); return; }
@@ -4774,7 +5157,7 @@
             score = 0;
             gemCount = 0;
             for (const k in upgrades) delete upgrades[k];
-            saveCode = null; saveTo = null; laserOn = true; testStage = null;
+            saveCode = null; saveTo = null; laserOn = true; testStage = null; endless = null;
             initGame(0);
             gameState = 'PROLOGUE';
             prologueStartT = performance.now();
@@ -4807,6 +5190,9 @@
             return;
         }
         if (gameState === 'ENDING') { if (endingDone() && performance.now() - endingT0 > ENDING_SILENCE_MS + END_LOOP + 2500) goTitle(); return; }   // 엔딩 중에는 못 넘김, 끝난 뒤 누르면 타이틀
+        if (gameState === 'EL_PICK') { elPickTap(p.x, p.y); return; }            // 무한 모드: 카드 고르기 (게임 멈춤)
+        if (gameState === 'GAME_OVER' && endless && endless.result) { elResultTap(p.x, p.y); return; }   // 무한 모드 게임 오버: 다시 하기 · 타이틀
+        if (gameState === 'START' && inRect(TITLE_ENDLESS_BTN, p.x, p.y)) { startEndless(); return; }    // 타이틀: ENDLESS → 무한 모드 (프롤로그 없이 바로)
         if (gameState === 'SHOP') { handleShopTap(p.x, p.y); return; }
         if (gameState === 'UPG_VIEW') { handleUpgViewTap(p.x, p.y); return; }
         if (gameState === 'PLAY' && inRect({ x: UPG_BTN.x - 16, y: UPG_BTN.y - 16, w: UPG_BTN.w + 32, h: UPG_BTN.h + 32 }, p.x, p.y)) { openUpgradeView(); return; }
@@ -4840,7 +5226,7 @@
         return n <= 1 ? '' : `<div class="dev-pager" style="display:flex; gap:10px; align-items:center; margin-top:10px;">${nav('prev', '◀', i === 0)}<div style="flex:1; text-align:center; font:bold 22px Menlo, monospace;">${i + 1} / ${n}</div>${nav('next', '▶', i === n - 1)}</div>`;
     };
     const MUSIC_PER_PAGE = 3, PRICE_PER_PAGE = 7, BRICK_MIN_CELL = 400, DETAIL_PER_PAGE = 2;
-    let musicPage = 0, pricePage = 0, brickPage = 0, detailPage = 0, BRICK_PER_PAGE = 4;
+    let musicPage = 0, pricePage = 0, brickPage = 0, detailPage = 0, BRICK_PER_PAGE = 4, elPatPage = 0, elPatLv = 1, elPatSeed = 1;
     const devContent = {
         stagejump: {
             title: '1. 스테이지 이동',
@@ -4853,7 +5239,9 @@
 <div style="display:flex; gap:8px; margin-bottom:16px;"><button class="dev-stage-jump" data-stage="boss" style="flex:1; padding:12px 0; font:bold 22px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid #c33; background:#111; color:#f55;">BOSS 1 (8 뒤)</button><button class="dev-stage-jump" data-stage="boss2" style="flex:1; padding:12px 0; font:bold 22px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid #c33; background:#111; color:#f55;">BOSS 2 (16 뒤)</button><button class="dev-stage-jump" data-stage="boss3" style="flex:1; padding:12px 0; font:bold 22px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid #c33; background:#111; color:#f55;">BOSS 3 (24 뒤)</button></div>
 <div style="color:#aaa;">치트키 <b style="color:#fff;">V</b> : 깰 수 있는 블럭 모두 깨기 · 보스전은 보스 체력 0</div>
 <div style="margin-top:14px; color:#888; font-size:14px;">배경 렉 확인용 (진짜 스테이지 아님) · 게이트 빼고 모든 블럭 7개씩 · 배경 2~4 는 움직임 켬 · 위에 FPS 표시 · 다 깨면 같은 스테이지 다시</div>
-<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:6px;">${TEST_STAGES.map((s, k) => `<button class="dev-stage-jump" data-test="${k}" style="padding:12px 0; font:bold 20px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid ${testStage === k ? '#fff' : '#4a7'}; background:${testStage === k ? '#fff' : '#111'}; color:${testStage === k ? '#000' : '#7c9'};">${s.name} · 배경 ${s.bg === 4 ? 4 : s.bg + 1}</button>`).join('')}</div>`;
+<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:6px;">${TEST_STAGES.map((s, k) => `<button class="dev-stage-jump" data-test="${k}" style="padding:12px 0; font:bold 20px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid ${testStage === k ? '#fff' : '#4a7'}; background:${testStage === k ? '#fff' : '#111'}; color:${testStage === k ? '#000' : '#7c9'};">${s.name} · 배경 ${s.bg === 4 ? 4 : s.bg + 1}</button>`).join('')}</div>
+<div style="margin-top:14px; color:#888; font-size:14px;">무한 모드 (시험) · 블럭이 한 칸씩 내려옴 (4초 → 레벨마다 빨라져 1.5초) · 디자인 패턴 16개 · 목숨 1개 · 레벨업하면 카드 고르기 · 패턴은 개발자 모드 13번에서</div>
+<button class="dev-stage-jump" data-endless="1" style="width:100%; margin-top:6px; padding:14px 0; font:bold 22px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid #c9a03a; background:#111; color:#e8c35a;">무한 모드 (시험)</button>`;
             }
         },
         stageview: {
@@ -4885,6 +5273,19 @@
             title: '4. 블럭',
             get body() { const nP = Math.ceil(BRICK_TIERS.length / BRICK_PER_PAGE); brickPage = Math.max(0, Math.min(nP - 1, brickPage));
                 return `<canvas class="dev-fill" id="dev-brick-canvas" width="1170" height="600" style="width:100%; background:#000; border:1px solid #444;"></canvas>${devPager('dev-bk-nav', brickPage, nP)}`; }
+        },
+        elpattern: {
+            title: '13. 무한 모드 패턴',
+            get body() {                                                             // 패턴 하나씩: 그림 + 등급 · 블럭 수 · 레벨 바꾸면 체력 · 게이트가 그 레벨대로
+                const n = EL_PATTERNS.length; elPatPage = Math.max(0, Math.min(n - 1, elPatPage));
+                const P = EL_PATTERNS[elPatPage], D = elDiff(elPatLv), cnt = P.rows.join('').replace(/\\./g, '').length;
+                const lvBtn = (d, label) => `<button class="dev-elp-lv" data-d="${d}" style="padding:8px 14px; font:bold 20px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid #888; background:#000; color:#fff;">${label}</button>`;
+                const tierName = ['', '쉬움 (레벨 1부터)', '보통 (레벨 3부터)', '어려움 (레벨 6부터)', '매우 어려움 (레벨 9부터)'][P.tier];
+                return `<div style="display:flex; align-items:center; gap:10px;"><div style="flex:1; font:bold 24px Menlo, monospace;">${elPatPage + 1}. ${P.name}</div>${lvBtn(-1, '◀ LV')}<div style="font:bold 20px Menlo, monospace; min-width:70px; text-align:center;">LV ${elPatLv}</div>${lvBtn(1, 'LV ▶')}</div>
+<div style="font-size:14px; color:#888; margin:2px 0 6px;">${tierName} · ${P.rows.length}줄 · 블럭 ${cnt}개 · 이 레벨: 체력 +${D.base} · 게이트 ${D.gate ? D.gate + '단계' : '없음 (일반 블럭)'} · 한 칸 ${(D.step / 1000).toFixed(2)}초 · 위: 원본 / 아래: 무작위 변형 (뒤집기 · 밀기 · 체력 +1) · 누르면 다시 섞음</div>
+<canvas class="dev-fill" id="dev-elp-canvas" width="1170" height="1200" style="width:100%; display:block; background:#000; border:1px solid #444; cursor:pointer;"></canvas>
+<div class="dev-pager" style="display:flex; gap:10px; align-items:center; margin-top:10px;"><button class="dev-elp-nav" data-nav="prev" ${elPatPage === 0 ? 'disabled' : ''} style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid ${elPatPage === 0 ? '#333' : '#fff'}; background:#000; color:${elPatPage === 0 ? '#444' : '#fff'};">◀</button><div style="flex:1; text-align:center; font:bold 22px Menlo, monospace;">${elPatPage + 1} / ${n}</div><button class="dev-elp-nav" data-nav="next" ${elPatPage === n - 1 ? 'disabled' : ''} style="flex:1; padding:10px 0; font:bold 24px Menlo, monospace; border-radius:6px; cursor:pointer; border:1px solid ${elPatPage === n - 1 ? '#333' : '#fff'}; background:#000; color:${elPatPage === n - 1 ? '#444' : '#fff'};">▶</button></div>`;
+            }
         },
         paddle: {
             title: '5. 패들',
@@ -5456,6 +5857,31 @@
         return lines;
     }
 
+    // 13. 무한 모드 패턴 미리보기: 위 = 원본 패턴 (그 레벨의 체력 · 게이트) · 아래 = 무작위 변형 2개 (뒤집기 · 밀기 · 체력 +1)
+    let elpRAF = 0;
+    function drawElPatternPreview() {
+        const cv = document.getElementById('dev-elp-canvas'); if (!cv) { elpRAF = 0; return; }
+        if (!elpRAF) { const step = () => { if (!document.getElementById('dev-elp-canvas') || devDetailScreen.style.display === 'none' || !devOverlay.classList.contains('open')) { elpRAF = 0; return; } drawElPatternPreview(); elpRAF = requestAnimationFrame(step); }; elpRAF = requestAnimationFrame(step); }
+        const c = cv.getContext('2d'), t = performance.now(), f = Math.floor(t / SAND_INTERVAL) % SAND_FRAMES;
+        const P = EL_PATTERNS[elPatPage], rs = galRng(elPatSeed * 7919 + elPatPage), vars = [{ rows: P.rows.map(r => r.padEnd(cols, '.').slice(0, cols)), bump: 0, label: '원본' }, elVariant(P, rs), elVariant(P, rs)];
+        vars[1].label = '변형 1'; vars[2].label = '변형 2';
+        const s = 0.62, bw = brickWidth * s, bh = brickHeight * s, gy = EL_ROW_H * s, blockH = Math.max(...vars.map(v => v.rows.length)) * gy + 60;
+        cv.height = Math.round(vars.length * blockH + 20);
+        c.fillStyle = '#020202'; c.fillRect(0, 0, cv.width, cv.height);
+        const x0 = (cv.width - cols * bw) / 2;
+        vars.forEach((V, k) => {
+            const y0 = 10 + k * blockH;
+            c.fillStyle = k ? '#aaa' : '#fff'; c.font = font(`bold ${k ? 26 : 30}px`); c.textAlign = 'left'; c.textBaseline = 'top';
+            c.fillText(V.label + (k ? `  (${V.flip ? '뒤집기' : '그대로'} · 밀기 ${V.shift > 0 ? '+' : ''}${V.shift} · ${V.bump ? '체력 +1' : '체력 그대로'})` : ''), 20, y0);
+            c.strokeStyle = 'rgba(255,255,255,0.15)'; c.lineWidth = 2; c.strokeRect(x0 - 4, y0 + 40, cols * bw + 8, V.rows.length * gy + 8);
+            V.rows.forEach((row, r) => row.split('').forEach((ch, col) => {
+                if (ch === '.') return;
+                const tier = elCellTier(ch, elPatLv, V.bump), T = BRICK_TIERS[tier], x = x0 + col * bw, y = y0 + 44 + r * gy;
+                if (T.gate) drawGateBrick(c, x, y, bw, bh, T, t, 0, f);
+                else c.drawImage(brickSprites[tier][0][(f + r * cols + col) % SAND_FRAMES], x, y, bw, bh);
+            }));
+        });
+    }
     function drawBrickPreview() {
         const cv = document.getElementById('dev-brick-canvas');
         if (!cv) return;
@@ -5576,7 +6002,7 @@
 
     // ===== 개발자 모드: 상점 카드 예시 (10종) =====
     // 카드 = 둥근 사각 테두리 + 상단 아이콘(도트) + 이름 + 단계 표시 + 설명
-    const CARD_CAT_ORDER = ['공격', '방어', '지원', '보스'];
+    const CARD_CAT_ORDER = ['공격', '방어', '지원', '보스', '무한'];
     const SHOP_CARDS = [
         { id: 'pierce',  name: '돌파',      cat: '공격', max: 1, desc: ['약한 블럭 · 적을', '튕기지 않고 관통'] },
         { id: 'size',    name: '크기 증가', cat: '방어', max: 5, desc: ['패들이 길어지고,', '빨리 회복한다'] },
@@ -5591,7 +6017,8 @@
         { id: 'aim',     name: '조준',      cat: '공격', max: 1, desc: ['블럭 7개 이하면', '남은 블럭 조준'] },
         { id: 'absorb',  name: '충격 흡수', cat: '방어', max: 3, desc: ['적 공격을 막아', '마비 방지'] },
         { id: 'save',    name: '저장',      cat: '지원', max: 99, repeat: true, desc: ['진행을 코드로 저장', '다음 스테이지부터'] },
-        { id: 'abyss',   name: '심연의 구체', cat: '보스', max: 1, reward: true, desc: ['공의 속도를', '컨트롤 할 수 없다.'] }   // 보스2 보상 (상점에 안 나옴) · 실제: 패들 한가운데 (6.5%) = 조준 + 그 공의 첫 블럭 한 방 격파, 블럭 · 벽에 튕길 때마다 속도 +1% (최대 2.5배) (V4.58.0)
+        { id: 'abyss',   name: '심연의 구체', cat: '보스', max: 1, reward: true, desc: ['공의 속도를', '컨트롤 할 수 없다.'] },   // 보스2 보상 (상점에 안 나옴) · 실제: 패들 한가운데 (6.5%) = 조준 + 그 공의 첫 블럭 한 방 격파, 블럭 · 벽에 튕길 때마다 속도 +1% (최대 2.5배) (V4.58.0)
+        { id: 'abyss2',  name: '심연의 구체 2', cat: '무한', max: 1, reward: true, endlessOnly: true, desc: ['가운데로 받으면', '맨 아래 블럭 격파'] }   // V4.61.0 무한 모드 전용: 레벨 10부터 레벨업 카드에 드물게 · 패들 한가운데 (6.5%) = 가장 아래 깰 수 있는 블럭 조준 + 한 방 격파 · 속도 페널티 없음
     ];
     const DEV_CARDS = SHOP_CARDS.map((c, i) => [c, i]).sort((a, b) => CARD_CAT_ORDER.indexOf(a[0].cat) - CARD_CAT_ORDER.indexOf(b[0].cat) || a[1] - b[1]).map(x => x[0]);   // 개발자 모드 정렬
 
@@ -5729,6 +6156,18 @@
                 dot(x0 + W * 0.55, y0 + 10, W * 0.1, H * 0.2, { lum: 40, density: 1 });
                 dot(x0 + W * 0.14, y0 + H * 0.5, W * 0.72, H * 0.42, { lum: 250, density: 1 });
                 for (let k = 0; k < 4; k++) dot(x0 + W * (0.2 + k * 0.165), y0 + H * 0.66, W * 0.11, H * 0.1, { lum: 40, density: 1 });
+                break;
+            }
+            case 'abyss2': {    // 심연의 구체 2: 아래에서 위로 올라가는 조준선이 맨 아래 블럭을 맞혀 깨짐 · 위쪽 블럭은 멀쩡 · 구체 + 패들
+                brick(cx - h * 0.75, cy - h * 0.98, h * 0.5, h * 0.24, 150); brick(cx + h * 0.25, cy - h * 0.98, h * 0.5, h * 0.24, 150);   // 위쪽 블럭 (안 노림)
+                const by = cy - h * 0.6, bw = h * 0.56, bh = h * 0.26;
+                [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy], k) => dot(cx + sx * bw * 0.3 - bw * 0.18, by + sy * bh * 0.4 + bh * 0.2 - bh * 0.18, bw * 0.36, bh * 0.36, { density: 0.9, lum: 210, seed: 9560 + k }));   // 맨 아래 블럭: 깨진 조각
+                for (let k = 0; k < 12; k++) { const a = k * 2.4, r = h * (0.08 + (k % 3) * 0.06); disc(cx + Math.cos(a) * r * 1.5, by + bh / 2 + Math.sin(a) * r * 0.7, 1.8, { lum: 235 - (k % 3) * 35, density: 1 }); }
+                for (let i = 0; i < 4; i++) disc(cx, cy - h * 0.25 + i * h * 0.13, 2.2, { lum: 120 + i * 30, density: 1 });             // 조준선 (점선)
+                const R = h * 0.36, oy = cy + h * 0.45;
+                drawB2Sphere(c, cx, oy, R, f * 0.35, f);
+                miniPaddle(cx - h * 0.6, oy + R + 6, h * 1.2, h * 0.2);
+                dot(cx - 2, oy + R + 2, 4, h * 0.2 + 8, { lum: 255, density: 1, spacing: 1.4 });                                           // 패들 가운데 표시
                 break;
             }
             case 'abyss': {     // 심연의 구체: 줄무늬 구체 + 위쪽 블럭으로 향하는 점선 조준선 + 반짝임
@@ -6238,6 +6677,8 @@
           desc: '반구 포대가 포신으로 패들을 따라 돌다가, 렌즈가 밝아지며 조준을 고정 → 1발. 맞으면 마비 1초. 금속이라 공은 튕김' },
         { type: '포탑 B', name: '블럭 쌍포 (시안)', ref: '25~28 · 블럭 아래에 매달림', role: 'turretB', note: '5초마다 아래로 2발 · 0.8초 전 홈 3개 + 바닥 표시 · 폭 90px (블럭 폭) · 공 · 레이저로 안 깨짐',
           desc: '키 블럭 옆 블럭 밑에 매달려 홈 3개가 차례로 켜지면 바로 아래로 2발. 키 블럭 밑을 지키는 벽. 금속이라 공은 튕김' },
+        { type: '포탑 C', name: '블럭 위 포탑 (무한 모드 · 적용)', ref: '무한 모드 레벨 5부터 · 패턴 윗면 블럭 위', role: 'turretTop', note: '5초마다 1발 (레벨마다 0.25초 빨라짐, 최소 3초) · 0.7초 전 렌즈가 밝아지며 조준 고정 + 바닥 표시 · 크기 56px · 패턴마다 1~3개',
+          desc: '블럭 윗면에 붙은 반구 포대. 포신이 패들을 따라 돌다가 1발 (맞으면 마비). 블럭과 같이 내려오고, 받친 블럭이 깨지면 같이 부서짐. 포탑 자체는 공 · 레이저가 그냥 지나감' },
         { type: '보스1', name: '눈알 위성 (적용)', ref: '8스테이지 뒤 보스', role: 'roam', fn: (c, cx, cy, S, t, f) => drawBossShape(c, cx, cy, S, t * BOSS_SPIN * 60 / 1000, bossEyeOpen(t), f), desc: '미사일 없음. 좌우뿐 아니라 위아래로 크게 움직여 패들 바로 위까지 내려옴 → 공 받기가 어려워짐. 도는 링은 공 · 레이저를 튕겨 냄, 링 틈으로 가운데 눈알을 맞혀야 함 (체력 40, 크기 704px)' },
         { type: '보스2', name: '줄무늬 구체와 그림자 (적용)', ref: '16스테이지 뒤 보스 · 사도 레리엘 느낌', role: 'boss2', fn: drawBoss2Art, muzzles: [[-0.22, 0.42], [0, 0.42], [0.22, 0.42]],
           desc: '구체 = 공을 튕기는 가짜. 그림자 (타원) = 진짜 몸: 위 · 아래 · 옆 어디에 맞아도 볼 파워만큼, 레이저는 1. 체력 10 이하: 소용돌이로 바뀌고 레이저가 막힘 (처음 10 아래로 내려갈 때 10에서 멈추고 2초 무적). 마지막 공 타격 → 결말 연출 → 심연의 구체. 3.6초마다 미사일 3발 (체력 50, 크기 704px)' },
@@ -6252,6 +6693,16 @@
         const D = ENEMY_DESIGNS[enemyPage], f = Math.floor(t / SAND_INTERVAL) % SAND_FRAMES;
         c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
         if (D.role === 'turretA' || D.role === 'turretB') { drawTurretPreview(c, W, H, t, D, f); return; }
+        if (D.role === 'turretTop') {                                            // 무한 모드 블럭 위 포탑: 확대 (블럭 + 포탑) · 포신이 좌우로 돌고 4초마다 충전 → 발사
+            const big = Math.min(W * 0.5, H * 0.3), k = big / EL_TURRET_S, bw = brickWidth * k * 0.8, bh = brickHeight * k * 0.8, cx = W / 2, by = H * 0.42;
+            const ph = t % 4000, charge = ph > 3300 ? (ph - 3300) / 700 : 0, flash = ph < 150 ? 1 - ph / 150 : 0, aim = Math.PI / 2 + 0.7 * Math.sin(t * 0.0008);
+            c.fillStyle = 'rgb(150,150,150)'; c.font = font('30px'); c.textAlign = 'center'; c.textBaseline = 'top'; c.fillText('확대', W / 2, 18);
+            drawTierBrick(c, cx - bw / 2, by, bw, bh, 2, 0, f);
+            drawTopTurret(c, cx, by - big * 0.32, big, f, aim, charge, flash);
+            c.fillText('실제 크기', W / 2, by + bh + 60);
+            const sy = by + bh + 200; c.drawImage(brickSprites[2][0][f], cx - brickWidth / 2, sy); drawTopTurret(c, cx, sy - EL_TURRET_S * 0.32, EL_TURRET_S, f, aim, charge, flash);
+            return;
+        }
         if (D.role === 'b3') {                                                   // 보스3 · 예비 보스: 보스3 그림 판을 캔버스에 맞춰 줄임
             const k = Math.min(W / B3_W, H / B3_H); c.save(); c.translate((W - B3_W * k) / 2, (H - B3_H * k) / 2); c.scale(k, k);
             BOSS3_VIEWS[D.b3].draw(c, t / 1000); c.restore(); return;
@@ -7054,9 +7505,9 @@
     // 10. 배경 미리보기: 시연용 공 하나가 화면을 튕기며 점을 흩음
     const BG_VIEWS = [
         { name: '1세션 (1~8) · 모래 먼지', note: '게임에서 쓰는 중', make: () => makeField(Array.from({ length: DUST_COUNT }, (_, i) => [Math.random() * LOGIC_WIDTH, Math.random() * LOGIC_HEIGHT, i % DUST_LUM.length]), DUST_LUM, true) },
-        { name: '2세션 (9~16) · 점묘 은하', note: '9~16스테이지에서 씀', make: () => makeField(buildGalaxyPoints(), GAL_LUM, false), sparkle: true,
-          live2: '은하 3개가 한 덩어리로 천천히 돎 · 성운이 떠다님 · 흩어진 별 일부가 반짝임 · 모든 점이 모래알처럼 흔들림' },
-        { name: '3세션 (17~24) · 블랙홀', note: '17~24스테이지에서 씀 · 참고 그림 기반 · 배경 2 방식 (점 겹침 허용)', make: makeBlackholeField, sparkle: 'bh',
+        { name: '2세션 (9~16) · 점묘 은하', note: '9~16스테이지에서 씀', make: () => Object.assign(makeField(buildGalaxyPoints(), GAL_LUM, false), { lvOpt: BG_LIVE_OPT.galaxy }), sparkle: true,
+          live2: '은하 3개가 한 덩어리로 천천히 흔들리듯 돎 + 팔을 따라 물결이 흘러감 · 성운이 떠다님 · 흩어진 별 일부가 반짝임 · 모든 점이 모래알처럼 흔들림' },
+        { name: '3세션 (17~24) · 블랙홀', note: '17~24스테이지에서 씀 · 참고 그림 기반 · 배경 2 방식 (점 겹침 허용)', make: () => Object.assign(makeBlackholeField(), { lvOpt: BG_LIVE_OPT.blackhole }), sparkle: 'bh',
           live2: '소용돌이가 구멍을 돎 (안쪽일수록 빠름 · 구멍에 들어가면 사라짐) · 빛무리 · 고리가 숨 쉼 · 바위 · 구름이 떠다님 · 별 반짝임' },
         { name: '4세션 (25~26) · 살의 통로', note: '25~26스테이지에서 씀 (보스3 몸속 · 목구멍) · 갈비뼈처럼 휜 살 벽 + 핏줄 + 안쪽 목구멍 + 벽의 눈이 가끔 뜨고 공을 봄', make: makeFleshField, live: drawFleshLive,
           live2: '살 벽이 아래에서 위로 삼키듯 부풂 (핏줄 · 벽의 눈도 같이) · 목구멍 고리가 차례로 커졌다 작아짐 · 체액이 위로 떠오름 · 점막이 출렁임' },
@@ -7358,21 +7809,21 @@
 
     function jumpToBoss(kind = 1) {
         if (lives < 1) lives = START_LIVES;
-        introCard = null; testStage = null;
+        introCard = null; testStage = null; endless = null;
         startBossFight(kind);
         gameState = 'BOSS_WARN';
         closeDevOverlay();
     }
     function jumpToStage(i) {
         if (lives < 1) lives = START_LIVES;
-        introCard = null; testStage = null;
+        introCard = null; testStage = null; endless = null;
         initGame(i);
         gameState = 'PLAY';
         closeDevOverlay();
     }
     function jumpToTestStage(k) {                                               // 렉 확인용 A~D: 그 배경을 쓰는 스테이지 번호로 시작 (음악 · 공 속도도 그 세션)
         if (lives < 1) lives = START_LIVES;
-        introCard = null; testStage = k; fpsBuf.length = 0;
+        introCard = null; testStage = k; fpsBuf.length = 0; endless = null;
         initGame(TEST_STAGES[k].stage);
         gameState = 'PLAY';
         closeDevOverlay();
@@ -7479,8 +7930,16 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
         devDetailBody.innerHTML = devContent.enemy.body;
     });
     devDetailBody.addEventListener('click', e => {
+        const lv = e.target.closest && e.target.closest('.dev-elp-lv, .dev-elp-nav, #dev-elp-canvas');   // 13. 무한 모드 패턴: 레벨 · 넘기기 · 다시 섞기
+        if (lv) {
+            if (lv.id === 'dev-elp-canvas') { elPatSeed++; return; }
+            if (lv.disabled) return;
+            if (lv.classList.contains('dev-elp-lv')) elPatLv = Math.max(1, Math.min(15, elPatLv + +lv.dataset.d));
+            else elPatPage += lv.dataset.nav === 'next' ? 1 : -1;
+            devDetailBody.innerHTML = devContent.elpattern.body; elpRAF = 0; drawElPatternPreview(); return;
+        }
         const b = e.target.closest && e.target.closest('.dev-stage-jump');
-        if (b) b.dataset.stage === 'boss' ? jumpToBoss(1) : b.dataset.stage === 'boss2' ? jumpToBoss(2) : b.dataset.stage === 'boss3' ? jumpToBoss(3) : b.dataset.test != null ? jumpToTestStage(parseInt(b.dataset.test, 10)) : jumpToStage(parseInt(b.dataset.stage, 10));
+        if (b) b.dataset.endless ? (startEndless(), closeDevOverlay()) : b.dataset.stage === 'boss' ? jumpToBoss(1) : b.dataset.stage === 'boss2' ? jumpToBoss(2) : b.dataset.stage === 'boss3' ? jumpToBoss(3) : b.dataset.test != null ? jumpToTestStage(parseInt(b.dataset.test, 10)) : jumpToStage(parseInt(b.dataset.stage, 10));
     });
 
     devDetailBody.addEventListener('click', e => {
@@ -7530,6 +7989,7 @@ ${isLife ? '<div style="font-size:13px; color:#888; margin-bottom:6px;">목숨�
             if (cat === 'prologue') startProloguePreview();
             if (cat === 'ending') startEndingPreview();
             if (cat === 'background') startBgPreview();
+            if (cat === 'elpattern') drawElPatternPreview();
         });
     });
 </script>
