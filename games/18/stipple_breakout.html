@@ -1274,8 +1274,9 @@
     const EL_TURRET_LV = 5;
     const elTurretPlan = lv => lv < EL_TURRET_LV ? { rate: 0, max: 0, period: 0 } : { rate: Math.min(0.12, 0.04 + 0.02 * (lv - EL_TURRET_LV)), max: Math.min(3, 1 + Math.floor((lv - EL_TURRET_LV) / 3)), period: Math.max(3000, 5000 - 250 * (lv - EL_TURRET_LV)) };
     const EL_TURRET_S = 56;                                                     // 블럭 위 포탑 크기 (블럭 높이 · 폭에 맞춤)
-    const EL_XP_NEED = [25, 40, 48, 55, 62, 68, 78, 88, 95, 100];              // 레벨 k → k+1 에 필요한 수정 · V4.60.0 패턴 기준 시뮬레이션 (죽지 않게 12분): 90초에 받는 수정 26 · 50 · 40 · 53 · 66 · 69 · 70 · 105 (앞뒤 평균으로 고름) · 끝 뒤는 +5씩
-    const elXpNeed = lv => lv <= EL_XP_NEED.length ? EL_XP_NEED[lv - 1] : EL_XP_NEED[EL_XP_NEED.length - 1] + 5 * (lv - EL_XP_NEED.length);
+    const EL_XP_NEED = [25, 40, 48, 55, 62, 68, 78, 88, 95, 100];              // 레벨 k → k+1 에 필요한 수정 (원래 값) · V4.60.0 패턴 기준 시뮬레이션 (죽지 않게 12분): 90초에 받는 수정 26 · 50 · 40 · 53 · 66 · 69 · 70 · 105 (앞뒤 평균으로 고름) · 끝 뒤는 +5씩
+    const EL_XP_SCALE = 0.7;                                                     // V4.62.3: 너무 어려움 → 필요한 수정 30% 줄임
+    const elXpNeed = lv => Math.max(1, Math.round(EL_XP_SCALE * (lv <= EL_XP_NEED.length ? EL_XP_NEED[lv - 1] : EL_XP_NEED[EL_XP_NEED.length - 1] + 5 * (lv - EL_XP_NEED.length))));
     // ===== V4.60.0 무한 모드 2단계: 디자인 패턴 · 변형 · 난이도 · 내려오는 간격 =====
     //  패턴 = 손으로 그린 그림 덩어리. 위에서 한 줄씩 차례로 나옴 (맨 아래 줄부터 → 화면에 그림이 그대로 서서히 나타남) · 패턴 사이엔 빈 줄 (숨 돌림)
     //  글자: 0~3 = 패턴 안의 상대 체력 (실제 체력 = 레벨 기준 + 이 값, 최대 8) · X = 금색 · g = 게이트 (레벨이 오르면 등장, 아니면 0) · . = 빈칸
@@ -1300,7 +1301,7 @@
     ];
     // 레벨 → 난이도: 기본 체력 (0 에 더해짐) · 쓸 수 있는 패턴 등급 · 게이트 단계 · 패턴 사이 빈 줄 · 내려오는 간격
     const elDiff = lv => ({
-        base: Math.min(5, Math.floor((lv - 1) / 2)),                             // 레벨 1~2 → +0 (체력 1부터) · 3~4 → +1 · … · 11+ → +5 (가장 단단한 칸이 8)
+        base: Math.min(5, Math.floor((lv - 1) / 2)),                             // 레벨 1~2 → +0 (체력 1부터) · 3~4 → +1 · … · 11+ → +5 (가장 단단한 칸이 8) · 레벨 1~4 는 elCellTier 에서 따로 (V4.62.3)
         maxTier: lv >= 9 ? 4 : lv >= 6 ? 3 : lv >= 3 ? 2 : 1,
         gate: lv >= 10 ? 3 : lv >= 7 ? 2 : lv >= 4 ? 1 : 0,                     // 0 = 게이트 안 나옴 (g 는 일반 블럭)
         gap: lv >= 8 ? 1 : 2,                                                    // 패턴 사이 빈 줄
@@ -1323,11 +1324,17 @@
         return pool[pool.length - 1];
     }
     // 글자 → 실제 블럭 종류 (레벨 기준 체력 + 패턴 상대 체력 + 변형 bump, 1~8 · 게이트 · 금색)
+    //  V4.62.3 초반은 체력 1 위주: 레벨 1~2 = 패턴 무늬 0 · 1 → 체력 1, 2 · 3 (핵) → 체력 2, 변형 bump 없음
+    //                               레벨 3~4 = 패턴 상대 체력 최대 +1 (체력 1~2), bump 는 레벨 3부터
+    const EL_EASY_LV = 2, EL_SOFT_LV = 4;
     function elCellTier(ch, lv, bump) {
         if (ch === 'X') return 5;
         const D = elDiff(lv);
         if (ch === 'g') return D.gate ? (lv % 2 ? STAGE_CHAR_TIER['p'] + D.gate - 1 : STAGE_CHAR_TIER['u'] + D.gate - 1) : 0;   // 돌격 / 원거리 번갈아
-        const hp = Math.min(8, 1 + D.base + parseInt(ch, 10) + bump);
+        const rel = parseInt(ch, 10);
+        const hp = lv <= EL_EASY_LV ? (rel >= 2 ? 2 : 1)
+                 : lv <= EL_SOFT_LV ? 1 + Math.min(1, rel) + bump
+                 : Math.min(8, 1 + D.base + rel + bump);
         return hp <= 5 ? hp - 1 : STAGE_CHAR_TIER[String(hp - 1)];               // 체력 1~5 → 0~4 · 6~8 → OBSIDIAN · TITAN · CORE
     }
     let endless = null;                                                          // null = 무한 모드 아님
@@ -4230,7 +4237,7 @@
                 else drawTitleEndless();
                 ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = font('28px');
-                ctx.fillText('V4.62.2', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.62.3', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER' && endless && endless.result) {
                 drawElResult();                                                      // 무한 모드: 이번 기록 · 최고 기록 (6초 뒤 타이틀로 가지 않음 · 누르면 버튼대로)
             } else if (gameState === 'GAME_OVER') {
