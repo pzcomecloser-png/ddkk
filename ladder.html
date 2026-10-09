@@ -633,7 +633,7 @@ Scene.def('count', {
     const bw = 470, bh = 400, gx = (W - bw * 2 - 50) / 2;
     const col = [PAL.red, PAL.blue, PAL.grn, PAL.yel], dark = ['#8a1027', '#1b2a80', '#1f7a2a', '#9a6f00'];
     this.btns = [0, 1, 2, 3].map(i => ({ x: gx + (i % 2) * (bw + 50), y: 600 + Math.floor(i / 2) * (bh + 60), w: bw, h: bh,
-      label: (i + 1) + 'P', size: 150, col: col[i], dark: dark[i], text: i >= 2 ? '#000' : PAL.ink }));
+      label: (i + 1) + 'P', size: 150, col: col[i], dark: dark[i], text: PAL.ink }));
   },
   pick(i) { this.btns[i].flash = 0.15; G.config.humans = i + 1; Sfx.play('start'); Scene.go('rounds'); },
   update(dt) { tickBtns(this.btns.concat(this.back), dt); },
@@ -687,7 +687,7 @@ Scene.def('rounds', {
     PF.draw('ROUNDS', W / 2, 300, 130, { color: PAL.cyan, shadow: PAL.blue });
     PF.draw('몇 라운드 할까요?', W / 2, 440, 60);
     this.btns.forEach((b, i) => {
-      const on = i === this.sel; b.col = on ? PAL.yel : PAL.blue; b.dark = on ? '#9a6f00' : '#1b2a80'; b.text = on ? '#000' : PAL.ink;
+      const on = i === this.sel; b.col = on ? PAL.yel : PAL.blue; b.dark = on ? '#9a6f00' : '#1b2a80'; b.text = PAL.ink;
       drawBtn(b); if (on) drawSel(b);
     });
     const h = G.config.humans, r = this.sel + 1, tot = totalPlayers(h, r), cpu = tot - h;
@@ -1919,7 +1919,7 @@ Scene.def('game', {
       else for (const rn of this.runners) {
         if (rn.done) continue;
         const lim = rn.hid && !rn.revDone ? rn.len - REV_D : rn.len;
-        rn.d = Math.min(lim, rn.d + 1000 * dt);
+        rn.d = Math.min(lim, rn.d + 500 * dt);
         const seg = pathPt(rn.P, rn.d)[2];
         if (seg > rn.seg) { rn.seg = seg; if (seg < rn.P.length - 1) Sfx.play('tick'); }
         if (rn.d >= rn.len) this.arrive(rn);
@@ -1997,7 +1997,7 @@ Scene.def('game', {
       ctx.fillStyle = done ? PAL.yel : k === R.game - 1 ? PAL.ink : '#3a3660'; ctx.fillRect(x - 8, 110, 16, 16);
     }
     const b = this.spdBtn, fast = this.spd === 2;
-    b.label = fast ? '2× ▶▶' : '1× ▶'; b.col = fast ? PAL.yel : '#3a3660'; b.dark = fast ? '#9a6f00' : '#1a1830'; b.text = fast ? '#000' : PAL.ink;
+    b.label = fast ? '2× ▶▶' : '1× ▶'; b.col = fast ? PAL.yel : '#3a3660'; b.dark = fast ? '#9a6f00' : '#1a1830'; b.text = PAL.ink;
     drawBtn(b);
   },
   drawCards() {
@@ -2462,7 +2462,7 @@ Scene.def('winner', {
     this.rec = gameRecords(G.players);
     const hs = G.players.filter(p => p.human).map(p => ({ name: p.name, avatar: p.avatar, score: p.bank, rounds: G.config.rounds, players: G.players.length, place: this.order.indexOf(p) + 1 }));
     const r = HiScore.submit(hs); this.hs = r.list; this.fresh = r.fresh; this.newTop = r.fresh.length > 0 && r.list[0] === r.fresh[0];
-    this.cd = null; this.btnA = { x: 90, y: 1770, w: 480, h: 160, label: '다시 하기', size: 52, col: PAL.grn, dark: '#1f7a2a', text: '#000' };
+    this.cd = null; this.btnA = { x: 90, y: 1770, w: 480, h: 160, label: '다시 하기', size: 52, col: PAL.grn, dark: '#1f7a2a', text: PAL.ink };
     this.btnB = { x: 600, y: 1770, w: 480, h: 160, label: '타이틀', size: 52, col: '#3a3660', dark: '#1a1830' };
   },
   once(k, fn) { if (!this.fired[k]) { this.fired[k] = 1; fn(); } },
