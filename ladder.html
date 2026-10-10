@@ -1428,10 +1428,11 @@ function cpuChoose(p, B, free) {
   if (!free.length) return -1;
   if (p.cpuType === 'random' || Math.random() < 0.3) return free[Math.random() * free.length | 0];
   const b = baseVal(B.st), g = p.cpuType === 'gamble';
-  const val = col => { const e = traceFor(p, B.rows, col, B).end, c = B.cells[e];
+  const cellV = e => { const c = B.cells[e];
     if (hiddenFor(p, e, B)) return g ? b * 2.2 : b * 0.4;       // 물음표: 도박형은 좋아하고 안전형은 꺼려요
     if (c.t === 'mult') return g ? b * 3 : b * 1.2;
     return c.v; };
+  const val = col => fogEval(p, B, col, cellV).ev;              // 안개 아래는 모름 → 여러 경우의 평균
   let best = free[0], bv = -Infinity;
   for (const c of free) { const v = val(c) + Math.random() * b * 0.3; if (v > bv) { bv = v; best = c; } }
   return best;
@@ -1444,26 +1445,26 @@ function cpuChoose(p, B, free) {
 const ITEMS = [
   { id: 'clover',   i: '🍀', n: '네잎클로버',     pro: '꽝·폭탄 칸 출현 30% 감소', m: m => { m.blankW *= .7; m.bombW *= .7; } },
   { id: 'scissors', i: '✂️', n: '황금 가위',      pro: '꽝에 도착하면 1번 기본 코인으로 바꿔요', m: m => { m.cuts += 1; } },
-  { id: 'orb',      i: '🔮', n: '점술구',         pro: '매 판 숨겨진 칸 2개 공개', m: m => { m.reveal += 2; } },
+  { id: 'orb',      i: '🔮', n: '점술구',         pro: '매 판 숨겨진 칸 3개 공개', m: m => { m.reveal += 3; } },
   { id: 'bank',     i: '🏦', n: '은행',           pro: '정산 시 누적 점수의 8% 이자', m: m => { m.interest += .08; } },
   { id: 'shield',   i: '🛡️', n: '수호 방패',      pro: '폭탄 2회 무효화', m: m => {} },
-  { id: 'ticket',   i: '🎟️', n: 'VIP 티켓',       pro: '내 스테이지 점수 +15%', con: '폭탄 피해 +30%', m: m => { m.mine *= 1.15; m.bomb *= 1.3; } },
+  { id: 'ticket',   i: '🎟️', n: 'VIP 티켓',       pro: '내 라운드 점수 +25%', con: '폭탄 피해 +30%', m: m => { m.mine *= 1.25; m.bomb *= 1.3; } },
   { id: 'pouch',    i: '💰', n: '황금 주머니',    pro: '내 코인 획득 +40%', con: '폭탄 칸 출현 +50%', m: m => { m.coin *= 1.4; m.bombW *= 1.5; } },
   { id: 'dice',     i: '🎲', n: '도박꾼의 주사위', pro: '대박 칸 출현 2.5배', con: '꽝 칸 출현 +40%', m: m => { m.jackW *= 2.5; m.blankW *= 1.4; } },
   { id: 'magnet',   i: '🧲', n: '자석',           pro: '내 코인 획득 +25%', con: '황금 가위 효과 -1', m: m => { m.coin *= 1.25; m.cuts -= 1; } },
-  { id: 'shades',   i: '🕶️', n: '선글라스',       pro: '내 코인 획득 +100%', con: '모든 칸이 숨겨짐', m: m => { m.coin *= 2; m.hideAll = true; } },
-  { id: 'moon',     i: '🌙', n: '달빛',           pro: '[사용] 이번 판 모든 칸 공개 · 1개당 2판', con: '내 코인 획득 -20%', use: 'showAll', uses: 2, m: m => { m.coin *= .8; } },
+  { id: 'shades',   i: '🕶️', n: '선글라스',       pro: '내 코인 획득 +30%', con: '모든 칸이 숨겨짐', m: m => { m.coin *= 1.3; m.hideAll = true; } },
+  { id: 'moon',     i: '🌙', n: '달빛',           pro: '[사용] 이번 판 안개가 완전히 걷혀요 · 1개당 1판', con: '내 코인 획득 -5%', use: 'fogAll', uses: 1, m: m => { m.coin *= .95; } },
   { id: 'scale',    i: '⚖️', n: '저울',           pro: '배수 칸 값 +30% · 배수 칸 출현 +50%', con: '내 코인 획득 -5%', m: m => { m.multAdd += .3; m.multW *= 1.5; m.coin *= .95; } },
   { id: 'clock',    i: '⏳', n: '모래시계',       pro: '꽝 탈출·마이너스/폭탄 무효 1번씩', con: '폭탄 피해 +50%', m: m => { m.cuts += 1; m.adds += 1; m.bomb *= 1.5; } },
-  { id: 'lens',     i: '🔭', n: '투시 렌즈',      pro: '[사용] 물음표 칸 1개 공개 · 라운드당 3번', use: 'peek1', uses: 3, m: m => {} },
+  { id: 'lens',     i: '🔭', n: '투시 렌즈',      pro: '[사용] 안개 속 맨 아래(도착 직전) 가로줄이 보여요 · 라운드당 3번', use: 'fogEnd', uses: 3, m: m => {} },
   { id: 'crown',    i: '👑', n: '황금 왕관',      pro: '내 라운드 점수 +40%', m: m => { m.mine *= 1.4; } },
   { id: 'skipF',    i: '⏫', n: '첫 줄 건너뛰기', pro: '첫 가로줄을 무시할 수 있어요 (유리한 쪽 자동 선택)', m: m => { m.skipF = true; } },
   { id: 'skipL',    i: '⏬', n: '끝 줄 건너뛰기', pro: '마지막 가로줄을 무시할 수 있어요 (유리한 쪽 자동 선택)', m: m => { m.skipL = true; } },
-  { id: 'sun',      i: '☀️', n: '태양석',         pro: '[사용] 이번 판 모든 칸 공개 · 라운드당 1번', use: 'showAll', uses: 1, m: m => {} },
+  { id: 'sun',      i: '☀️', n: '태양석',         pro: '[사용] 이번 판 안개가 완전히 걷혀요 · 라운드당 1번', use: 'fogAll', uses: 1, m: m => {} },
   { id: 'plank',    i: '🪜', n: '사다리 조각',    pro: '마이너스·폭탄 피해 3번 무효', con: '폭탄 칸 출현 +20%', m: m => { m.adds += 3; m.bombW *= 1.2; } },
-  { id: 'lantern',  i: '🏮', n: '랜턴',           pro: '[사용] 물음표 칸 2개 공개 · 라운드당 3번', con: '내 코인 획득 -10%', use: 'peek2', uses: 3, m: m => { m.coin *= .9; } }
+  { id: 'lantern',  i: '🏮', n: '랜턴',           pro: '[사용] 안개 속 가로줄 3줄이 더 보여요 · 라운드당 3번', use: 'fogSome', uses: 3, m: m => {} }
 ];
-const COST = { sun: 180, lens: 55, lantern: 45, skipF: 80, skipL: 80, scissors: 40, plank: 35, moon: 180, magnet: 100, clover: 60, clock: 60, orb: 150, scale: 70, shield: 90, ticket: 90, shades: 100, dice: 110, pouch: 120, bank: 150, crown: 190 };
+const COST = { sun: 180, lens: 35, lantern: 45, skipF: 30, skipL: 50, scissors: 40, plank: 35, moon: 180, magnet: 100, clover: 60, clock: 60, orb: 35, scale: 70, shield: 90, ticket: 90, shades: 100, dice: 110, pouch: 120, bank: 150, crown: 190 };
 const FROM = { crown: 3 };
 ITEMS.forEach(x => { x.cost = COST[x.id] || 60; if (FROM[x.id]) x.from = FROM[x.id]; });
 const SYNERGY = [   // 8단계에서 적용
@@ -1485,8 +1486,8 @@ const itemOf = id => ITEMS.find(x => x.id === id);
 const qtyOf = (items, id) => items.filter(x => x === id).length;
 /* 시너지: 두 아이템을 같은 라운드에 가지면 발동. 라운드당 1개 — 효과 큰 순(SYN_POWER, 시뮬레이션 측정값) 우선 */
 // 3라운드 기준 시너지 켬/끔 수익 차이(같은 난수 쌍 비교, 1.5만 회). 동점이면 앞 순서.
-const SYN_POWER = { nightvis: 2103, goldrush: 1075, clairvoy: 952, highroll: 587, toolset: 542, ironwall: 421,
-  multlord: 274, interest: 240, timestop: 188, vipguard: 169, magscissors: 109, express: 100 };
+const SYN_POWER = { goldrush: 618, highroll: 444, toolset: 348, ironwall: 243, interest: 240, clairvoy: 186,
+  vipguard: 151, multlord: 150, timestop: 146, magscissors: 127, nightvis: 118, express: 64 };
 const doneSyn = items => SYNERGY.filter(x => items.includes(x.a) && items.includes(x.b)).sort((p, q) => (SYN_POWER[q.id] || 0) - (SYN_POWER[p.id] || 0));
 const activeSyn = items => doneSyn(items).slice(0, 1);
 const waitSyn = items => doneSyn(items).slice(1);
@@ -1509,11 +1510,11 @@ function beginRoundItems(p) {
   p.cuts = p.M ? p.M.cuts : 0; p.adds = p.M ? p.M.adds : 0;
   p.uses = {}; p.items.forEach(id => { const it = itemOf(id); if (it.use) p.uses[id] = (p.uses[id] || 0) + it.uses; });
 }
-function clearItems(p) { p.items = []; p.M = null; p.syn = null; p.synWait = []; p.shield = 0; p.cuts = 0; p.adds = 0; p.uses = {}; p.view = null; p.useView = null; p.showGame = false; }
+function clearItems(p) { p.items = []; p.M = null; p.syn = null; p.synWait = []; p.shield = 0; p.cuts = 0; p.adds = 0; p.uses = {}; p.view = null; p.useView = null; p.showGame = false; p.fog = 'none'; }
 
 /* ---------- 칸 공개(본인 시점) ---------- */
 function prepView(p, B) {
-  p.view = null; p.useView = null; p.showGame = false; const M = p.M;
+  p.view = null; p.useView = null; p.showGame = false; p.fog = 'none'; const M = p.M;
   if (!M || !M.reveal || M.hideAll || M.showAll) return;
   const hid = B.cells.map((c, i) => c.hid ? i : -1).filter(i => i >= 0);
   p.view = new Set(shuffle(hid).slice(0, M.reveal));
@@ -1528,16 +1529,29 @@ function hiddenFor(p, i, B) {
   return c.hid;
 }
 
-/* 사용형: 달빛·태양석 = 이번 판 모든 칸 공개, 투시 렌즈 = 물음표 1칸, 랜턴 = 물음표 2칸 (버튼 UI는 8단계) */
+/* ---------- 안개 (1.08 기준) ----------
+   기본: 위쪽 40% 가로줄만 보임 · 랜턴(fogSome): 3줄 더 · 투시 렌즈(fogEnd): 맨 아래 20%도 보임 · 달빛·태양석(fogAll): 전부
+   안개는 판마다 다시 깔리고, 사용 효과는 그 판에만 유지돼요. */
+const FOG_TOP = 0.4, FOG_SOME_ROWS = 3, FOG_END = 0.2;
+const FOG_RANK = { none: 0, some: 1, end: 1, all: 2 };
+function fogVisible(fog, r, R) {
+  if (fog === 'all') return true;
+  const top = Math.round(R * FOG_TOP);
+  if (fog === 'some') return r < Math.min(R, top + FOG_SOME_ROWS);
+  if (fog === 'end') return r < top || r >= R - Math.round(R * FOG_END);
+  return r < top;
+}
+const FOG_OF = { fogAll: 'all', fogSome: 'some', fogEnd: 'end' };
+/* 사용형: 달빛·태양석 = 안개 완전히 걷힘, 투시 렌즈 = 맨 아래 가로줄, 랜턴 = 가로줄 3줄 더 */
 function useItem(p, id, B) {
-  if (!(p.uses && p.uses[id] > 0)) return false;
-  const it = itemOf(id);
-  if (it.use === 'showAll') { if (p.showGame) return false; p.showGame = true; }
-  else {
-    const hid = B.cells.map((c, i) => hiddenFor(p, i, B) ? i : -1).filter(i => i >= 0); if (!hid.length) return false;
-    p.useView = p.useView || new Set(); shuffle(hid).slice(0, it.use === 'peek1' ? 1 : 2).forEach(i => p.useView.add(i));
-  }
+  if (!canUse(p, id, B)) return false;
+  const f = FOG_OF[itemOf(id).use];
+  p.fog = p.fog === 'some' && f === 'end' || p.fog === 'end' && f === 'some' ? 'both' : f;
   p.uses[id]--; return true;
+}
+function fogLevelVisible(fog, r, R) {
+  if (fog === 'both') return fogVisible('some', r, R) || fogVisible('end', r, R);
+  return fogVisible(fog || 'none', r, R);
 }
 /* ---------- 경로(첫 줄/끝 줄 건너뛰기, 본인만) ---------- */
 function walkSkip(rows, c, skip) {
@@ -1557,12 +1571,33 @@ function skipTrace(p, rows, col) {
 }
 // 본인 시야로 본 칸의 기대값 (숨김 = 기본 칸 값 × 1.1, 배수 = 기본 × 2)
 function cellGuess(p, B, e) { const c = B.cells[e], b = baseVal(B.st); return hiddenFor(p, e, B) ? b * 1.1 : c.t === 'mult' ? b * 2 : c.v; }
+/* 안개 속 추정: 보이는 가로줄은 그대로, 안개 속 가로줄은 무작위로 '상상'해서 FOG_SAMPLES번 시뮬레이션.
+   사람·CPU 모두 자기에게 보이는 정보로만 판단해요(안개 아래 실제 경로는 몰라요). */
+const FOG_SAMPLES = 16;
+function sampleRow(w) { const o = Array(w).fill(false); for (let i = 0; i < w; i++) if (!(i && o[i - 1]) && Math.random() < 0.42) o[i] = true; return o; }
+function fogSamples(B, fog) {
+  B._fs = B._fs || {}; if (B._fs[fog]) return B._fs[fog];
+  const R = B.rows.length, mask = B.rows.map((_, r) => fogLevelVisible(fog, r, R)), full = mask.every(Boolean), out = [];
+  for (let k = 0; k < (full ? 1 : FOG_SAMPLES); k++) {
+    const rows = full ? B.rows : B.rows.map((row, r) => mask[r] ? row : sampleRow(row.length));
+    out.push({ rows, ends: [...Array(B.n).keys()].map(c => traceCol(rows, c).end) });
+  }
+  return (B._fs[fog] = out);
+}
+function fogEval(p, B, col, val) {
+  const S = fogSamples(B, (p && p.fog) || 'none'), M = p && p.M, canSkip = !!(M && (M.skipF || M.skipL));
+  let eb = 0, es = 0;
+  for (const x of S) { eb += val(x.ends[col]); if (canSkip) es += val(skipTrace(p, x.rows, col).end); }
+  return { ev: (canSkip ? Math.max(eb, es) : eb) / S.length, skip: canSkip && es > eb };
+}
+// 실제 경로: 건너뛰기 아이템은 '보이는 정보로 유리해 보이는 쪽'을 자동 선택 (판·시야마다 한 번 정하면 고정)
 function traceFor(p, rows, col, B) {
   const M = p && p.M, base = traceCol(rows, col);
   if (!M || (!M.skipF && !M.skipL)) return base;
-  const sk = skipTrace(p, rows, col);
-  if (!B) return sk;
-  return cellGuess(p, B, sk.end) > cellGuess(p, B, base.end) ? sk : base;
+  if (!B) return skipTrace(p, rows, col);
+  B._sk = B._sk || new Map(); const key = p.id + '|' + col + '|' + (p.fog || 'none');
+  if (!B._sk.has(key)) B._sk.set(key, fogEval(p, B, col, e => cellGuess(p, B, e)).skip);
+  return B._sk.get(key) ? skipTrace(p, rows, col) : base;
 }
 
 /* ---------- 칸 결과(본인 효과로 변환) ---------- */
@@ -1674,9 +1709,11 @@ function settleRivals(rows, st) {
 }
 /* ---------- 사용형 아이템 ---------- */
 function canUse(p, id, B) {
-  const it = itemOf(id); if (!p || !p.uses || !(p.uses[id] > 0)) return false;
-  if (it.use === 'showAll') return !p.showGame && B.cells.some((c, i) => hiddenFor(p, i, B));
-  return B.cells.some((c, i) => hiddenFor(p, i, B));
+  const it = itemOf(id); if (!p || !p.uses || !(p.uses[id] > 0) || !FOG_OF[it.use]) return false;
+  const f = FOG_OF[it.use], cur = p.fog || 'none';
+  if (cur === 'all') return false;                         // 이미 다 보임
+  if (f === 'all') return true;
+  return cur !== f && cur !== 'both';                       // 같은 효과를 한 판에 두 번 쓰지 않음
 }
 
 /* =========================================================
@@ -1789,7 +1826,7 @@ Scene.def('game', {
     this.queue = hs.slice(k).concat(hs.slice(0, k));      // 사람끼리 판마다 순서 교대
     this.cpus = ps.filter(p => !p.human);
     this.runners = []; this.pops = []; this.shake = 0; this.resT = 0; this.fx = null; this.doneBtn = null;
-    this.thinking = null; this.cursor = this.firstFree(0); this.bannerT = 0; this.dogShown = false; this.rev = null;
+    this.thinking = null; this.cursor = this.firstFree(0); this.bannerT = 0; this.dogShown = false; this.rev = null; this.lastViewer = null; this.fogT = 0;
     this.phase = this.intro && this.intro.length ? 'intro' : 'prep'; this.introT = 0; this.prepT = 0; this.fakeRows = genRungs(this.n, Math.random); this.fakeT = 0.07;
   },
   ry(r) { return LAY.top + (r + 1) * (LAY.bot - LAY.top) / (this.Ry + 1); },
@@ -1801,6 +1838,7 @@ Scene.def('game', {
   beginPick() { if (this.queue.length) { this.phase = 'pick'; this.bannerT = 0; Sfx.play('turn'); } else this.nextCpu(); },
   humanPick(col) {
     if (this.phase !== 'pick' || !this.take(col, this.cur)) return false;
+    this.lastViewer = this.cur;
     this.queue.shift(); this.bannerT = 0;
     if (this.queue.length) { Sfx.play('turn'); this.cursor = this.firstFree(this.cursor); } else this.nextCpu();
     return true;
@@ -1821,6 +1859,7 @@ Scene.def('game', {
       P.push([g.x(tr.end), LAY.bot]);
       return { p, col, end: tr.end, P, len: pathLen(P), d: 0, seg: 1, done: false, hid: p.human && hiddenFor(p, tr.end, this.B) };
     });
+    this.lastFog = this.lastViewer ? this.lastViewer.fog : 'none'; this.fogT = 0;
     this.phase = 'run'; Sfx.play('go');
   },
   cardRect(k) {
@@ -1915,6 +1954,7 @@ Scene.def('game', {
     } else if (ph === 'ready') {
       this.startT -= dt; if (this.startT <= 0) this.startRun();
     } else if (ph === 'run') {
+      this.fogT = (this.fogT || 0) + dt;
       if (this.rev) this.updRev(dt);
       else for (const rn of this.runners) {
         if (rn.done) continue;
@@ -2074,7 +2114,10 @@ Scene.def('game', {
     const rows = shuffling ? this.fakeRows : this.rows;
     ctx.fillStyle = shuffling ? '#2c2868' : '#3e3a7a';
     for (let c = 0; c < this.n; c++) ctx.fillRect(g.x(c) - 5, LAY.top, 10, LAY.bot - LAY.top);
-    rows.forEach((row, r) => row.forEach((on, i) => { if (on) ctx.fillRect(g.x(i), this.ry(r) - 5, g.x(i + 1) - g.x(i), 10); }));
+    const fogP = this.fogViewer(), nRows = rows.length;
+    rows.forEach((row, r) => { if (!shuffling && !this.fogOpen(fogP, r, nRows)) return;
+      row.forEach((on, i) => { if (on) ctx.fillRect(g.x(i), this.ry(r) - 5, g.x(i + 1) - g.x(i), 10); }); });
+    if (!shuffling) this.drawFog(fogP, nRows);
     // 트레일
     for (const rn of this.runners) {
       const col = avColor(rn.p), [bx, by, seg] = pathPt(rn.P, rn.d);
@@ -2186,6 +2229,33 @@ Scene.def('game', {
       const k = R.t - REV_ARR; textAt(R.good ? '좋아!' : '으악!', W / 2, 400, 130, 1 + Math.max(0, 0.25 - k) * 3, R.good ? { cycle: 12, shadow: '#000' } : { color: PAL.red, shadow: '#000' });
     }
   },
+  // 안개는 '고르는 사람' 시점. 하강이 시작되면 걷혀요(1.08처럼 서서히).
+  fogViewer() { return this.phase === 'pick' ? this.cur : ['prep', 'cpu', 'ready'].includes(this.phase) ? this.lastViewer || null : null; },
+  fogOpen(p, r, R) {
+    if (!['prep', 'pick', 'cpu', 'ready'].includes(this.phase)) return true;
+    return fogLevelVisible(p ? p.fog : 'none', r, R);
+  },
+  drawFog(p, R) {
+    const lift = ['prep', 'pick', 'cpu', 'ready'].includes(this.phase) ? 1 : Math.max(0, 1 - (this.fogT || 0) / 0.4);
+    if (lift <= 0) return;
+    const g = this.geo, x0 = g.x(0) - 60, x1 = g.x(this.n - 1) + 60, fog = this.phase === 'run' || this.phase === 'post' ? (this.lastFog || 'none') : (p ? p.fog : 'none');
+    let r = 0;
+    while (r < R) {
+      if (fogLevelVisible(fog, r, R)) { r++; continue; }
+      let e = r; while (e < R && !fogLevelVisible(fog, e, R)) e++;
+      const y0 = (r === 0 ? LAY.top : (this.ry(r - 1) + this.ry(r)) / 2), y1 = e >= R ? LAY.bot : (this.ry(e - 1) + this.ry(e)) / 2;
+      ctx.save(); ctx.globalAlpha = 0.92 * lift;
+      ctx.fillStyle = '#2a2050'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+      for (let k = 0; k < 9; k++) {                     // 픽셀 안개 무늬(천천히 흘러감)
+        const yy = y0 + ((k * 97 + G.time * 18) % Math.max(1, y1 - y0)), xx = x0 + ((k * 211 + G.time * 40) % (x1 - x0 - 160));
+        ctx.fillStyle = 'rgba(160,150,220,.18)'; ctx.fillRect(Math.round(xx / 6) * 6, Math.round(yy / 6) * 6, 160, 18);
+      }
+      ctx.fillStyle = 'rgba(200,190,255,.35)'; ctx.fillRect(x0, y0, x1 - x0, 6);
+      if (y1 - y0 > 120) PF.draw('? ? ?', (x0 + x1) / 2, (y0 + y1) / 2, 64, { color: '#8a80c0', outline: null, alpha: lift });
+      ctx.restore();
+      r = e;
+    }
+  },
   drawVs(c) {
     const t = this.introT, p = c.p, o = p.rival, R = G.round, cy = 960, k = Math.min(1, t / 0.25), e = easeOutBack(k);
     ctx.fillStyle = 'rgba(0,0,0,' + Math.min(0.8, t * 3) + ')'; ctx.fillRect(0, 0, W, H);
@@ -2215,7 +2285,7 @@ Scene.def('game', {
     const p = this.cur, it = itemOf(id);
     if (!canUse(p, id, this.B)) { Sfx.play('nope'); toast(p.uses[id] > 0 ? '지금은 쓸 수 없어요' : '남은 횟수가 없어요', 0.9); return false; }
     useItem(p, id, this.B); Sfx.play('mult'); this.useFx = { id, t: 0 };
-    toast(it.n + ' 사용! ' + (it.use === 'showAll' ? '모든 칸 공개' : '물음표 ' + (it.use === 'peek1' ? 1 : 2) + '칸 공개'), 1.1); return true;
+    this.fogA = 1; toast(it.n + ' 사용! ' + ({ fogAll: '안개가 걷혔어요', fogEnd: '도착 직전 가로줄이 보여요', fogSome: '가로줄 3줄이 더 보여요' })[it.use], 1.1); return true;
   },
   drawUseBtns() {
     const p = this.cur;
@@ -2852,7 +2922,7 @@ function frame(now) {
   Dev.draw(fps);
   requestAnimationFrame(frame);
 }
-window.LF = { cellGuess, skipTrace, HiScore, gameRecords, restartSame, WIN, BGM, SONGS, SCENE_BGM, DUTY_SNAP, DOG_LINES, isBad, dogArt, REV_ARR, REV_END, assignRivals, settleRivals, rivalBonus, canUse, SYN_POWER, activeSyn, waitSyn, doneSyn, synOf, ICONS, iconArt, useItem, ITEMS, SYNERGY, mods, beginRoundItems, clearItems, prepView, hiddenFor, traceFor, resolveCell, reweight, itemBonus, priceOf, shopPool, makeShelf, buyItem, cpuShop, qtyOf, itemOf, rankPlayers, applyMults, multOf, cpuChoose, CPU_INFO, fmtN, makeBoard, traceCol, genRungs, CAT, cellWeights, applyCell, HOWTO, AVATARS, EXPR, avatarArt, AvCache, buildPlayers, validateName, NameIn, Demo, totalPlayers, G, Scene, Sfx, AU, Bank, PF, Input, Dev, makePlayer, newRound, dispatch, frame };
+window.LF = { fogEval, fogSamples, FOG_SAMPLES, fogVisible, fogLevelVisible, FOG_TOP, cellGuess, skipTrace, HiScore, gameRecords, restartSame, WIN, BGM, SONGS, SCENE_BGM, DUTY_SNAP, DOG_LINES, isBad, dogArt, REV_ARR, REV_END, assignRivals, settleRivals, rivalBonus, canUse, SYN_POWER, activeSyn, waitSyn, doneSyn, synOf, ICONS, iconArt, useItem, ITEMS, SYNERGY, mods, beginRoundItems, clearItems, prepView, hiddenFor, traceFor, resolveCell, reweight, itemBonus, priceOf, shopPool, makeShelf, buyItem, cpuShop, qtyOf, itemOf, rankPlayers, applyMults, multOf, cpuChoose, CPU_INFO, fmtN, makeBoard, traceCol, genRungs, CAT, cellWeights, applyCell, HOWTO, AVATARS, EXPR, avatarArt, AvCache, buildPlayers, validateName, NameIn, Demo, totalPlayers, G, Scene, Sfx, AU, Bank, PF, Input, Dev, makePlayer, newRound, dispatch, frame };
 Scene.go('title');
 requestAnimationFrame(frame);
 </script>
