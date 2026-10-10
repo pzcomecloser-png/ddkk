@@ -141,7 +141,11 @@
         rgba(0,0,0,.40) 80%,rgba(0,0,0,.75) 100%);
     background-size:100% 2px,100% 100%}
 
-  #narr{flex:0 0 auto;padding:12px 15px 13px;min-height:172px;
+  /* ══ 서술문 칸 — 높이를 고정한다 ══
+     줄이 쌓여도 늘어나지 않는다. 늘어나면 관측창이 줄어들어
+     아스키 아트가 세로로 눌리기 때문이다. */
+  #narr{flex:0 0 auto;padding:12px 15px 13px;
+    height:172px;min-height:172px;max-height:172px;overflow:hidden;
     border-top:1px solid #cfcfcf;font-size:18px;line-height:1.68;
     word-break:keep-all;color:#c8c1b4;letter-spacing:-.3px}
   #narr .nline{opacity:0;transform:translateY(3px);
@@ -459,6 +463,7 @@
       <button onclick="devEnding()">5. 엔딩 미리보기</button>
       <button onclick="devSound()">6. BGM / 사운드</button>
       <button onclick="devNarr()">7. 서술문 구성 보기</button>
+      <button onclick="devMoveCut()">8. 이동 연출 보기</button>
     </div>
   </div>
 
@@ -778,9 +783,13 @@ function renderTo(el,cols,rows,fn,ramp=RAMP,grain=.05,xr){
 
 /* 박스 가로에 폰트를 맞추고, 세로 줄 수는 박스 비율로 계산한다.
    x 범위는 ±1.0 고정 (모든 아트가 이 좌표계로 설계됨) */
-function drawFill(el,cols,fn,ramp=RAMP,grain=.05){
+function drawFill(el,cols,fn,ramp=RAMP,grain=.05,hOverride){
   const b=el.parentElement;
-  const W=b.clientWidth-4, H=b.clientHeight-2;
+  const W=b.clientWidth-4;
+  /* hOverride — 높이 전환(transition) 중에는 '최종 높이'를 넘긴다.
+     그러면 글자 크기·줄 수가 처음부터 확정되어
+     무대가 열리는 동안 그림이 리사이즈되지 않는다. */
+  const H=(hOverride!==undefined?hOverride:b.clientHeight)-2;
   if(W<10||H<6) return 0;
   const font=W/(cols*CELL_W);
   const rows=Math.max(3,Math.round(H/font));
@@ -1240,11 +1249,29 @@ function luminance(sx,sy){
   if(dm<P.sunR) L+=1.05;
   if(dm<P.sunR*0.54) L-=1.60;
 
+  /* ══ 하늘의 까마귀 — V 자 날개. 날갯짓한다 ══ */
   for(let i=0;i<P.farCrows;i++){
     const cx=-0.7+((i*0.37+t*0.004*P.crowDrift)%1.5);
-    const cy=0.045+i*0.028+Math.sin(t*0.05+i)*0.008;
-    if(Math.abs(px-cx)<0.011&&Math.abs(py-cy)<0.004) L+=1.5;
-    if(Math.abs(px-cx)<0.020&&Math.abs(py-cy-0.004)<0.003) L+=1.0;
+    const cy=0.045+i*0.030+Math.sin(t*0.05+i)*0.010;
+    const dx=px-cx, dy=py-cy;
+    /* 개체마다 크기가 조금 다르다 */
+    const sz=0.034+((i*7)%3)*0.008;
+    /* 날갯짓 — 날개가 오르내린다 */
+    const flap=Math.sin(t*0.16+i*2.1);
+    if(Math.abs(dx)<sz*1.5 && Math.abs(dy)<sz*0.9){
+      /* 몸통 */
+      if(Math.abs(dx)<sz*0.26 && Math.abs(dy)<sz*0.17) L+=1.9;
+      /* 양 날개 — 바깥·위로 뻗는다 */
+      for(const s2 of [-1,1]){
+        const u=dx*s2;
+        if(u>sz*0.16 && u<sz*1.5){
+          const tw=(u-sz*0.16)/(sz*1.34);
+          /* 날개가 꺾이는 각도 — 날갯짓에 따라 변한다 */
+          const wy2=-tw*sz*(0.30+flap*0.42);
+          if(Math.abs(dy-wy2)<sz*0.13*(1-tw*0.5)) L+=1.7;
+        }
+      }
+    }
   }
 
   const SX=P.posX;
@@ -1334,7 +1361,8 @@ function luminance(sx,sy){
         /* idle — 평소 상태. 고개를 살짝 숙여 눈구멍이 좁고 어둡다 */
         eyes=[[-0.026,-0.004,0.0120,0.0105],[0.020,-0.006,0.0104,0.0092]];
       }
-      if(P.mouthState==='eye') eyes.push([0.000,0.030,0.0150,0.0180]);
+      /* 세 번째 눈 — 입이 있던 자리. 두 눈보다 크다 */
+      if(P.mouthState==='eye') eyes.push([0.000,0.034,0.0260,0.0310]);
       const idle=(P.headYaw==='idle');
       for(const[ex,ey,erx,ery]of eyes){
         const ed=Math.hypot((fx-ex)/erx,(fy-ey)/ery);
@@ -1369,20 +1397,100 @@ function luminance(sx,sy){
       if(cd<1.0) L+=0.75+fbm(px*40,py*40)*0.24;
       if(Math.abs(fy+0.059)<0.006&&Math.abs(fx)<0.048) L-=0.58;}
 
+    /* ══ 모자 위 까마귀 ══
+       머리 반지름은 hRx=0.058, hRy=0.066.
+       모자 챙이 fy≈-0.052 에 있으므로 그 위에 앉힌다.
+       원래 몸통 0.037x0.024 → 0.050x0.034 (약 1.9배 넓이) */
     if(P.crowOn){
-      const hy0=P.hatOn?-0.114:-0.090;
-      const kd=Math.hypot((fx-0.014)/0.037,(fy-hy0)/0.024);
-      if(kd<1.0) L-=1.8;
-      if(kd<1.0&&kd>0.80) L+=2.1;
-      if(Math.abs(fx-0.055)<0.019&&Math.abs(fy-hy0+0.002)<0.005) L+=1.8;
-      if(Math.hypot(fx-0.026,fy-hy0+0.007)<0.006) L+=2.2;}
+      const hy0=P.hatOn?-0.082:-0.066;
+      const bob=Math.sin(t*0.055)*0.0026;
+      const cx0=0.006, cy0=hy0+bob;
 
+      /* ── 몸통 ── */
+      const bdc=Math.hypot((fx-cx0)/0.050,(fy-cy0)/0.034);
+      if(bdc<1.0){
+        L-=2.1;
+        if(bdc>0.72) L+=2.6;                  /* 윤곽 */
+        if(fbm(fx*95,fy*95)>0.62) L+=0.52;    /* 깃털 */
+      }
+      /* ── 접은 날개 ── */
+      for(let k=0;k<3;k++){
+        const wy2=cy0-0.005+k*0.008;
+        if(Math.abs(fy-wy2)<0.0020 && fx>cx0-0.034 && fx<cx0+0.030) L+=0.82;
+      }
+      /* ── 머리 ── */
+      const hx0=cx0-0.036, hyh=cy0-0.024;
+      const hdk=Math.hypot((fx-hx0)/0.025,(fy-hyh)/0.021);
+      if(hdk<1.0){
+        L-=2.1;
+        if(hdk>0.64) L+=2.5;
+      }
+      /* ── 부리 ── */
+      {
+        const bl=0.036;
+        const u=(hx0-0.017)-fx;
+        if(u>0 && u<bl){
+          const tb=u/bl;
+          const hw=0.0095*(1-tb*0.92);
+          if(Math.abs(fy-(hyh+0.003+tb*0.006))<hw){ L-=2.0; L+=2.4; }
+        }
+      }
+      /* ── 눈 ── */
+      if(Math.hypot((fx-hx0+0.005)/0.0068,(fy-hyh+0.004)/0.0062)<1.0) L+=3.0;
+      /* ── 꼬리 ── */
+      {
+        const tl=0.056;
+        const u=fx-(cx0+0.038);
+        if(u>0 && u<tl){
+          const tt=u/tl;
+          const hw=0.019*(1-tt*0.55);
+          const ty=cy0+0.010+tt*0.019;
+          if(Math.abs(fy-ty)<hw){
+            L-=1.9;
+            if(Math.abs(fy-ty)>hw*0.60) L+=2.2;
+            if(Math.abs((fy-ty)*175%2.0)<0.55) L+=0.62;
+          }
+        }
+      }
+      /* ── 발 ── */
+      for(const s2 of [-1,1]){
+        const fxp=cx0+s2*0.013;
+        if(Math.abs(fx-fxp)<0.0026 && fy>cy0+0.029 && fy<cy0+0.042) L+=1.7;
+      }
+    }
+
+    /* ══ 손에 든 신발 — 아이의 것. 크게 그려 알아보게 한다 ══ */
     if(P.handItem==='shoe'){
-      const swing=Math.sin(t*0.11*W)*0.012;
-      const sx2=SX+0.300*S+swing, sy2=0.395;
-      if(Math.abs(px-sx2)<0.020&&Math.abs(py-sy2)<0.014) L+=0.9;
-      if(Math.abs(px-sx2)<0.014&&Math.abs(py-sy2-0.012)<0.006) L+=0.7;
-      if(Math.abs(px-sx2-0.004)<0.002&&py>0.362&&py<0.382) L+=0.6;}
+      const swing=Math.sin(t*0.11*W)*0.018;
+      const sx2=SX+0.300*S+swing, sy2=0.412;
+      const dx2=px-sx2, dy2=py-sy2;
+
+      /* ── 매달린 끈 ── */
+      if(Math.abs(dx2-0.004)<0.0035 && py>0.352 && py<sy2-0.014) L+=1.4;
+
+      /* ── 신발 몸체 — 발등에서 뒤축으로 ── */
+      {
+        const bd=Math.hypot(dx2/0.050,(dy2-0.004)/0.026);
+        if(bd<1.0){
+          L-=1.7;
+          if(bd>0.74) L+=2.1;                  /* 윤곽 */
+          /* 가죽 결 */
+          if(fbm(px*80,py*80)>0.62) L+=0.45;
+        }
+      }
+      /* ── 밑창 — 아래쪽에 두껍게 ── */
+      if(Math.abs(dx2)<0.052 && dy2>0.022 && dy2<0.036){
+        L-=1.5; L+=1.9;
+        /* 밑창 홈 */
+        if(Math.abs((dx2*120)%2.0)<0.6) L+=0.55;
+      }
+      /* ── 발목 입구 — 어둡게 벌어져 있다 ── */
+      if(Math.hypot((dx2+0.022)/0.020,(dy2+0.020)/0.012)<1.0) L-=2.2;
+      /* ── 끈 구멍 ── */
+      for(let k=0;k<3;k++){
+        if(Math.hypot((dx2+0.004-k*0.014)/0.004,(dy2+0.010)/0.004)<1.0) L+=1.6;
+      }
+    }
 
     if(P.shadowOn){
       const shd=Math.hypot((px-SX-0.05)/(0.16*S),(py-HEM-0.012)/0.020);
@@ -1552,11 +1660,7 @@ function proLum(px,py){
   /* ═══════════ 3. 최전면 ═══════════ */
   let front=0;
   {
-    const BL=[
-      {x:-0.60, y:0.30, a: 0.85, l:0.92, w:0.115, sp:0.26},
-      {x: 0.66, y:0.16, a:-1.05, l:0.80, w:0.095, sp:0.22},
-      {x:-0.44, y:0.72, a: 0.42, l:0.66, w:0.078, sp:0.30},
-    ];
+    const BL=MV_LEAF[C.leaf||0];
     for(const b of BL){
       const ox=b.x+(b.x>0?1:-1)*(parted*b.sp+OPEN*0.28);
       const oy=b.y+parted*0.09;
@@ -1857,6 +1961,8 @@ function newGame(){
   $('clock').textContent=fmt(LIMIT);
   GS.tickTimer=setInterval(tick,1000);
   SND.bgm('field');
+  vpH=0;
+  requestAnimationFrame(()=>{ measureVP(); render(); });
   enterCell(true);
 }
 
@@ -2221,13 +2327,34 @@ const MVRAMP=" ...'`^\":;i!liI+*?7cxX%$#@";
 let mvP=0, mvT=0, mvDir='N', mvCols=142;
 let mvRaf=null, mvT0=0, mvPlaying=false, mvDone=null;
 
+/* ══ 방향별 파라미터 ══
+   seed   — 옥수수 배치 시드. 방향마다 다른 자리가 된다
+   seamPh — 빛이 새는 틈의 위상
+   leaf   — 얼굴을 스치는 잎 배치 (0=기본, 1=동쪽 전용)
+   동쪽은 서쪽의 반전이 아니다. 같은 허수아비, 다른 자리. */
 const MVDIRS={
-  N:{ yawMax:0,            figS:0.086, figCY:0.330, figTh:0.26, sweep:0.00 },
-  S:{ yawMax:Math.PI,      figS:0.118, figCY:0.300, figTh:0.55, sweep:1.35 },
-  W:{ yawMax:Math.PI*0.40, figS:0.092, figCY:0.318, figTh:0.52, sweep:1.05 },
-  E:{ yawMax:Math.PI*0.40, figS:0.092, figCY:0.318, figTh:0.52, sweep:1.05,
-      mirror:true },
+  N:{ yawMax:0,            figS:0.086, figCY:0.330, figTh:0.26, sweep:0.00,
+      seed: 0,  seamPh:0.70, leaf:0 },
+  S:{ yawMax:Math.PI,      figS:0.118, figCY:0.300, figTh:0.55, sweep:1.35,
+      seed:11,  seamPh:2.15, leaf:0 },
+  W:{ yawMax:Math.PI*0.40, figS:0.092, figCY:0.318, figTh:0.52, sweep:1.05,
+      seed:23,  seamPh:1.40, leaf:0 },
+  /* 동 — 고개를 조금 덜 돌린다. 허수아비가 더 멀고 조금 높다.
+          옥수수 배치와 스치는 잎이 전혀 다르다 */
+  E:{ yawMax:Math.PI*0.355,figS:0.081, figCY:0.302, figTh:0.46, sweep:0.88,
+      seed:47,  seamPh:4.05, leaf:1 },
 };
+
+/* 동쪽 전용 — 반대쪽에서 스치는 잎 */
+const MV_LEAF=[
+  [ {x:-0.60, y:0.30, a: 0.85, l:0.92, w:0.115, sp:0.26},
+    {x: 0.66, y:0.16, a:-1.05, l:0.80, w:0.095, sp:0.22},
+    {x:-0.44, y:0.72, a: 0.42, l:0.66, w:0.078, sp:0.30} ],
+  [ {x: 0.58, y:0.24, a:-0.72, l:0.86, w:0.105, sp:0.24},
+    {x:-0.70, y:0.38, a: 1.18, l:0.74, w:0.088, sp:0.28},
+    {x: 0.40, y:0.66, a:-0.36, l:0.70, w:0.082, sp:0.32},
+    {x:-0.30, y:0.12, a: 0.58, l:0.58, w:0.068, sp:0.20} ],
+];
 
 function mvTurn(p){
   if(p<0.36) return 0;
@@ -2271,7 +2398,7 @@ function mvLum(px,py){
   const panX=wx+pan;
 
   /* 1. 빛이 새어 나오는 틈 */
-  const seamX=Math.sin(wy*3.1+0.7)*0.055+Math.sin(wy*7.3)*0.022;
+  const seamX=Math.sin(wy*3.1+C.seamPh)*0.055+Math.sin(wy*7.3+C.seed*0.3)*0.022;
   const FX=MV_PANK*C.yawMax;
   const gaps=[{c:0, w:0.024+mvP*0.055+(turning?0:rev*0.26), i:1-tr*0.78}];
   if(turning) gaps.push({c:FX, w:0.030+tr*0.20, i:0.30+tr*0.90});
@@ -2300,7 +2427,7 @@ function mvLum(px,py){
       const z=i/2;
       const scl=(9+i*13)*(1-trv*0.45);
       const spd=(1.0-z*0.55);
-      const r=ridge(panX*scl+i*31, wy*(2.6+i*1.3)-walk*2.2*spd+i*17);
+      const r=ridge(panX*scl+i*31+C.seed, wy*(2.6+i*1.3)-walk*2.2*spd+i*17+C.seed*0.7);
       dark+=Math.pow(r,2.2+z*1.4)*(0.50-z*0.13);
     }
     const away=Math.min(1,Math.max(0,(sdMin-0.85)/1.5));
@@ -2311,11 +2438,7 @@ function mvLum(px,py){
   /* 3. 최전면 — 얼굴을 스치는 것들 */
   let front=0;
   {
-    const BL=[
-      {x:-0.60, y:0.30, a: 0.85, l:0.92, w:0.115, sp:0.26},
-      {x: 0.66, y:0.16, a:-1.05, l:0.80, w:0.095, sp:0.22},
-      {x:-0.44, y:0.72, a: 0.42, l:0.66, w:0.078, sp:0.30},
-    ];
+    const BL=MV_LEAF[C.leaf||0];
     for(const b of BL){
       const ox=b.x+(b.x>0?1:-1)*(mvP*b.sp+(turning?0:rev*0.28))-tr*C.sweep;
       const oy=b.y+mvP*0.09;
@@ -2332,7 +2455,7 @@ function mvLum(px,py){
       }
     }
     const SP=0.285;
-    const near=Math.round(panX/SP);
+    const near=Math.round((panX+C.seed*0.013)/SP);
     for(let d=-1;d<=1;d++){
       const idx=near+d;
       const bx=idx*SP+Math.sin(idx*2.7+mvT*0.017)*0.030;
@@ -2433,7 +2556,6 @@ function mvDraw(){
   const box=$('movecut');
   const Wb=box.clientWidth-4, Hb=box.clientHeight-2;
   if(Wb<10||Hb<6) return;
-  const mir=MVDIRS[mvDir].mirror?-1:1;
   const font=Wb/(mvCols*CELL_W);
   const rows=Math.max(4,Math.round(Hb/font));
   const el=$('mvArt');
@@ -2444,7 +2566,7 @@ function mvDraw(){
     const py=(r+0.5)/rows;
     let line='';
     for(let c=0;c<mvCols;c++){
-      const px=((c+0.5)/mvCols-0.5)*2.0*mir;
+      const px=((c+0.5)/mvCols-0.5)*2.0;
       const v=mvLum(px,py);
       line+=MVRAMP[v<=0?0:v>=1?last:Math.round(v*last)];
     }
@@ -3686,9 +3808,23 @@ function die(lines,cause){
 }
 
 /* ══ 렌더 ══ */
-function render(){drawFill($('screen'),COLS,luminance,RAMP,P.grain);}
+/* ══ 관측창 높이 — 처음 측정한 값을 계속 쓴다 ══
+   서술문이 쌓이거나 버튼이 바뀌어도 아트가 리사이즈되지 않는다.
+   창 크기가 실제로 달라지면 fitAll() 이 다시 잰다. */
+let vpH=0;
+function measureVP(){
+  const b=$('viewport');
+  if(b && b.clientHeight>20) vpH=b.clientHeight;
+  return vpH;
+}
+function render(){
+  drawFill($('screen'),COLS,luminance,RAMP,P.grain, vpH>20?vpH:undefined);
+}
 function fitAll(){
-  if($('proStage').clientHeight>10) drawFill($('proArt'),PCOLS,proLum,PRAMP,0);
+  vpH=0; measureVP();                 /* 창 크기가 바뀌었으니 다시 잰다 */
+  if($('game').classList.contains('on')) render();
+  if($('proStage').clientHeight>10)
+    drawFill($('proArt'),PCOLS,proLum,PRAMP,0,proStageTargetH());
   if($('endStage').clientHeight>10) drawFill($('endArt'),ECOLS,endLum,RAMP,0.05);
   if($('deathStage')&&$('deathStage').clientHeight>10)
     drawFill($('deathArt'),DCOLS,deathLum,RAMP,0.055);
@@ -3738,6 +3874,17 @@ const PRO=[
 
 let proIdx=0,proArtOn=false,proBusy=false,proIv=null;
 
+/* ══ 프롤로그 무대가 다 열렸을 때의 높이 (CSS: #proStage.open{height:56%}) ══
+   높이 전환 중에도 이 값으로 그려서 글자 크기를 고정한다. */
+function proStageTargetH(){
+  const st=$('proStage');
+  if(!st) return 0;
+  const parentH=st.parentElement ? st.parentElement.clientHeight : 0;
+  const target=parentH*0.56;
+  /* 이미 다 열렸으면 실제 높이를 쓴다 (미세 오차 방지) */
+  return Math.max(target, st.clientHeight);
+}
+
 function proNext(){
   if(proBusy) return;
   const step=PRO[proIdx];
@@ -3756,7 +3903,7 @@ function proNext(){
       $('prologue').classList.add('arted');
       proArtOn=true;
       setTimeout(()=>{
-        drawFill($('proArt'),PCOLS,proLum,PRAMP,0);
+        drawFill($('proArt'),PCOLS,proLum,PRAMP,0,proStageTargetH());
         $('proArt').classList.add('show');
       },260);
       SND.fx('push',1);
@@ -3969,7 +4116,7 @@ function skipPro(){
    ══════════════════════════════════════════════════════════════ */
 setInterval(()=>{
   if($('prologue').classList.contains('on')){
-    if(proArtOn){pt+=1;drawFill($('proArt'),PCOLS,proLum,PRAMP,0);}
+    if(proArtOn){pt+=1;drawFill($('proArt'),PCOLS,proLum,PRAMP,0,proStageTargetH());}
   } else if($('game').classList.contains('on')){
     if(!GS.dead){t+=1;render();}
   } else if($('ending').classList.contains('on')){
@@ -4631,6 +4778,133 @@ function nvTime(sec){ nvRemain=sec; nvDraw(); }
 /* ══════════════════════════════════════════════════════════════
    6. BGM / 사운드
    ══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   8. 이동 연출 보기 — 4방향 비교
+   ══════════════════════════════════════════════════════════════ */
+let dmDir='N', dmP=1.0, dmIv=null;
+
+function devMoveCut(){
+  devPane('8. 이동 연출', `
+    <div class="devInfo">
+      방향마다 다른 자리의 밭이다. 동쪽은 서쪽의 반전이 아니다.<br>
+      <span style="color:#8a8a8a;font-size:11px">
+        옥수수 배치 시드 · 빛 틈 위상 · 스치는 잎 · 회전 각도가 모두 다르다</span>
+    </div>
+    <div id="dmTabs" style="display:flex;gap:3px;margin:8px 0">
+      <button class="dmT" data-d="N" onclick="dmSet('N')">▲ 북</button>
+      <button class="dmT" data-d="S" onclick="dmSet('S')">▼ 남</button>
+      <button class="dmT" data-d="W" onclick="dmSet('W')">◀ 서</button>
+      <button class="dmT" data-d="E" onclick="dmSet('E')">동 ▶</button>
+    </div>
+    <div id="dmStage" style="position:relative;width:100%;height:280px;
+      background:#000;border:1px solid #3a3a3a;overflow:hidden;
+      display:flex;align-items:center;justify-content:center">
+      <pre id="dmArt" style="font-family:inherit;white-space:pre;color:#c6c0b6;
+        margin:0;text-align:center;line-height:1;letter-spacing:0;
+        text-shadow:0 0 2px rgba(190,185,175,.26)"></pre>
+    </div>
+    <div class="devInfo" id="dmInfo" style="margin-top:8px"></div>
+    <div style="display:flex;gap:4px;margin-top:6px">
+      <button onclick="dmPlay()">▶ 재생 2초</button>
+      <button onclick="dmStep(-0.1)">◀ -0.1</button>
+      <button onclick="dmStep(0.1)">+0.1 ▶</button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+      <label style="font-size:11px;color:#8a8a8a;min-width:56px">
+        진행 <span id="dmPv">1.00</span></label>
+      <input type="range" id="dmR" min="0" max="1000" value="1000"
+        style="flex:1" oninput="dmManual(this.value/1000)">
+    </div>
+    <style>
+      .dmT{flex:1;padding:8px 2px;background:#111;color:#8a8a8a;
+        border:1px solid #444;font-family:inherit;font-size:12px;cursor:pointer}
+      .dmT.on{background:#d8d8d8;color:#000;border-color:#fff;font-weight:700}
+    </style>
+  `);
+  dmDir='N'; dmP=1.0;
+  dmSet('N');
+}
+
+function dmRender(){
+  const box=$('dmStage'), el=$('dmArt');
+  if(!box||!el) return;
+  const Wb=box.clientWidth-4, Hb=box.clientHeight-2;
+  if(Wb<10||Hb<6) return;
+
+  /* mvLum 이 읽는 전역을 잠시 빌려 쓴다 */
+  const sD=mvDir, sP=mvP, sT=mvT;
+  mvDir=dmDir; mvP=dmP; mvT=sT;
+
+  const cols=120;
+  const font=Wb/(cols*CELL_W);
+  const rows=Math.max(4,Math.round(Hb/font));
+  el.style.fontSize=font.toFixed(3)+'px';
+  const last=MVRAMP.length-1;
+  const out=new Array(rows);
+  for(let r=0;r<rows;r++){
+    const py=(r+0.5)/rows;
+    let line='';
+    for(let c=0;c<cols;c++){
+      const px=((c+0.5)/cols-0.5)*2.0;
+      const v=mvLum(px,py);
+      line+=MVRAMP[v<=0?0:v>=1?last:Math.round(v*last)];
+    }
+    out[r]=line;
+  }
+  el.textContent=out.join('\n');
+
+  const C=MVDIRS[dmDir];
+  const turning=C.yawMax>0.01;
+  const rev=turning?mvTurn(dmP):mvPart(dmP);
+  const NM={N:'정면 — 허수아비',S:'뒤를 돌아본다',
+            W:'오른쪽을 본다',E:'왼쪽을 본다'};
+  $('dmInfo').innerHTML=
+    `<b style="color:#fff">${dmDir}</b> ${NM[dmDir]}　`+
+    `<b>${cols}×${rows}</b>　<b>${font.toFixed(2)}px</b><br>`+
+    `회전 <b>${(C.yawMax*180/Math.PI).toFixed(1)}°</b>　`+
+    `크기 <b>${C.figS}</b>　높이 <b>${C.figCY}</b>　`+
+    `임계 <b>${C.figTh}</b><br>`+
+    `시드 <b>${C.seed}</b>　위상 <b>${C.seamPh}</b>　`+
+    `잎 <b>${C.leaf===1?'동쪽 전용 4장':'기본 3장'}</b>　`+
+    `드러남 <b>${rev.toFixed(3)}</b>`+
+    (rev>C.figTh?' <span style="color:#fff">◀ 보인다</span>':'');
+
+  mvDir=sD; mvP=sP;
+}
+
+function dmSet(d){
+  dmDir=d;
+  document.querySelectorAll('.dmT').forEach(b=>
+    b.classList.toggle('on', b.dataset.d===d));
+  dmPlay();
+}
+function dmPlay(){
+  clearInterval(dmIv);
+  dmP=0;
+  const t0=performance.now();
+  dmIv=setInterval(()=>{
+    const e=performance.now()-t0;
+    const q=Math.min(1,e/MV_DUR);
+    dmP=1-Math.pow(1-q,1.35);
+    mvT+=1;
+    $('dmR').value=Math.round(dmP*1000);
+    $('dmPv').textContent=dmP.toFixed(2);
+    dmRender();
+    if(q>=1) clearInterval(dmIv);
+  },60);
+  devIvs.push(dmIv);
+}
+function dmManual(v){
+  clearInterval(dmIv);
+  dmP=v; mvT+=1;
+  $('dmPv').textContent=v.toFixed(2);
+  dmRender();
+}
+function dmStep(dv){
+  dmManual(Math.max(0,Math.min(1,dmP+dv)));
+  $('dmR').value=Math.round(dmP*1000);
+}
+
 function devSound(){
   const bgms=[['prologue','프롤로그'],['field','탐색'],
               ['tension','긴장'],['ending','엔딩']];
