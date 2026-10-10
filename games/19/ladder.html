@@ -1332,6 +1332,40 @@ function rollCell(st, rnd) {
 }
 const cellText = c => c.t === 'blank' ? '꽝' : c.t === 'mult' ? '×' + c.v : (c.v > 0 ? '+' : '') + fmtN(c.v);
 
+/* ---------- 돈 칸 그림 (1.08 moneyArt 4단계 → 픽셀 아트) ----------
+   1 동전 3개 · 2 동전 탑 · 3 돈주머니(대박 포함) · 4 금괴 피라미드. 도착 전엔 금액 대신 그림만 보여요. */
+const MONEY_COL = { K: '#1a1020', Y: '#ffd23f', O: '#c89a10', o: '#8a5a08', W: '#fff6c0', B: '#c8862a', b: '#8a5214', R: '#ff3b5c', P: '#ff8fb8', E: '#1a1020', G: '#ffe680' };
+const MONEY_ART = {
+  1: ['................', '................', '................', '................', '......YYYY......', '.....YWYYYO.....', '.....YYOOYO.....',
+      '.....YYYYYO.....', '......OOOO......', '..YYYY....YYYY..', '.YWYYYO..YWYYYO.', '.YYOOYO..YYOOYO.', '.YYYYYO..YYYYYO.', '..OOOO....OOOO..'],
+  2: ['................', '.....YYYYYY.....', '....YWYYYYYO....', '....OOOOOOOO....', '....YYYYYYYO....', '....OOOOOOOO....', '....YWYYYYYO....',
+      '....OOOOOOOO....', '....YYYYYYYO....', '....OOOOOOOO....', '....YWYYYYYO....', '....OOOOOOOO....', '.....oooooo.....'],
+  3: ['......R..R......', '.......RR.......', '......BBBB......', '.......bb.......', '.....BBBBBB.....', '....BBBBBBBB....', '...BBBBBBBBBB...',
+      '...BBEBBBBEBB...', '..BBBBBBBBBBBB..', '..BPBBbbbbBBPB..', '..BBBBBbbBBBBB..', '...BBBBBBBBBB...', 'YY..bbbbbbbb..YY', 'OO............OO'],
+  4: ['................', '................', '......GYYY......', '.....GYYYYO.....', '.....OOOOOO.....', '...GYYYGYYYY....', '..GYYYYGYYYYO...',
+      '..OOOOOOOOOOO...', '.GYYYGYYYGYYY...', 'GYYYYGYYYYGYYYO.', 'OOOOOOOOOOOOOOO.']
+};
+const MoneyCache = {};
+function moneyArt(t) {
+  if (MoneyCache[t]) return MoneyCache[t];
+  const pat = MONEY_ART[t], art = document.createElement('canvas'); art.width = art.height = 16;
+  const x = art.getContext('2d'), oy = Math.floor((16 - pat.length) / 2);
+  pat.forEach((row, r) => [...row].forEach((ch, c) => { const col = MONEY_COL[ch]; if (col) { x.fillStyle = col; x.fillRect(c, r + oy, 1, 1); } }));
+  const out = document.createElement('canvas'); out.width = out.height = 18; const y = out.getContext('2d'), m = PF.tint(art, '#000');
+  for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]) y.drawImage(m, 1 + dx, 1 + dy);
+  y.drawImage(art, 1, 1); return (MoneyCache[t] = out);
+}
+// 1.08 tierOf: 금괴=4 · 대박=3 · 돈 칸은 기본 칸 값 대비 0.9배 미만=1, 1.2배 미만=2, 그 이상=3
+function moneyTier(c, st) { if (c.t === 'bar') return 4; if (c.t === 'jackpot') return 3; const r = c.v / baseVal(st); return r < 0.9 ? 1 : r < 1.2 ? 2 : 3; }
+const MONEY_NAME = { 1: '동전', 2: '동전 탑', 3: '돈주머니', 4: '금괴' };
+// 그림 단계만 보고 추정하는 금액(실제 분포 평균에 가깝게): 동전·동전 탑은 기본값 근처, 돈주머니는 대박 가능성 포함
+function moneyGuess(t, st) { const b = baseVal(st); return t === 1 ? b * 0.8 : t === 2 ? b * 1.05 : t === 3 ? b * 3.07 : b * (4 + st) * 4; }
+function drawMoney(t, cx, cy, size, bob) {
+  const s = Math.max(18, Math.floor(size / 18) * 18);
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(moneyArt(t), Math.round(cx - s / 2), Math.round(cy - s / 2 + (bob || 0)), s, s); ctx.restore();
+}
+
 /* ---------- 사다리 생성 ---------- */
 // rows[r][i] = r번째 높이에서 i ↔ i+1 연결. 같은 높이 인접 연결 금지, 간격(i)마다 최소 MIN_RUNG개
 const MIN_RUNG = 3;
@@ -1372,7 +1406,7 @@ function makeBoard(n, st, rnd = Math.random) {
     const bad = cells.filter(c => !pos(c)), c = bad[Math.floor(rnd() * bad.length)];
     Object.assign(c, { t: 'coin', v: Math.round(baseVal(st) * (0.7 + rnd() * 0.7)) });
   }
-  cells.forEach(c => c.hid = rnd() < HIDE_P);
+  cells.forEach(c => { c.hid = rnd() < HIDE_P; if (CAT[c.t] === 'money') c.mt = moneyTier(c, st); });
   return { n, st, rows, cells };
 }
 
@@ -1431,6 +1465,7 @@ function cpuChoose(p, B, free) {
   const cellV = e => { const c = B.cells[e];
     if (hiddenFor(p, e, B)) return g ? b * 2.2 : b * 0.4;       // 물음표: 도박형은 좋아하고 안전형은 꺼려요
     if (c.t === 'mult') return g ? b * 3 : b * 1.2;
+    if (CAT[c.t] === 'money') return moneyGuess(c.mt || moneyTier(c, B.st), B.st);   // 돈 칸은 그림만 보고 추정
     return c.v; };
   const val = col => fogEval(p, B, col, cellV).ev;              // 안개 아래는 모름 → 여러 경우의 평균
   let best = free[0], bv = -Infinity;
@@ -1443,13 +1478,13 @@ function cpuChoose(p, B, free) {
    데이터는 1.08 ITEMS/COST/FROM/SYNERGY 그대로. 시너지 적용은 8단계.
    ========================================================= */
 const ITEMS = [
-  { id: 'clover',   i: '🍀', n: '네잎클로버',     pro: '꽝·폭탄 칸 출현 30% 감소', m: m => { m.blankW *= .7; m.bombW *= .7; } },
+  { id: 'clover',   i: '🍀', n: '네잎클로버',     pro: '꽝·마이너스·폭탄 칸 출현 30% 감소', m: m => { m.blankW *= .7; m.bombW *= .7; } },
   { id: 'scissors', i: '✂️', n: '황금 가위',      pro: '꽝에 도착하면 1번 기본 코인으로 바꿔요', m: m => { m.cuts += 1; } },
   { id: 'orb',      i: '🔮', n: '점술구',         pro: '매 판 숨겨진 칸 3개 공개', m: m => { m.reveal += 3; } },
-  { id: 'bank',     i: '🏦', n: '은행',           pro: '정산 시 누적 점수의 8% 이자', m: m => { m.interest += .08; } },
+  { id: 'bank',     i: '🏦', n: '은행',           pro: '라운드 끝에 내 보유 돈의 8%를 이자로 받아요', m: m => { m.interest += .08; } },
   { id: 'shield',   i: '🛡️', n: '수호 방패',      pro: '폭탄 2회 무효화', m: m => {} },
   { id: 'ticket',   i: '🎟️', n: 'VIP 티켓',       pro: '내 라운드 점수 +25%', con: '폭탄 피해 +30%', m: m => { m.mine *= 1.25; m.bomb *= 1.3; } },
-  { id: 'pouch',    i: '💰', n: '황금 주머니',    pro: '내 코인 획득 +40%', con: '폭탄 칸 출현 +50%', m: m => { m.coin *= 1.4; m.bombW *= 1.5; } },
+  { id: 'pouch',    i: '💰', n: '황금 주머니',    pro: '내 코인 획득 +40%', con: '폭탄·핵폭탄·마이너스 칸 출현 +50%', m: m => { m.coin *= 1.4; m.bombW *= 1.5; } },
   { id: 'dice',     i: '🎲', n: '도박꾼의 주사위', pro: '대박 칸 출현 2.5배', con: '꽝 칸 출현 +40%', m: m => { m.jackW *= 2.5; m.blankW *= 1.4; } },
   { id: 'magnet',   i: '🧲', n: '자석',           pro: '내 코인 획득 +25%', con: '황금 가위 효과 -1', m: m => { m.coin *= 1.25; m.cuts -= 1; } },
   { id: 'shades',   i: '🕶️', n: '선글라스',       pro: '내 코인 획득 +30%', con: '모든 칸이 숨겨짐', m: m => { m.coin *= 1.3; m.hideAll = true; } },
@@ -1461,12 +1496,18 @@ const ITEMS = [
   { id: 'skipF',    i: '⏫', n: '첫 줄 건너뛰기', pro: '첫 가로줄을 무시할 수 있어요 (유리한 쪽 자동 선택)', m: m => { m.skipF = true; } },
   { id: 'skipL',    i: '⏬', n: '끝 줄 건너뛰기', pro: '마지막 가로줄을 무시할 수 있어요 (유리한 쪽 자동 선택)', m: m => { m.skipL = true; } },
   { id: 'sun',      i: '☀️', n: '태양석',         pro: '[사용] 이번 판 안개가 완전히 걷혀요 · 라운드당 1번', use: 'fogAll', uses: 1, m: m => {} },
-  { id: 'plank',    i: '🪜', n: '사다리 조각',    pro: '마이너스·폭탄 피해 3번 무효', con: '폭탄 칸 출현 +20%', m: m => { m.adds += 3; m.bombW *= 1.2; } },
+  { id: 'plank',    i: '🪜', n: '사다리 조각',    pro: '마이너스·폭탄 피해 3번 무효', con: '폭탄·핵폭탄·마이너스 칸 출현 +20%', m: m => { m.adds += 3; m.bombW *= 1.2; } },
   { id: 'lantern',  i: '🏮', n: '랜턴',           pro: '[사용] 안개 속 가로줄 3줄이 더 보여요 · 라운드당 3번', use: 'fogSome', uses: 3, m: m => {} }
 ];
-const COST = { sun: 180, lens: 35, lantern: 45, skipF: 30, skipL: 50, scissors: 40, plank: 35, moon: 180, magnet: 100, clover: 60, clock: 60, orb: 35, scale: 70, shield: 90, ticket: 90, shades: 100, dice: 110, pouch: 120, bank: 150, crown: 190 };
+// 가격 비율(이번 라운드 수익의 %, 실제 가격은 ×PRICE_K) — 실제 구매 효율(다음 라운드에서 늘어난 수익 ÷ 가격)을 등급별 목표에 맞춤
+const COST = { scissors: 15, clover: 60, shield: 40, plank: 25, skipF: 10, skipL: 20, lens: 40, lantern: 25, orb: 20, bank: 25,
+  magnet: 135, pouch: 150, clock: 35, ticket: 45, moon: 60, scale: 65, crown: 75, sun: 80, shades: 110, dice: 165 };
+// 등급: 목표 효율 일반 ×1.2 · 고급 ×1.5 · 희귀 ×1.8 / 상점 등장 비중 3 : 2 : 1
+const TIER = { scissors: '일반', clover: '일반', shield: '일반', plank: '일반', skipF: '일반', skipL: '일반', lens: '일반', lantern: '일반', orb: '일반', bank: '일반',
+  magnet: '고급', pouch: '고급', clock: '고급', ticket: '고급', moon: '고급', scale: '고급', crown: '희귀', sun: '희귀', shades: '희귀', dice: '희귀' };
+const TIER_W = { '일반': 3, '고급': 2, '희귀': 1 };
 const FROM = { crown: 3 };
-ITEMS.forEach(x => { x.cost = COST[x.id] || 60; if (FROM[x.id]) x.from = FROM[x.id]; });
+ITEMS.forEach(x => { x.cost = COST[x.id] || 60; x.tier = TIER[x.id] || '일반'; if (FROM[x.id]) x.from = FROM[x.id]; });
 const SYNERGY = [   // 8단계에서 적용
   { id: 'toolset', a: 'scissors', b: 'plank', n: '만능 공구', d: '꽝 탈출·무효 +1번씩 + 내 코인 +20%', m: m => { m.cuts += 1; m.adds += 1; m.coin *= 1.2; } },
   { id: 'ironwall', a: 'clover', b: 'shield', n: '철벽 수호', d: '폭탄·핵폭탄 완전 면역 + 내 코인 +15%', m: m => { m.immune = true; m.coin *= 1.15; } },
@@ -1570,7 +1611,7 @@ function skipTrace(p, rows, col) {
   tr.skipped = skip; return tr;
 }
 // 본인 시야로 본 칸의 기대값 (숨김 = 기본 칸 값 × 1.1, 배수 = 기본 × 2)
-function cellGuess(p, B, e) { const c = B.cells[e], b = baseVal(B.st); return hiddenFor(p, e, B) ? b * 1.1 : c.t === 'mult' ? b * 2 : c.v; }
+function cellGuess(p, B, e) { const c = B.cells[e], b = baseVal(B.st); return hiddenFor(p, e, B) ? b * 1.1 : c.t === 'mult' ? b * 2 : CAT[c.t] === 'money' ? moneyGuess(c.mt || moneyTier(c, B.st), B.st) : c.v; }
 /* 안개 속 추정: 보이는 가로줄은 그대로, 안개 속 가로줄은 무작위로 '상상'해서 FOG_SAMPLES번 시뮬레이션.
    사람·CPU 모두 자기에게 보이는 정보로만 판단해요(안개 아래 실제 경로는 몰라요). */
 const FOG_SAMPLES = 16;
@@ -1655,7 +1696,15 @@ function priceOf(p, it, st) {
 function shopPool(p, nextNo, humans) {
   return ITEMS.filter(it => qtyOf(p.items, it.id) < MAXQ && (!it.from || nextNo >= it.from) && !(humans >= 2 && MULTI_EXCLUDE.includes(it.id)));
 }
-function makeShelf(p, nextNo, humans) { return shuffle(shopPool(p, nextNo, humans)).slice(0, SHELF_N).map(it => it.id); }
+function makeShelf(p, nextNo, humans) {           // 등급 비중(3:2:1)으로 중복 없이 SHELF_N개
+  const pool = shopPool(p, nextNo, humans).slice(), out = [];
+  while (out.length < SHELF_N && pool.length) {
+    let r = Math.random() * pool.reduce((a, it) => a + TIER_W[it.tier], 0), k = 0;
+    for (; k < pool.length - 1; k++) { r -= TIER_W[pool[k].tier]; if (r < 0) break; }
+    out.push(pool.splice(k, 1)[0].id);
+  }
+  return out;
+}
 function buyItem(p, id, price) {
   const it = itemOf(id); if (!it || qtyOf(p.items, id) >= MAXQ || !Bank.spend(p, price)) return false;
   p.items.push(id); p.stats.bought[id] = (p.stats.bought[id] || 0) + 1; return true;
@@ -1667,7 +1716,30 @@ const CPU_PREF = {
   random: ['clover', 'shield', 'bank', 'orb', 'crown', 'dice', 'pouch', 'ticket', 'scale', 'magnet', 'skipF', 'skipL']
 };
 const CPU_RATE = { safe: .35, gamble: .7, random: .5 };
+const OPT = { cpuRival: false, smartShop: false };   // B안: CPU끼리 라이벌 · C안: CPU 상점 개선 (결정 전 실험용)
+// C안: 아이템별 실측 효율·손해 확률(tests/eff.js) → 위험 대비 이득 점수
+const ITEM_EFF = { crown: [1.84, .33], shades: [1.79, .48], dice: [1.77, .85], sun: [1.75, .73], clock: [1.60, .36], scale: [1.56, .79], moon: [1.54, .75],
+  magnet: [1.52, .40], ticket: [1.50, .43], pouch: [1.49, .37], scissors: [1.39, .61], shield: [1.26, .65], clover: [1.24, .89], skipL: [1.19, .58],
+  skipF: [1.18, .63], lens: [1.13, .63], plank: [1.11, .52], lantern: [1.08, .61], orb: [1.07, .58], bank: [.91, .92] };
+const SMART_RISK = { safe: 1.2, gamble: 0.35, random: 0.7 };   // 손해 확률을 얼마나 싫어하는지
+function smartShop(p, st, nextNo, humans, rnd) {
+  const type = SMART_RISK[p.cpuType] != null ? p.cpuType : 'random', shelf = makeShelf(p, nextNo, humans), bought = [];
+  const alive = G.players.filter(q => q.alive), rank = rankPlayers(alive).indexOf(p), danger = rank >= alive.length - 2;   // 꼴찌 근처
+  const risk = SMART_RISK[type] * (danger ? 1.8 : 1), rate = (danger ? 0.25 : { safe: .45, gamble: .8, random: .6 }[type]);
+  let budget = Math.min(p.bank * (danger ? 0.15 : 0.35), Math.max(0, p.lastEarn || 0) * rate), guard = 0;
+  const score = id => { const e = ITEM_EFF[id] || [1, .5]; return e[0] - 1 - risk * Math.max(0, e[1] - 0.4); };
+  while (budget > 0 && guard++ < 20) {
+    const ok = shelf.filter(id => itemOf(id).use == null && qtyOf(p.items, id) < MAXQ && priceOf(p, itemOf(id), st) <= budget && score(id) > 0)
+      .sort((a, b) => score(b) - score(a));
+    if (!ok.length) break;
+    const id = ok[0], price = priceOf(p, itemOf(id), st);
+    if (!buyItem(p, id, price)) break;
+    budget -= price; bought.push({ id, price });
+  }
+  return bought;
+}
 function cpuShop(p, st, nextNo, humans, rnd = Math.random) {
+  if (OPT.smartShop) return smartShop(p, st, nextNo, humans, rnd);
   const type = CPU_PREF[p.cpuType] ? p.cpuType : 'random', shelf = makeShelf(p, nextNo, humans), bought = [];
   let budget = Math.min(p.bank, Math.max(0, p.lastEarn || 0) * CPU_RATE[type]), guard = 0;
   while (budget > 0 && guard++ < 20) {
@@ -1685,19 +1757,19 @@ const RIVAL_K = 1.5, RIVAL_MAX = 5;     // 보너스 = 그 라운드 기본 칸 
 const rivalBonus = (st, streak) => Math.round(baseVal(st) * RIVAL_K * Math.min(RIVAL_MAX, Math.max(1, streak)));
 function assignRivals(ps) {
   const out = [];
-  ps.filter(p => p.human).forEach(p => {
-    if (p.rival && p.rival.alive && ps.includes(p.rival)) { out.push({ p, isNew: false }); return; }
+  ps.filter(p => p.human || OPT.cpuRival).forEach(p => {
+    if (p.rival && p.rival.alive && ps.includes(p.rival)) { if (p.human) out.push({ p, isNew: false }); return; }
     const pool = ps.filter(q => q !== p), cpu = pool.filter(q => !q.human), c = cpu.length ? cpu : pool;
     const lost = !!p.rival; p.rivalStreak = 0;
     if (!c.length) { p.rival = null; return; }
-    p.rival = c[Math.random() * c.length | 0]; out.push({ p, isNew: true, lost });
+    p.rival = (p.human ? c : pool)[Math.random() * (p.human ? c : pool).length | 0]; if (p.human) out.push({ p, isNew: true, lost });
   });
   return out;
 }
 function settleRivals(rows, st) {
   const earn = new Map(rows.map(r => [r.p, r.p.roundEarn]));
   rows.forEach(r => {
-    const p = r.p; if (!p.human || !p.rival || !earn.has(p.rival)) return;
+    const p = r.p; if ((!p.human && !OPT.cpuRival) || !p.rival || !earn.has(p.rival)) return;
     const me = earn.get(p), op = earn.get(p.rival), win = me > op, tie = me === op;
     if (win) { p.rivalStreak++; p.stats.maxStreak = Math.max(p.stats.maxStreak, p.rivalStreak); } else if (!tie) p.rivalStreak = 0;
     const bonus = win ? rivalBonus(st, p.rivalStreak) : 0;
@@ -2023,8 +2095,15 @@ Scene.def('game', {
     } else {
       ctx.fillStyle = hit ? D.c : D.bg; ctx.fillRect(-w / 2, -h / 2, w, h);
       const tx = hit ? '#000' : D.c, txt = cellText(c), vs = Math.max(28, Math.min(56, Math.floor(w / Math.max(2.2, [...txt].length * 0.62) / 4) * 4));
-      PF.draw(D.n, 0, -h / 2 + 34, Math.max(24, Math.min(36, w / 3.4)), { color: tx, outline: hit ? null : '#000' });
-      PF.draw(txt, 0, 22, vs, { color: tx, outline: hit ? null : '#000' });
+      if (CAT[c.t] === 'money') {
+        const mt = c.mt || moneyTier(c, this.B.st), big = mt >= 3, sz = Math.min(w - 10, hit ? 108 : 144);
+        if (big && !hit) { ctx.fillStyle = 'rgba(255,230,128,' + (0.18 + 0.12 * Math.sin(G.time * 6 + i)).toFixed(2) + ')'; ctx.fillRect(-w / 2, -h / 2, w, h); }
+        drawMoney(mt, 0, hit ? -18 : 4, sz, hit ? 0 : Math.round(Math.sin(G.time * 4 + i * 1.3) * 4));
+        if (hit) PF.draw(txt, 0, h / 2 - 30, Math.min(vs, 44), { color: '#000', outline: null });
+      } else {
+        PF.draw(D.n, 0, -h / 2 + 34, Math.max(24, Math.min(36, w / 3.4)), { color: tx, outline: hit ? null : '#000' });
+        PF.draw(txt, 0, 22, vs, { color: tx, outline: hit ? null : '#000' });
+      }
     }
     ctx.restore();
   },
@@ -2922,7 +3001,7 @@ function frame(now) {
   Dev.draw(fps);
   requestAnimationFrame(frame);
 }
-window.LF = { fogEval, fogSamples, FOG_SAMPLES, fogVisible, fogLevelVisible, FOG_TOP, cellGuess, skipTrace, HiScore, gameRecords, restartSame, WIN, BGM, SONGS, SCENE_BGM, DUTY_SNAP, DOG_LINES, isBad, dogArt, REV_ARR, REV_END, assignRivals, settleRivals, rivalBonus, canUse, SYN_POWER, activeSyn, waitSyn, doneSyn, synOf, ICONS, iconArt, useItem, ITEMS, SYNERGY, mods, beginRoundItems, clearItems, prepView, hiddenFor, traceFor, resolveCell, reweight, itemBonus, priceOf, shopPool, makeShelf, buyItem, cpuShop, qtyOf, itemOf, rankPlayers, applyMults, multOf, cpuChoose, CPU_INFO, fmtN, makeBoard, traceCol, genRungs, CAT, cellWeights, applyCell, HOWTO, AVATARS, EXPR, avatarArt, AvCache, buildPlayers, validateName, NameIn, Demo, totalPlayers, G, Scene, Sfx, AU, Bank, PF, Input, Dev, makePlayer, newRound, dispatch, frame };
+window.LF = { OPT, smartShop, moneyTier, moneyGuess, moneyArt, MONEY_ART, TIER, TIER_W, fogEval, fogSamples, FOG_SAMPLES, fogVisible, fogLevelVisible, FOG_TOP, cellGuess, skipTrace, HiScore, gameRecords, restartSame, WIN, BGM, SONGS, SCENE_BGM, DUTY_SNAP, DOG_LINES, isBad, dogArt, REV_ARR, REV_END, assignRivals, settleRivals, rivalBonus, canUse, SYN_POWER, activeSyn, waitSyn, doneSyn, synOf, ICONS, iconArt, useItem, ITEMS, SYNERGY, mods, beginRoundItems, clearItems, prepView, hiddenFor, traceFor, resolveCell, reweight, itemBonus, priceOf, shopPool, makeShelf, buyItem, cpuShop, qtyOf, itemOf, rankPlayers, applyMults, multOf, cpuChoose, CPU_INFO, fmtN, makeBoard, traceCol, genRungs, CAT, cellWeights, applyCell, HOWTO, AVATARS, EXPR, avatarArt, AvCache, buildPlayers, validateName, NameIn, Demo, totalPlayers, G, Scene, Sfx, AU, Bank, PF, Input, Dev, makePlayer, newRound, dispatch, frame };
 Scene.go('title');
 requestAnimationFrame(frame);
 </script>
