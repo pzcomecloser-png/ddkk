@@ -4447,7 +4447,9 @@ function devGimPlay(key){
 /* ══════════════════════════════════════════════════════════════
    3. 파라미터 시스템
    ══════════════════════════════════════════════════════════════ */
-const PVCOLS=132;
+/* 본게임 관측창과 똑같이 보이도록 COLS(168)를 그대로 쓴다 */
+const PVCOLS=COLS;
+let pvRows=0;
 let pvCell=[4,4], pvCond='', pvT=0;
 
 function devParams(){
@@ -4455,9 +4457,7 @@ function devParams(){
     .map(g=>`<option value="${g.key}">${String(g.n).padStart(2,'0')} ${g.name}</option>`)
     .join('');
   const html=
-    `<div style="position:relative;height:210px;background:#000;
-                 border:1px solid #3a3a3a;overflow:hidden;
-                 display:flex;align-items:center;justify-content:center">
+    `<div id="pvStage">
        <pre id="pvArt"></pre>
      </div>
      <div class="devInfo" id="pvInfo"></div>
@@ -4476,14 +4476,43 @@ function devParams(){
        </select>
      </div>
      <style>
+       /* ══ 본게임 관측창과 동일한 조건 ══
+          #viewport 의 비율·스캔라인·비네팅,
+          pre#screen 의 색·글로우를 그대로 가져온다 */
+       #pvStage{position:relative;width:100%;
+         background:#000;border:1px solid #3a3a3a;overflow:hidden;
+         display:flex;align-items:center;justify-content:center}
+       #pvStage::after{content:"";position:absolute;inset:0;
+         pointer-events:none;z-index:40;
+         background:linear-gradient(rgba(0,0,0,0) 50%,rgba(0,0,0,.24) 50%),
+           radial-gradient(ellipse at 50% 46%,rgba(0,0,0,0) 46%,
+             rgba(0,0,0,.40) 80%,rgba(0,0,0,.75) 100%);
+         background-size:100% 2px,100% 100%}
+       pre#pvArt{font-family:inherit;white-space:pre;color:#cfcfcf;margin:0;
+         text-align:center;letter-spacing:0;line-height:1;
+         text-shadow:0 0 2px rgba(200,200,200,.30),
+                     0 0 7px rgba(195,205,195,.10)}
        .pvBtn{flex:1;padding:11px 4px;background:#0d0d0d;color:#c8c2b6;
          border:1px solid #4a4a4a;font-family:inherit;font-size:13px;cursor:pointer}
        .pvBtn:active{background:#c8c2b6;color:#000}
      </style>`;
   devPane('3. 파라미터 시스템',html);
+
+  /* ── 무대 비율을 본게임 관측창과 똑같이 맞춘다 ──
+     게임이 돌고 있으면 실제 값을, 아니면 기본 비율을 쓴다 */
+  {
+    const vp=$('viewport');
+    const st=$('pvStage');
+    let ar=168/82;                      /* 기본값 */
+    if(vp && vp.clientWidth>20 && vp.clientHeight>20)
+      ar=vp.clientWidth/vp.clientHeight;
+    if(st) st.style.aspectRatio=String(ar);
+  }
+
   pvCell=[GS.x||4,GS.y||4]; pvCond=''; pvT=0;
   setTimeout(pvDraw,40);
-  devIvs.push(setInterval(()=>{ pvT+=1; pvDraw(); },110));
+  /* 본게임 루프와 같은 95ms */
+  devIvs.push(setInterval(()=>{ pvT+=1; pvDraw(); },95));
 }
 
 function pvDraw(){
@@ -4492,17 +4521,14 @@ function pvDraw(){
   P=cellParams(pvCell[0],pvCell[1],GS.seed||1700000000);
   if(pvCond&&COND[pvCond]) Object.assign(P,COND[pvCond].p);
   t=pvT;
-  const box=el.parentElement;
-  const W=box.clientWidth-4, H=box.clientHeight-2;
-  const font=W/(PVCOLS*CELL_W);
-  const rows=Math.max(3,Math.round(H/font));
-  el.style.fontSize=font.toFixed(3)+'px';
-  renderTo(el,PVCOLS,rows,luminance,RAMP,P.grain,2.0);
+  /* 본게임 render() 와 완전히 같은 경로로 그린다 */
+  pvRows=drawFill(el,PVCOLS,luminance,RAMP,P.grain);
 
   const f=v=>typeof v==='number'?v.toFixed(2):v;
   const info=$('pvInfo');
   if(info) info.innerHTML=
     `칸 <b>(${pvCell[0]},${pvCell[1]})</b>　`+
+    `격자 <b>${PVCOLS}</b>열 × <b>${pvRows}</b>줄 (본게임과 동일)<br>`+
     `머리 <b>${P.headYaw}</b> ${f(P.headTilt)}°　크기 <b>${f(P.scale)}</b><br>`+
     `카메라 pitch <b>${f(P.camPitch)}</b> fov <b>${f(P.camFov)}</b> `+
     `roll <b>${f(P.camRoll)}</b>°<br>`+
