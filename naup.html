@@ -238,6 +238,16 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 19. 운빨사다리 (NEW) -->
+    <a class="game-card" href="games/19/ladder.html">
+      <div class="icon-frame"><canvas id="iconLadder" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">운빨사다리</div>
+        <div class="card-desc">당신의 운에 걸어보세요.</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -680,6 +690,56 @@ function drawBreakoutIcon(id) {
   [4, 9, 14, 19].forEach(x => ctx.fillRect(x, 21, 2, 1));
 }
 
+// 19. 운빨사다리 (강아지)
+function drawLadderIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+  const R = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
+
+  // 밤하늘 배경 + 별
+  R(0, 0, 24, 24, '#0b0b1e');
+  R(2, 20, 1, 1, '#2a6f8a'); R(21, 3, 1, 1, '#2a6f8a'); R(1, 2, 1, 1, '#3a3a66');
+
+  // 귀
+  R(2, 3, 6, 7, '#8a5a2b'); R(3, 2, 4, 1, '#8a5a2b');
+  R(16, 3, 6, 7, '#8a5a2b'); R(17, 2, 4, 1, '#8a5a2b');
+  R(3, 4, 3, 4, '#a8733a'); R(18, 4, 3, 4, '#a8733a');
+
+  // 얼굴 (둥근 모양)
+  R(7, 5, 10, 1, '#e0a35a');
+  R(5, 6, 14, 1, '#e0a35a');
+  R(4, 7, 16, 12, '#e0a35a');
+  R(5, 19, 14, 1, '#e0a35a');
+  R(7, 20, 10, 1, '#e0a35a');
+  R(7, 6, 10, 1, '#f0b86e'); // 이마 밝은 부분
+
+  // 주둥이
+  R(7, 13, 10, 6, '#fff3e0');
+  R(8, 12, 8, 1, '#fff3e0');
+  R(8, 19, 8, 1, '#fff3e0');
+
+  // 웃는 눈 (감은 눈 아치)
+  const eye = '#4a2a14';
+  R(6, 10, 1, 1, eye); R(7, 9, 2, 1, eye); R(9, 10, 1, 1, eye);
+  R(14, 10, 1, 1, eye); R(15, 9, 2, 1, eye); R(17, 10, 1, 1, eye);
+
+  // 볼터치
+  R(4, 12, 2, 2, '#f08aa0'); R(18, 12, 2, 2, '#f08aa0');
+
+  // 코
+  R(10, 12, 4, 1, '#1a1a1a'); R(11, 13, 2, 1, '#1a1a1a');
+
+  // 입 + 혀
+  R(8, 15, 8, 1, '#4a2a14');
+  R(9, 16, 6, 2, '#5a1a1a');
+  R(10, 18, 4, 1, '#5a1a1a');
+  R(10, 17, 4, 3, '#ff6b8a');
+  R(12, 17, 1, 2, '#e04a6a');
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -690,6 +750,7 @@ drawFireIcon('iconFire');
 draw3SecIcon('icon3Sec');
 drawVirusIcon('iconVirus');
 drawBreakoutIcon('iconBreakout');
+drawLadderIcon('iconLadder');
 </script>
 </body>
 </html>
