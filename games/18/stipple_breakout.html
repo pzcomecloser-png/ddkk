@@ -1266,7 +1266,7 @@
     const EL_TOP_Y = 96 + 40;                                                   // 새 줄이 생기는 높이 (위 HUD 96px 아래)
     const EL_LINE_Y = LOGIC_HEIGHT - 200 - 230;                                 // 게임 오버 선 (패들 230px 위)
     const EL_WARN_ROWS = 2;                                                      // 선에서 2칸 안이면 빨간 경고
-    const EL_SPEED_STEP = 0.01, EL_SPEED_MAX = 4;                                // 공: 블럭마다 처음 속도의 +1%, 최대 400%
+    const EL_SPEED_STEP = 0.003, EL_SPEED_MAX = 4;                               // 공: 블럭마다 처음 속도의 +0.3% (V4.62.4: 1% → 0.3%, 너무 어려움), 최대 400% (블럭 1000개)
     const EL_NO_CARDS = ['life', 'interest', 'save', 'aim'];                     // 무한 모드에서 안 나오는 카드
     const EL_ABYSS2_LV = 10, EL_ABYSS2_CHANCE = 0.2;                             // 심연의 구체 2: 레벨 10부터 레벨업 카드 고르기의 20% 에 한 장 섞임 (한 번 가지면 끝)
     // 블럭 위 포탑 (V4.61.0): 패턴 블럭 위에 앉아 같이 내려옴 · 블럭이 깨지면 같이 사라짐 · 레벨 5부터, 레벨이 오를수록 많이 · 빨리 쏨
@@ -4237,7 +4237,7 @@
                 else drawTitleEndless();
                 ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = font('28px');
-                ctx.fillText('V4.62.3', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.62.4', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER' && endless && endless.result) {
                 drawElResult();                                                      // 무한 모드: 이번 기록 · 최고 기록 (6초 뒤 타이틀로 가지 않음 · 누르면 버튼대로)
             } else if (gameState === 'GAME_OVER') {
