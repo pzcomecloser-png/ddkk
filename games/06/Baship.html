@@ -107,7 +107,7 @@
     gap: 18px;
   }
   /* 머리글 버튼: 아이콘만 표시 (글자는 읽기 프로그램용으로 남겨 둠) */
-  .btn-sound, .btn-help, .btn-crt {
+  .btn-sound, .btn-help, .btn-crt, .btn-home {
     width: 88px;
     height: 88px;
     border-radius: 50%;
@@ -119,13 +119,15 @@
     cursor: pointer;
     transition: all 0.2s;
   }
-  .btn-sound::before, .btn-help::before, .btn-crt::before {
+  .btn-sound::before, .btn-help::before, .btn-crt::before, .btn-home::before {
     content: attr(data-icon);
     font-size: 42px;
   }
   .btn-help { background: rgba(252, 191, 73, 0.15); border-color: var(--guide-gold); color: var(--guide-gold); }
   .btn-sound { background: rgba(72, 202, 228, 0.15); border-color: var(--accent-cyan); color: var(--accent-glow); }
   .btn-crt { background: rgba(82, 183, 136, 0.15); border-color: #52b788; color: #95d5b2; }
+  .btn-home { background: rgba(252, 191, 73, 0.15); border-color: var(--guide-gold); color: var(--guide-gold); }
+  .btn-home:hover { background: rgba(252, 191, 73, 0.35); box-shadow: 0 0 24px rgba(252, 191, 73, 0.5); }
   .btn-help:hover { background: rgba(252, 191, 73, 0.35); box-shadow: 0 0 24px rgba(252, 191, 73, 0.5); }
   .btn-sound:hover { background: rgba(72, 202, 228, 0.35); box-shadow: 0 0 24px rgba(72, 202, 228, 0.5); }
   .btn-crt:hover { background: rgba(82, 183, 136, 0.35); box-shadow: 0 0 24px rgba(82, 183, 136, 0.5); }
@@ -633,7 +635,7 @@
   /* 함선 카드 줄은 한 칸짜리 줄 (1170 변환 때 버튼용 4칸 격자에 같이 들어가 왼쪽 절반에 몰려 있던 문제 수정) */
   #placementControls > .btn-group:first-child { grid-template-columns: 1fr; }
   /* 배치 버튼 줄: 난이도 버튼이 더해져 5칸 (22-A단계) */
-  #placementControls > .btn-group:last-child { grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  #placementControls > .btn-group:last-child { grid-template-columns: repeat(4, 1fr); gap: 12px; } /* 작전 개시 버튼 제거 → 4칸 */
   #difficultyBtn.lv-easy { border-color: #52b788; }
   #difficultyBtn.lv-normal { border-color: #ffd166; }
   #difficultyBtn.lv-hard { border-color: #ff4d6d; }
@@ -668,39 +670,63 @@
   .ship-card-name { font-size: 24px; font-weight: bold; white-space: nowrap; }
   .ship-card-size { font-size: 20px; color: #d3dbe8; } /* 9단계: 선택된 카드(#1b4965) 위에서도 대비 4.5 이상 */
 
+  /* 무기 버튼 2×2: 왼쪽 그림 · 가운데 이름+설명 · 오른쪽 남은 횟수 */
+  #battleControls { padding: 16px 20px; }
+  #battleControls .weapon-grid { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 14px; height: 100%; }
   .weapon-btn {
-    height: 112px;
+    --wi-off: rgba(144, 224, 239, 0.14);
+    --wi-off-line: rgba(144, 224, 239, 0.35);
+    --wi-hot: #ff9f1c;
+    --wi-line: #90e0ef;
+    height: 100%;
+    min-height: 0;
     background: #1c2541;
     border: 2px solid var(--border-color);
     color: var(--text-main);
     border-radius: 18px;
-    font-size: 24px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
+    gap: 16px;
+    padding: 0 18px;
+    text-align: left;
     word-break: keep-all;
   }
+  .weapon-btn .wi { width: 84px; height: 84px; flex: none; overflow: visible; }
+  .wi .wi-off { fill: var(--wi-off); stroke: var(--wi-off-line); stroke-width: 2; }
+  .wi .wi-on { fill: var(--wi-hot); stroke: #ffd29a; stroke-width: 2; }
+  .wi .wi-line { fill: none; stroke: var(--wi-line); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  .wi .wi-arc { stroke-width: 4; stroke-dasharray: 2 9; }
+  .wi .wi-dot { fill: #ff4d6d; stroke: #fff; stroke-width: 2; }
+  .wi-skip { transition: transform 0.2s; }
+  .weapon-btn.vertical .wi-skip { transform: rotate(90deg); }
+  .wb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .wb-name { font-size: 30px; font-weight: 800; line-height: 1.1; white-space: nowrap; }
+  .wb-desc { font-size: 20px; color: #b8c4d9; line-height: 1.2; }
+  .weapon-btn .badge-ammo { flex: none; }
   .weapon-btn.selected {
-    background: #f77f00;
+    --wi-off: rgba(255, 255, 255, 0.16);
+    --wi-off-line: rgba(255, 255, 255, 0.45);
+    --wi-hot: #ffffff;
+    --wi-line: #ffffff;
+    background: #c2410c; /* 흰 글자 대비 4.5 이상 */
     color: #fff;
     border-color: #fcbf49;
-    font-weight: bold;
     box-shadow: 0 0 24px rgba(247, 127, 0, 0.6);
   }
+  .weapon-btn.selected .wb-desc { color: #ffe8d1; }
+  .weapon-btn.selected .wi .wi-on { stroke: #fcbf49; }
   .weapon-btn:disabled { opacity: 0.35; cursor: not-allowed; border-color: #3a506b; }
   .badge-ammo {
     background: rgba(0, 0, 0, 0.35);
     padding: 3px 12px;
     border-radius: 8px;
-    font-size: 20px;
+    font-size: 22px;
     font-weight: bold;
   }
-  #skipDirGroup { grid-template-columns: 1fr; }
-  #skipDirGroup[style*="flex"] { display: grid !important; }
+  #skipDirGroup, #skipDirGroup[style*="flex"] { display: none !important; } /* 방향은 물수제비 버튼을 다시 눌러 바꿈 */
 
   .btn {
     height: 84px;
@@ -732,19 +758,17 @@
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
   /* ---------- 전투 기록 (남은 높이를 모두 사용) ---------- */
-  .log-container {
+  /* 하단 애니메이션 칸: 남은 공간을 모두 씀. 안의 캔버스는 칸 크기에 맞춰 늘어남 */
+  .anim-panel {
     flex: 1;
     min-height: 0;
+    position: relative;
+    overflow: hidden;
     background: rgba(11, 19, 43, 0.9);
     border: 2px solid rgba(58, 80, 107, 0.6);
     border-radius: 22px;
-    padding: 18px 24px;
-    overflow-y: auto;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 23px;
-    display: flex;
-    flex-direction: column-reverse;
   }
+  .anim-panel canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .log-entry { margin-bottom: 6px; line-height: 1.35; }
   .log-player { color: #90e0ef; }
   .log-cpu { color: #ff99a8; }
@@ -1208,12 +1232,12 @@
   }
 
   /* 턴 배너 (13단계): 화면 가운데를 가로지르는 띠. 0.55초 동안 들어와 멈췄다 나감
-     - 띠 위치는 전투 보드(y600~1472) 가운데 높이(1036), 이펙트(50) 위·팝업(100) 아래 (진행 단계 표시줄 제거로 102px 올라감)
+     - 띠 위치는 전투 보드 격자(y508~1380) 가운데 높이(944), 이펙트(50) 위·팝업(100) 아래
      - 움직임은 transform·opacity만 */
   #turnBanner {
     position: absolute;
     left: 0;
-    top: 956px; /* 1036 - 160/2 */
+    top: 864px; /* 보드 가운데 944 - 160/2 (해역 탭 제거로 92px 올라감) */
     width: 1170px;
     height: 160px;
     display: none;
@@ -1406,9 +1430,8 @@
   <div class="header-top">
     <h1 id="gameTitle" data-no-skip>⚓ 해양 전투 대작전</h1>
     <div class="header-actions" data-no-skip>
-      <button class="btn-crt" id="crtToggleBtn" aria-pressed="true" data-icon="📺" title="CRT 화면 효과 (단축키: C)" onclick="CRT.toggle()">📺 CRT ON</button>
-      <button class="btn-sound" id="soundToggleBtn" aria-pressed="false" data-icon="🔊" title="사운드 (단축키: M)" onclick="Sound.toggleMute()">🔊 사운드 ON</button>
-      <button class="btn-help" data-icon="📖" title="튜토리얼 / 도움말" onclick="openTutorialModal()">📖 튜토리얼 / 도움말</button>
+      <button class="btn-sound" id="soundToggleBtn" aria-pressed="false" data-icon="🔊" title="사운드 켜기/끄기" onclick="Sound.toggleMute()">🔊 사운드 ON</button>
+      <button class="btn-home" id="toTitleBtn" data-icon="🏠" title="타이틀 화면으로" onclick="Title.backToTitle()">🏠 타이틀로</button>
     </div>
   </div>
   <p class="synopsis">"적의 함대를 격침하여 우리 항구를 완벽히 수호하라!"</p>
@@ -1438,15 +1461,10 @@
       <span class="guide-tag">작전 지침</span>
       <span id="guideText">배치할 함선을 고르고, <kbd>🔄 방향</kbd> 버튼으로 가로/세로를 조절해 <b>🛡️ 아군 해역</b>에 배치하세요.</span>
     </div>
-    <span class="guide-rules-link" onclick="openTutorialModal()">전체 규칙 ℹ️</span>
   </div>
 
   <!-- 보드: 한 번에 하나만 크게 표시 (배치·적 턴 = 아군 / 내 턴 = 적군). 탭으로 다른 보드 보기 -->
   <div class="board-panel" id="boardPanel">
-    <div class="board-tabs" role="tablist" data-no-skip>
-      <button class="board-tab tab-player active" id="tabPlayer" role="tab" aria-selected="true" onclick="BoardView.onTab(true)">🛡️ 아군 해역</button>
-      <button class="board-tab tab-cpu" id="tabCpu" role="tab" aria-selected="false" disabled onclick="BoardView.onTab(false)">🎯 적군 해역</button>
-    </div>
     <div class="board-section highlight-board" id="playerBoardSection">
       <div class="fleet-status" id="playerFleetStatus"></div>
       <div class="grid-container" id="playerGrid"></div>
@@ -1469,35 +1487,42 @@
       <!-- AI 난이도 (22-A단계): 누를 때마다 쉬움 → 보통 → 어려움. 배치 중에만, 고른 값은 저장 -->
       <button class="btn btn-secondary" id="difficultyBtn" aria-label="적 AI 난이도 바꾸기">🟡 적 AI: 보통</button>
       <button class="btn btn-secondary" id="resetPlacementBtn">🗑️ 초기화</button>
-      <button class="btn btn-accent" id="startGameBtn" disabled>⚔️ 작전 개시</button>
     </div>
   </div>
 
   <!-- Battle Controls -->
   <div class="control-panel" id="battleControls" style="display:none;">
-    <div class="btn-group">
+    <div class="btn-group weapon-grid">
       <span class="panel-label">무기 선택:</span>
       <button class="weapon-btn selected" id="w-normal" onclick="selectWeapon('normal')">
-        🎯 일반 사격 <span class="badge-ammo">무제한</span>
+        <svg class="wi" viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="34" class="wi-line"/><circle cx="48" cy="48" r="18" class="wi-line"/><path d="M48 4v20M48 72v20M4 48h20M72 48h20" class="wi-line"/><circle cx="48" cy="48" r="7" class="wi-dot"/></svg>
+        <span class="wb-text"><span class="wb-name">일반 사격</span><span class="wb-desc">1칸</span></span>
+        <span class="badge-ammo">∞</span>
       </button>
       <button class="weapon-btn" id="w-cross" onclick="selectWeapon('cross')">
-        ➕ 십자탄 (5칸) <span class="badge-ammo" id="ammo-cross">1회</span>
+        <svg class="wi" viewBox="0 0 96 96" aria-hidden="true"><rect x="6" y="6" width="26" height="26" rx="5" class="wi-off"/><rect x="36" y="6" width="26" height="26" rx="5" class="wi-on"/><rect x="66" y="6" width="26" height="26" rx="5" class="wi-off"/><rect x="6" y="36" width="26" height="26" rx="5" class="wi-on"/><rect x="36" y="36" width="26" height="26" rx="5" class="wi-on"/><rect x="66" y="36" width="26" height="26" rx="5" class="wi-on"/><rect x="6" y="66" width="26" height="26" rx="5" class="wi-off"/><rect x="36" y="66" width="26" height="26" rx="5" class="wi-on"/><rect x="66" y="66" width="26" height="26" rx="5" class="wi-off"/><circle cx="48" cy="48" r="6" class="wi-dot"/></svg>
+        <span class="wb-text"><span class="wb-name">십자탄</span><span class="wb-desc">+ 모양 5칸</span></span>
+        <span class="badge-ammo" id="ammo-cross">1회</span>
       </button>
       <button class="weapon-btn" id="w-x" onclick="selectWeapon('x')">
-        ✖️ X자탄 (5칸) <span class="badge-ammo" id="ammo-x">1회</span>
+        <svg class="wi" viewBox="0 0 96 96" aria-hidden="true"><rect x="6" y="6" width="26" height="26" rx="5" class="wi-on"/><rect x="36" y="6" width="26" height="26" rx="5" class="wi-off"/><rect x="66" y="6" width="26" height="26" rx="5" class="wi-on"/><rect x="6" y="36" width="26" height="26" rx="5" class="wi-off"/><rect x="36" y="36" width="26" height="26" rx="5" class="wi-on"/><rect x="66" y="36" width="26" height="26" rx="5" class="wi-off"/><rect x="6" y="66" width="26" height="26" rx="5" class="wi-on"/><rect x="36" y="66" width="26" height="26" rx="5" class="wi-off"/><rect x="66" y="66" width="26" height="26" rx="5" class="wi-on"/><circle cx="48" cy="48" r="6" class="wi-dot"/></svg>
+        <span class="wb-text"><span class="wb-name">X자탄</span><span class="wb-desc">X 모양 5칸</span></span>
+        <span class="badge-ammo" id="ammo-x">1회</span>
       </button>
       <button class="weapon-btn" id="w-skip" onclick="selectWeapon('skip')">
-        🌊 물수제비탄 (4칸) <span class="badge-ammo" id="ammo-skip">1회</span>
+        <svg class="wi wi-skip" viewBox="0 0 96 96" aria-hidden="true"><path d="M2 40 Q13 14 22 44 Q35 22 45 44 Q58 26 68 44 Q80 30 92 44" class="wi-line wi-arc"/><rect x="4" y="56" width="19" height="19" rx="4" class="wi-on"/><rect x="27" y="56" width="19" height="19" rx="4" class="wi-on"/><rect x="50" y="56" width="19" height="19" rx="4" class="wi-on"/><rect x="73" y="56" width="19" height="19" rx="4" class="wi-on"/><path d="M84 80h10M89 75l5 5-5 5" class="wi-line"/></svg>
+        <span class="wb-text"><span class="wb-name">물수제비탄</span><span class="wb-desc"><span id="skipDirLabel">가로 4칸</span> · 다시 누르면 방향</span></span>
+        <span class="badge-ammo" id="ammo-skip">1회</span>
       </button>
     </div>
-    <div class="btn-group" id="skipDirGroup" style="display:none;">
+    <div class="btn-group" id="skipDirGroup" style="display:none;" hidden>
       <button class="btn btn-secondary" id="toggleSkipDirBtn">➡️ 발사 방향: 가로</button>
     </div>
   </div>
 
-  <!-- Combat Log -->
-  <div class="log-container" id="combatLog">
-    <div class="log-entry log-system">[작전 지휘소] 7×7 전장에 아군 함대를 전략적으로 배치하십시오.</div>
+  <!-- 하단 애니메이션 칸 (나중에 애니메이션을 넣을 자리) · 화면 아래 남은 공간을 모두 씀 -->
+  <div class="anim-panel" id="animPanel" aria-hidden="true">
+    <canvas id="animCanvas"></canvas>
   </div>
 </div>
 </div>
@@ -1769,7 +1794,7 @@ const Sound = {
   stats: { played: 0, dropped: 0, peakVoices: 0 },
 
   init() {
-    this.muted = this.loadMuted();
+    this.muted = this.loadMuted(); // 오른쪽 위 버튼으로 켜고 끔 · 다음 접속에도 유지
     // 캡처 단계: 어떤 버튼·칸을 눌러도 그 입력 안에서 먼저 잠금 해제
     ['pointerdown', 'touchend', 'mousedown', 'keydown'].forEach(type =>
       window.addEventListener(type, () => this.unlock(), true));
@@ -1916,11 +1941,7 @@ const CRT = {
   on: true,
 
   init() {
-    try {
-      this.on = window.localStorage.getItem(this.STORAGE_KEY) !== '0'; // 기본: 켬
-    } catch (e) {
-      this.on = true;
-    }
+    this.on = true; // 항상 켬 (끄는 버튼 없음 · 예전에 저장된 '끔' 설정도 무시)
     this.apply();
   },
 
@@ -2121,6 +2142,236 @@ const TitleBG = {
   }
 };
 
+
+// =========================================================
+// 하단 애니메이션 칸: 명령을 기다리는 함대 (6초 반복)
+// - 밤바다 정박지에 아군 함대 5척(항공모함·순양함 2·잠수함 2)이 멈춰 서서 대기
+// - 파도에 따라 천천히 오르내림 · 마스트 꼭대기 신호등이 차례로 깜빡(명령 대기) · 함교 창 불빛
+// - 레이더 안테나가 천천히 돌고, 탐조등 한 줄기가 수면을 좌우로 훑음 · 잔물결·달빛 반사
+// - 모든 움직임은 6초 주기로 이어지게 계산 → 끊김 없이 반복
+// - 칸이 화면에 보일 때만 그림 (타이틀·브리핑·백그라운드 중엔 멈춤) · '동작 줄이기'면 한 장면만
+// =========================================================
+const FLEET_LOOP = 6; // 초
+const FleetIdle = {
+  canvas: null,
+  ctx: null,
+  raf: 0,
+  t0: 0,
+  running: false,
+  frames: 0,
+  W: 1074,
+  H: 330,
+  dpr: 1,
+  // 함선: [종류, 중심 x(0~1), 크기, 흔들림 위상, 수면 y 보정]
+  fleet: [['sub', 0.08, 0.68, 0.0, 10], ['cruiser', 0.255, 0.82, 1.3, 4], ['carrier', 0.5, 0.95, 2.4, 0], ['cruiser', 0.745, 0.82, 3.6, 4], ['sub', 0.92, 0.68, 4.7, 10]],
+  stars: null,
+
+  init() {
+    this.canvas = document.getElementById('animCanvas');
+    this.ctx = this.canvas && this.canvas.getContext ? this.canvas.getContext('2d') : null;
+    if (!this.ctx) return;
+    // 별 위치는 처음에 한 번만 (고정 시드)
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    this.stars = Array.from({ length: 34 }, () => [rnd(), rnd() * 0.42, 0.6 + rnd() * 1.6, rnd() * TAU]);
+    this.frame = this.frame.bind(this);
+    document.addEventListener('visibilitychange', () => this.sync());
+    Stage.onFit(() => this.resize());
+    this.resize();
+    this.sync();
+  },
+
+  // 화면에 보이는 크기에 맞춰 캔버스 해상도 정함 (그리기 좌표는 칸 크기 기준)
+  resize() {
+    if (!this.ctx) return;
+    const panel = this.canvas.parentNode;
+    const w = (panel && panel.clientWidth) || this.W, h = (panel && panel.clientHeight) || this.H;
+    this.W = w; this.H = h;
+    this.dpr = Math.max(0.25, Math.min(2, (Stage.scale || 1) * (window.devicePixelRatio || 1)));
+    this.canvas.width = Math.round(w * this.dpr);
+    this.canvas.height = Math.round(h * this.dpr);
+    this.render(this.running ? ((performance.now() - this.t0) / 1000) % FLEET_LOOP : 1.5);
+  },
+
+  // 보여야 할 때만 움직임 (타이틀·브리핑 위에 덮여 있거나 앱이 백그라운드면 멈춤)
+  enabled: true, // 테스트 도구에서만 끔 (다른 테스트의 프레임 수 계산에 섞이지 않게)
+  visible() {
+    return this.enabled && !!this.ctx && !Title.active && !Briefing.active && !document.hidden;
+  },
+  sync() {
+    if (this.visible() && !prefersReducedMotion()) this.start();
+    else this.stop();
+  },
+  start() {
+    if (this.running) return;
+    this.running = true;
+    this.t0 = performance.now();
+    this.raf = requestAnimationFrame(this.frame);
+  },
+  stop() {
+    this.running = false;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+  },
+  frame() {
+    if (!this.running) return;
+    if (!this.visible()) return this.stop();
+    this.render(((performance.now() - this.t0) / 1000) % FLEET_LOOP);
+    this.frames++;
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  // t: 0 ~ 6초 (반복 주기 안의 시각)
+  render(t) {
+    const c = this.ctx;
+    if (!c) return;
+    const W = this.W, H = this.H, ph = (t / FLEET_LOOP) * TAU;
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    const sea = H * 0.6; // 수평선
+    // 밤하늘
+    const sky = c.createLinearGradient(0, 0, 0, sea);
+    sky.addColorStop(0, '#050a18'); sky.addColorStop(1, '#13284a');
+    c.fillStyle = sky; c.fillRect(0, 0, W, sea);
+    // 별 (주기에 맞춰 반짝)
+    this.stars.forEach(([x, y, r, p]) => {
+      c.globalAlpha = 0.35 + 0.35 * (0.5 + 0.5 * Math.sin(ph * 2 + p));
+      c.fillStyle = '#cfe8ff';
+      c.fillRect(x * W, y * H, r, r);
+    });
+    c.globalAlpha = 1;
+    // 달 + 달빛 길
+    const mx = W * 0.86, my = H * 0.16;
+    const moon = c.createRadialGradient(mx, my, 2, mx, my, 70);
+    moon.addColorStop(0, 'rgba(240, 248, 255, 0.95)'); moon.addColorStop(0.25, 'rgba(200, 225, 255, 0.5)'); moon.addColorStop(1, 'rgba(200, 225, 255, 0)');
+    c.fillStyle = moon; c.fillRect(mx - 70, my - 70, 140, 140);
+    // 탐조등: 한 주기에 왼쪽→오른쪽→왼쪽으로 수면을 훑음
+    const beamX = W * (0.5 + 0.38 * Math.sin(ph));
+    const beam = c.createLinearGradient(W * 0.52, sea - 70, beamX, H);
+    beam.addColorStop(0, 'rgba(180, 230, 255, 0.28)'); beam.addColorStop(1, 'rgba(180, 230, 255, 0)');
+    c.fillStyle = beam;
+    c.beginPath(); c.moveTo(W * 0.52, sea - 70); c.lineTo(beamX - 60, H); c.lineTo(beamX + 60, H); c.closePath(); c.fill();
+    // 바다
+    const water = c.createLinearGradient(0, sea, 0, H);
+    water.addColorStop(0, '#0e2440'); water.addColorStop(1, '#040912');
+    c.fillStyle = water; c.fillRect(0, sea, W, H - sea);
+    // 달빛 반사 (일렁임)
+    for (let k = 0; k < 7; k++) {
+      const y = sea + 8 + k * ((H - sea) / 7);
+      const w = 30 + k * 10 + 10 * Math.sin(ph * 2 + k);
+      c.fillStyle = `rgba(200, 225, 255, ${0.28 - k * 0.03})`;
+      c.fillRect(mx - w / 2 + 8 * Math.sin(ph + k), y, w, 2);
+    }
+    // 잔물결 (정수 바퀴 위상 → 주기마다 같은 그림)
+    for (let k = 0; k < 5; k++) {
+      const y = sea + 10 + k * ((H - sea - 10) / 5);
+      c.strokeStyle = `rgba(144, 224, 239, ${0.16 - k * 0.02})`;
+      c.lineWidth = 1.5;
+      c.beginPath();
+      for (let x = 0; x <= W; x += 18) {
+        const yy = y + Math.sin(x / 60 + ph * (k % 2 ? 2 : 1) + k) * 2.5;
+        x === 0 ? c.moveTo(x, yy) : c.lineTo(x, yy);
+      }
+      c.stroke();
+    }
+    // 함대 (정박 · 대기)
+    this.fleet.forEach(([kind, fx, sc, p, dy], i) => {
+      const s = sc * (H / 330) * 1.12; // 칸 높이에 맞춰 크게 (함선끼리 겹치지 않는 크기)
+      const x = fx * W, bob = Math.sin(ph + p) * 3 * s, y = sea + 6 * s + dy + bob;
+      const roll = Math.sin(ph + p + 0.8) * 0.018;
+      // 물에 비친 그림자
+      c.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      c.beginPath(); c.ellipse(x, y + 10 * s, 92 * s * (kind === 'carrier' ? 1.25 : kind === 'sub' ? 0.7 : 1), 8 * s, 0, 0, TAU); c.fill();
+      c.save();
+      c.translate(x, y);
+      c.rotate(roll);
+      c.scale(s, s);
+      this.drawShip(c, kind, ph, i);
+      // 달빛 테두리 (오른쪽 위 달 방향)
+      c.strokeStyle = 'rgba(190, 225, 255, 0.55)'; c.lineWidth = 2;
+      c.beginPath();
+      if (kind === 'carrier') { c.moveTo(-126, -22); c.lineTo(130, -22); }
+      else if (kind === 'cruiser') { c.moveTo(-86, -12); c.lineTo(96, -12); }
+      else { c.moveTo(-60, -6); c.quadraticCurveTo(0, -14, 60, -6); }
+      c.stroke();
+      c.restore();
+      // 뱃머리 앞 잔잔한 물결 고리 (정박 중이라 작게)
+      const ring = ((t / FLEET_LOOP) * 2 + i * 0.2) % 1;
+      c.strokeStyle = `rgba(200, 240, 255, ${0.25 * (1 - ring)})`;
+      c.lineWidth = 1.5;
+      c.beginPath(); c.ellipse(x, y + 8 * s, (60 + ring * 50) * s, (4 + ring * 3) * s, 0, 0, TAU); c.stroke();
+    });
+    // 하단 가장자리 어둡게 (칸 테두리와 자연스럽게)
+    const v = c.createLinearGradient(0, H - 40, 0, H);
+    v.addColorStop(0, 'rgba(4, 8, 18, 0)'); v.addColorStop(1, 'rgba(4, 8, 18, 0.7)');
+    c.fillStyle = v; c.fillRect(0, H - 40, W, 40);
+  },
+
+  // 함선 실루엣 (원점 = 수면 중앙, 위가 -y)
+  drawShip(c, kind, ph, i) {
+    const hull = '#34507a', deck = '#4a6a96', dark = '#1a2a44', lit = '#ffd27a';
+    // 신호등: 함선마다 순서대로 깜빡 (명령 대기). 주기 안에서 5번 차례로
+    const slot = ((ph / TAU) * 5 + 5 - i) % 5;
+    const blink = slot < 0.35 ? 1 : 0.15;
+    const mast = (mx, top) => {
+      c.strokeStyle = dark; c.lineWidth = 3;
+      c.beginPath(); c.moveTo(mx, top + 26); c.lineTo(mx, top); c.stroke();
+      c.fillStyle = `rgba(255, 70, 90, ${blink})`;
+      c.beginPath(); c.arc(mx, top, 4.5, 0, TAU); c.fill();
+      if (blink > 0.5) { c.fillStyle = 'rgba(255, 70, 90, 0.25)'; c.beginPath(); c.arc(mx, top, 13, 0, TAU); c.fill(); }
+    };
+    const radar = (rx, ry) => {
+      const w = 14 * Math.abs(Math.cos(ph * 2 + i)); // 한 주기에 두 바퀴 회전처럼 보임
+      c.strokeStyle = '#7fb6d9'; c.lineWidth = 3;
+      c.beginPath(); c.moveTo(rx - w, ry); c.lineTo(rx + w, ry); c.stroke();
+    };
+    const windows = (x0, y0, n) => {
+      for (let k = 0; k < n; k++) {
+        const on = 0.55 + 0.45 * Math.sin(ph * 3 + k * 1.7 + i);
+        c.fillStyle = `rgba(255, 210, 122, ${0.35 + 0.5 * on})`;
+        c.fillRect(x0 + k * 9, y0, 5, 4);
+      }
+    };
+    if (kind === 'carrier') {
+      c.fillStyle = hull;
+      c.beginPath(); c.moveTo(-118, -14); c.lineTo(124, -14); c.lineTo(108, 6); c.lineTo(-104, 6); c.closePath(); c.fill();
+      c.fillStyle = deck; c.fillRect(-126, -22, 256, 9); // 비행갑판
+      c.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      for (let k = 0; k < 9; k++) c.fillRect(-110 + k * 26, -18.5, 12, 2);
+      c.fillStyle = hull; c.fillRect(40, -52, 34, 30); c.fillRect(48, -66, 18, 14); // 함교
+      windows(44, -46, 3);
+      radar(57, -70);
+      mast(66, -96);
+      // 갑판 위 대기 중인 함재기 (작은 실루엣)
+      c.fillStyle = '#5a7090';
+      [-90, -55, -20].forEach(px => { c.fillRect(px, -27, 16, 4); c.fillRect(px + 6, -31, 4, 12); });
+    } else if (kind === 'cruiser') {
+      c.fillStyle = hull;
+      c.beginPath(); c.moveTo(-86, -12); c.lineTo(96, -12); c.quadraticCurveTo(104, -12, 100, -4); c.lineTo(84, 6); c.lineTo(-80, 6); c.closePath(); c.fill();
+      c.fillStyle = deck; c.fillRect(-46, -34, 58, 22); c.fillRect(-30, -50, 30, 16);
+      c.fillStyle = dark; c.fillRect(-64, -30, 14, 18); // 굴뚝
+      windows(-40, -28, 4);
+      // 포탑 (앞·뒤) — 포신은 정면 대기 자세
+      c.fillStyle = deck;
+      c.beginPath(); c.arc(46, -14, 10, Math.PI, 0); c.fill();
+      c.beginPath(); c.arc(-74, -14, 9, Math.PI, 0); c.fill();
+      c.strokeStyle = deck; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(52, -19); c.lineTo(76, -21); c.moveTo(-80, -18); c.lineTo(-98, -20); c.stroke();
+      radar(-15, -54);
+      mast(-15, -80);
+    } else {
+      // 잠수함: 수면에 반쯤 잠겨 대기 (함교탑만 크게)
+      c.fillStyle = hull;
+      c.beginPath(); c.ellipse(0, 0, 78, 10, 0, Math.PI, 0); c.fill();
+      c.fillStyle = deck;
+      c.beginPath(); c.moveTo(-16, -8); c.lineTo(-12, -32); c.lineTo(16, -32); c.lineTo(22, -8); c.closePath(); c.fill();
+      windows(-7, -26, 2);
+      c.strokeStyle = dark; c.lineWidth = 2.5;
+      c.beginPath(); c.moveTo(4, -32); c.lineTo(4, -46); c.lineTo(10, -46); c.stroke(); // 잠망경
+      mast(-6, -54);
+    }
+  }
+};
+
 const Title = {
   HISCORE_KEY: 'battleship.hiscore',
   LEAVE_MS: 600,
@@ -2168,9 +2419,32 @@ const Title = {
     this.el.hidden = true;
     TitleBG.stop(); // 배경 애니메이션 멈춤 (화면에 안 보이는 동안 그리지 않음)
     document.documentElement.classList.remove('title-open');
+    FleetIdle.sync();
     if (!this.noBriefing && !Briefing.active) Briefing.start(); // (탭으로 시작했다면 이미 시작됨)
     updateGuide();
     BGM.update(); // 타이틀이 닫히면 배치 곡 시작 (23단계)
+  },
+
+  // 게임 화면 → 타이틀 (오른쪽 위 🏠 버튼). 진행 중인 판은 정리하고 새 판으로 되돌린 뒤 타이틀을 다시 띄움
+  // 다시 탭하면 처음처럼 동전 소리 → 브리핑(두 번째부터 짧은 버전) → 배치
+  backToTitle() {
+    if (this.active) return;
+    playSound('click');
+    if (Briefing.active) { BriefCut.stop(); clearTimeout(Briefing.timer); Briefing.active = false; Briefing.el.hidden = true; }
+    if (Practice.active) { clearTimeout(Practice.timer); Practice.active = false; Practice.waiting = false; Practice.el.hidden = true; } // 연습 중이면 조용히 닫음 (완료로 기록하지 않음)
+    restartGame();
+    this.active = true;
+    this.leaving = false;
+    this.el.classList.remove('leaving');
+    this.el.hidden = false;
+    document.getElementById('titleCoinText').textContent = 'INSERT COIN';
+    document.getElementById('titleCredit').textContent = 'CREDIT 00';
+    document.getElementById('titleHiScore').textContent = String(this.loadHiScore()).padStart(6, '0');
+    document.documentElement.classList.add('title-open');
+    TitleBG.start();
+    FleetIdle.sync();
+    BGM.update();
+    updateGuide();
   },
 
   // 바로 닫기 (테스트·측정용). withBriefing이 아니면 브리핑도 건너뜀
@@ -2255,13 +2529,6 @@ const BoardView = {
     this.showPlayer = showPlayer;
     document.getElementById('playerBoardSection').classList.toggle('board-hidden', !showPlayer);
     document.getElementById('cpuBoardSection').classList.toggle('board-hidden', showPlayer);
-    const tp = document.getElementById('tabPlayer'), tc = document.getElementById('tabCpu');
-    tp.classList.toggle('active', showPlayer);
-    tc.classList.toggle('active', !showPlayer);
-    tp.setAttribute('aria-selected', String(showPlayer));
-    tc.setAttribute('aria-selected', String(!showPlayer));
-    // 배치 중에는 적 해역을 볼 이유가 없음
-    tc.disabled = game.state === GS.PLACEMENT;
     if (changed) {
       clearPreviews();
       FX.invalidate();
@@ -2452,6 +2719,7 @@ const Briefing = {
     this.markSeen();
     this.el.hidden = true;
     if (this.cursor.parentNode) this.cursor.parentNode.removeChild(this.cursor);
+    FleetIdle.sync(); // 브리핑이 닫히면 하단 함대 애니메이션 시작
     logMessage(skipped ? '[작전 지휘소] 브리핑 생략. 아군 함대를 배치하십시오.' : '[작전 지휘소] 브리핑 완료. 아군 함대를 배치하십시오.', 'log-system');
     playSound('click');
     if (!Practice.hasDone()) Practice.start(false); // 처음 한 번만 연습 훈련
@@ -4137,14 +4405,16 @@ const Cutscene = {
     const info = CUT_INFO[this.weapon];
     const lead = { x: 585 + Math.sin(t * 3) * 30, y: skim ? 1240 : 900 - k * 120 };
     if (this.weapon === 'x') {
-      [[-170, -120], [170, -120], [-170, 140], [170, 140]].forEach(([dx, dy], i) =>
+      // X 모양 5칸 = 네 모서리 + 가운데 5발
+      [[-170, -120], [170, -120], [0, 10], [-170, 140], [170, 140]].forEach(([dx, dy], i) =>
         this.missile(c, lead.x + dx + Math.sin(t * 4 + i) * 10, lead.y + dy, -0.55, 0.8, t + i * 0.3, info.glow));
     } else if (this.weapon === 'cross') {
       const split = cutSeg(t, 4.1, 4.45);
       if (split <= 0) this.missile(c, lead.x, lead.y, -0.55, 1.15, t, info.glow);
       else {
         const e = cutEase.out(split);
-        [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy], i) =>
+        // + 모양 5칸 = 위·아래·좌·우 + 가운데 5발 (가운데 한 발은 그대로 직진)
+        [[0, -1], [-1, 0], [0, 0], [1, 0], [0, 1]].forEach(([dx, dy], i) =>
           this.missile(c, lead.x + dx * 260 * e, lead.y + dy * 260 * e, -0.55 + dx * 0.25, 0.75, t + i, info.glow));
         if (split < 0.5) {
           const fl = c.createRadialGradient(lead.x, lead.y, 5, lead.x, lead.y, 240);
@@ -6879,7 +7149,6 @@ const KBD_ROTATE = '<kbd>🔄 방향</kbd>';
 
 function updateGuide() {
   const guide = document.getElementById('guideText');
-  const startBtn = document.getElementById('startGameBtn');
   const pBoard = document.getElementById('playerBoardSection');
   const cBoard = document.getElementById('cpuBoardSection');
   const focus = (p, c) => { pBoard.classList.toggle('highlight-board', p); cBoard.classList.toggle('highlight-board', c); };
@@ -6891,10 +7160,9 @@ function updateGuide() {
   switch (game.state) {
     case GS.PLACEMENT: {
       const done = game.player.ships.length === SHIP_DEFS.length;
-      startBtn.classList.toggle('btn-glow', done);
       focus(!done, false);
       if (done) {
-        guide.innerHTML = '🎉 5척의 함선이 모두 배치되었습니다! <b>[⚔️ 작전 개시]</b> 버튼을 눌러 교전을 시작하세요!';
+        guide.innerHTML = '🎉 5척 배치 완료! <b>작전을 개시합니다.</b>';
       } else {
         const def = SHIP_DEFS[game.placeIndex] || SHIP_DEFS.find(s => !isPlaced(s.id));
         const rotate = Input.touch ? KBD_ROTATE : `${KBD_ROTATE} 또는 <kbd>R</kbd>`;
@@ -6908,7 +7176,7 @@ function updateGuide() {
         normal: `🎯 <b>아군 공격 턴</b>: <b>🎯 적군 해역</b>에서 타격할 좌표를 ${act}하세요. (상단 특수무기 선택 가능)`,
         cross: `➕ <b>십자탄 장전됨</b>: 중심 좌표를 ${act}하면 상·하·좌·우 <b>총 5칸</b>을 동시 폭격합니다!`,
         x: `✖️ <b>X자탄 장전됨</b>: 중심 좌표를 ${act}하면 4개 대각선 <b>총 5칸</b>을 동시 폭격합니다!`,
-        skip: `🌊 <b>물수제비탄 장전됨</b>: 지정 좌표부터 일직선 <b>4칸 연속</b> 관통 타격합니다! (방향 전환 가능)`
+        skip: `🌊 <b>물수제비탄 장전됨</b>: 지정 좌표부터 일직선 <b>4칸 연속</b> 관통 타격합니다! (버튼을 다시 누르면 가로/세로 전환)`
       };
       guide.innerHTML = text[game.weapon] + tapHint;
       break;
@@ -6947,7 +7215,6 @@ function renderShipSelectors() {
     };
     group.appendChild(card);
   });
-  document.getElementById('startGameBtn').disabled = game.player.ships.length !== SHIP_DEFS.length;
   updateGuide();
 }
 
@@ -6983,6 +7250,8 @@ function selectWeapon(w, silent = false) {
   if (!silent) {
     if (!canAct(GS.PLAYER_TURN)) return;
     if (w !== 'normal' && game.player.ammo[w] <= 0) return;
+    // 이미 고른 물수제비탄을 다시 누르면 발사 방향(가로↔세로) 전환
+    if (w === 'skip' && game.weapon === 'skip') return toggleSkipDir();
     playSound('click');
   }
   game.weapon = w;
@@ -7002,11 +7271,12 @@ function updateWeaponButtons() {
   if (game.weapon !== 'normal' && game.player.ammo[game.weapon] <= 0) selectWeapon('normal', true);
 }
 
+// 전투 기록: 화면 표시는 없앰 (하단은 애니메이션 칸). 최근 80줄만 내부에 보관 (개발·테스트 확인용)
+const GameLog = { lines: [], MAX: 80, onAdd: null };
 function logMessage(text, className = '') {
-  const entry = document.createElement('div');
-  entry.className = `log-entry ${className}`;
-  entry.textContent = text;
-  document.getElementById('combatLog').prepend(entry);
+  if (GameLog.onAdd) GameLog.onAdd(text);
+  GameLog.lines.unshift({ text, className });
+  if (GameLog.lines.length > GameLog.MAX) GameLog.lines.length = GameLog.MAX;
 }
 
 // =========================================================
@@ -7042,7 +7312,7 @@ const AutoDock = {
     if (!ship) return;
     dockShip(ship);
     if (this.queue.length) this.timer = setTimeout(() => this.step(), DOCK.STAGGER_MS);
-    else updateGuide();
+    else { updateGuide(); startGame(); } // 자동 배치 도킹이 끝나면 바로 작전 개시
   },
 
   // 남은 함선을 모두 바로 도킹 (효과음은 1번만)
@@ -7052,6 +7322,7 @@ const AutoDock = {
     const rest = this.queue.splice(0);
     rest.forEach((ship, i) => dockShip(ship, i > 0));
     updateGuide();
+    if (!this.noAutoStart) startGame(); // 도킹을 빨리 끝내도(탭·동작 줄이기) 바로 작전 개시
     return true;
   },
 
@@ -7100,6 +7371,7 @@ function onPlayerCellClick(r, c) {
   clearPreviews();
   dockShip(ship);
   renderShipSelectors();
+  if (next === -1) return startGame(); // 5척 모두 놓음 → 바로 작전 개시
   previewPlacement(r, c); // 같은 칸 위에 있으면 다음 함선 미리보기 즉시 표시
 }
 
@@ -7159,7 +7431,9 @@ function onDifficultyClick() {
 }
 
 function startGame() {
+  AutoDock.noAutoStart = true;
   AutoDock.finishNow(); // 자동 배치 도킹 중이면 남은 함선을 바로 마치고 시작
+  AutoDock.noAutoStart = false;
   if (!canAct(GS.PLACEMENT) || game.player.ships.length !== SHIP_DEFS.length) return;
   playSound('click');
   autoPlace(game.cpu);
@@ -7478,7 +7752,7 @@ function restartGame() {
   hover.player = null;
   hover.cpu = null;
   document.getElementById('rotateShipBtn').textContent = '🔄 방향: 가로 (H)';
-  document.getElementById('toggleSkipDirBtn').textContent = '➡️ 발사 방향: 가로';
+  renderSkipDir();
 
   setState(GS.PLACEMENT);
   BGM.update(); // 새 판 배치 곡 (이미 PLACEMENT였어도)
@@ -7506,7 +7780,6 @@ function closeTutorialModal() {
 document.getElementById('rotateShipBtn').onclick = toggleRotation;
 document.getElementById('randomPlaceBtn').onclick = randomPlacement;
 document.getElementById('resetPlacementBtn').onclick = resetPlacement;
-document.getElementById('startGameBtn').onclick = startGame;
 // AI 난이도 (22-A단계)
 {
   const db = document.getElementById('difficultyBtn');
@@ -7514,13 +7787,22 @@ document.getElementById('startGameBtn').onclick = startGame;
   AI.load();
   AI.render();
 }
-document.getElementById('toggleSkipDirBtn').onclick = () => {
+// 물수제비탄 발사 방향 표시: 버튼 그림이 90도 돌고 설명이 '가로/세로 4칸'으로 바뀜
+function renderSkipDir() {
+  document.getElementById('toggleSkipDirBtn').textContent = `➡️ 발사 방향: ${game.skipHorizontal ? '가로' : '세로'}`;
+  const label = document.getElementById('skipDirLabel');
+  if (label) label.textContent = `${game.skipHorizontal ? '가로' : '세로'} 4칸`;
+  const b = document.getElementById('w-skip');
+  if (b && b.classList) b.classList.toggle('vertical', !game.skipHorizontal);
+}
+function toggleSkipDir() {
   if (!canAct(GS.PLAYER_TURN)) return;
   playSound('click');
   game.skipHorizontal = !game.skipHorizontal;
-  document.getElementById('toggleSkipDirBtn').textContent = `➡️ 발사 방향: ${game.skipHorizontal ? '가로' : '세로'}`;
+  renderSkipDir();
   if (hover.cpu) previewAttack(hover.cpu.r, hover.cpu.c);
-};
+}
+document.getElementById('toggleSkipDirBtn').onclick = toggleSkipDir;
 
 window.addEventListener('keydown', (e) => {
   if (Title.active) {
@@ -7553,8 +7835,6 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'r' || e.key === 'R') toggleRotation();
-  else if (e.key === 'm' || e.key === 'M') Sound.toggleMute();
-  else if (e.key === 'c' || e.key === 'C') CRT.toggle();
   else if (e.key === 'd' || e.key === 'D') FX.toggleDebug();
   else if (e.key === 's' || e.key === 'S') Particles.toggleStress();
   else if (e.key === ' ' || e.key === 'Enter') onSkipInput(e);
@@ -7588,6 +7868,7 @@ BriefCut.init();
 Practice.init();
 Title.init();
 TitleBG.init();
+FleetIdle.init();
 Score.init();
 updateGuide();
 </script>
