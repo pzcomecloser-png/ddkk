@@ -201,65 +201,6 @@
     gap: 22px;
   }
 
-  /* ---------- 진행 단계 ---------- */
-  .stepper-bar {
-    flex: none;
-    height: 80px;
-    background: var(--panel-bg);
-    border: 2px solid var(--border-color);
-    border-radius: 24px;
-    padding: 0 28px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
-  }
-  .step-item {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex: 1;
-    opacity: 0.45;
-    transition: all 0.3s;
-  }
-  .step-item.active { opacity: 1; }
-  .step-number {
-    flex: none;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: #151e33;
-    border: 3px solid var(--border-color);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    font-weight: bold;
-    color: var(--text-dim);
-  }
-  .step-item.active .step-number {
-    background: var(--accent-cyan);
-    border-color: var(--accent-glow);
-    color: #0b132b;
-    box-shadow: 0 0 20px var(--accent-cyan);
-  }
-  .step-item.completed .step-number {
-    background: #2a9d8f;
-    border-color: #52b788;
-    color: #fff;
-  }
-  .step-text { display: flex; flex-direction: column; }
-  .step-title {
-    font-size: 28px;
-    font-weight: bold;
-    color: var(--text-main);
-    word-break: keep-all; /* 한글은 기본적으로 글자 단위로 줄바꿈 → 띄어쓰기에서만 줄바꿈 */
-  }
-  .step-item.active .step-title { color: var(--accent-glow); }
-  .step-desc { display: none; }
-  .step-arrow { color: var(--text-dim); font-size: 28px; } /* 9단계: 대비 1.88 → 기준 이상 */
-
   /* ---------- 작전 지침 (높이 고정: 문구가 바뀌어도 아래 보드가 움직이지 않음) ---------- */
   .guide-callout {
     flex: none;
@@ -965,6 +906,32 @@
     -webkit-tap-highlight-color: transparent;
   }
   #titleScreen[hidden] { display: none; }
+  /* 배경 애니메이션: 화면 전체, 글자 뒤 · 클릭은 타이틀 화면으로 전달 */
+  #titleBg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1170px;
+    height: 2080px;
+    z-index: 0;
+    pointer-events: none;
+  }
+  #titleScreen > :not(#titleBg):not(.title-hiscore):not(.title-credit) { position: relative; z-index: 1; }
+  #titleScreen > .title-hiscore, #titleScreen > .title-credit { z-index: 1; }
+  /* 글자 흰 테두리: 움직이는 배경 위에서도 잘 보이게 (paint-order로 테두리를 글자 뒤에 그려 글자 모양이 가늘어지지 않음) */
+  #titleScreen .title-logo-en,
+  #titleScreen .title-logo-ko,
+  #titleScreen .title-coin,
+  #titleScreen .title-hint,
+  #titleScreen .title-hiscore,
+  #titleScreen .title-credit {
+    -webkit-text-stroke: var(--title-stroke, 6px) #ffffff;
+    paint-order: stroke fill;
+  }
+  #titleScreen .title-logo-en { --title-stroke: 14px; }
+  #titleScreen .title-logo-ko { --title-stroke: 8px; }
+  #titleScreen .title-coin { --title-stroke: 8px; }
+  #titleScreen .title-hint, #titleScreen .title-hiscore, #titleScreen .title-credit { --title-stroke: 5px; }
   #titleScreen.leaving { opacity: 0; pointer-events: none; }
 
   .title-arcade {
@@ -978,15 +945,16 @@
     left: 0;
     right: 0;
     font-size: 40px;
-    color: #ff758f;
+    color: #d62828;
   }
-  .title-hiscore b { color: #ffffff; margin-left: 0.6em; }
+  .title-hiscore b { color: #0b2338; margin-left: 0.6em; }
   .title-fleet { display: flex; gap: 40px; opacity: 0.9; }
+  .title-fleet[hidden] { display: none; } /* 배경 함대 애니메이션이 대신함 */
   .title-fleet svg { width: 130px; height: auto; }
   .title-logo-en {
     font-size: 190px;
     line-height: 1;
-    color: #90e0ef;
+    color: #1d6fa5;
     text-shadow:
       0 0 28px rgba(72, 202, 228, 0.65),
       0.06em 0.06em 0 #1b4965,
@@ -997,20 +965,20 @@
     font-size: 66px;
     font-weight: 800;
     letter-spacing: 0.32em;
-    color: var(--guide-gold);
+    color: #c2410c;
     text-shadow: 0 0 28px rgba(252, 191, 73, 0.45);
     margin-right: -0.32em; /* 글자 간격 때문에 생기는 오른쪽 여백 보정 → 가운데 정렬 */
   }
   .title-coin {
     margin-top: 60px;
     font-size: 72px;
-    color: #ffffff;
+    color: #d62828;
     text-shadow: 0 0 22px rgba(255, 255, 255, 0.55);
     animation: titleBlink 1s steps(1, end) infinite; /* 1초에 한 번 (빛에 민감한 사람 기준 3회/초보다 충분히 느림) */
   }
   #titleScreen.leaving .title-coin { animation: none; color: var(--guide-gold); }
   @keyframes titleBlink { 50% { opacity: 0; } }
-  .title-hint { font-size: 34px; color: var(--text-dim); word-break: keep-all; }
+  .title-hint { font-size: 34px; color: #1b2a44; font-weight: 700; word-break: keep-all; }
   .title-credit {
     position: absolute;
     bottom: 64px;
@@ -1020,7 +988,7 @@
     justify-content: space-between;
     padding: 0 72px;
     font-size: 34px;
-    color: var(--text-dim);
+    color: #1b2a44;
   }
   @media (prefers-reduced-motion: reduce) {
     .title-coin { animation: none; }
@@ -1094,6 +1062,19 @@
     animation: briefCursor 1s steps(1, end) infinite; /* 1초에 한 번 */
   }
   @keyframes briefCursor { 50% { opacity: 0; } }
+  /* 브리핑 오프닝 컷신: 브리핑 화면 전체를 덮음 · 건너뛰기 줄만 위에 */
+  #briefCut {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1170px;
+    height: 2080px;
+    z-index: 5;
+    pointer-events: none;
+    display: none;
+  }
+  #briefCut.on { display: block; }
+  #briefing .brief-foot { position: relative; z-index: 6; }
   .brief-foot {
     flex: none;
     display: flex;
@@ -1227,12 +1208,12 @@
   }
 
   /* 턴 배너 (13단계): 화면 가운데를 가로지르는 띠. 0.55초 동안 들어와 멈췄다 나감
-     - 띠 위치는 전투 보드(y702~1574) 가운데 높이(1138), 이펙트(50) 위·팝업(100) 아래
+     - 띠 위치는 전투 보드(y600~1472) 가운데 높이(1036), 이펙트(50) 위·팝업(100) 아래 (진행 단계 표시줄 제거로 102px 올라감)
      - 움직임은 transform·opacity만 */
   #turnBanner {
     position: absolute;
     left: 0;
-    top: 1058px; /* 1138 - 160/2 */
+    top: 956px; /* 1036 - 160/2 */
     width: 1170px;
     height: 160px;
     display: none;
@@ -1290,7 +1271,7 @@
   #sinkPopup {
     position: absolute;
     left: 0;
-    top: 1000px;
+    top: 898px; /* 진행 단계 표시줄 제거로 보드가 102px 올라감 → 함께 올림 */
     width: 1170px;
     display: none;
     flex-direction: column;
@@ -1388,6 +1369,19 @@
     .shake-1, .shake-2, .shake-3 { animation: none; }
   }
 
+  /* 특수무기 발사 컷신: 게임 화면 전체를 덮음 (팝업 100 아래) */
+  #cutCanvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1170px;
+    height: 2080px;
+    pointer-events: none;
+    z-index: 95;
+    display: none;
+  }
+  #cutCanvas.on { display: block; }
+
   /* 개발용 부하 테스트 버튼 (확인 모드에서만 표시) */
   .dev-btn {
     position: absolute;
@@ -1438,33 +1432,6 @@
 </div>
 
 <div class="main-container">
-  <!-- Interactive Step-by-Step Guide Bar -->
-  <div class="stepper-bar" id="stepperBar">
-    <div class="step-item active" id="step1">
-      <div class="step-number">1</div>
-      <div class="step-text">
-        <span class="step-title">함선 배치</span>
-        <span class="step-desc">배 선택 & 회전 후 아군 해역 클릭</span>
-      </div>
-    </div>
-    <div class="step-arrow">➔</div>
-    <div class="step-item" id="step2">
-      <div class="step-number">2</div>
-      <div class="step-text">
-        <span class="step-title">작전 개시</span>
-        <span class="step-desc">5척 배치 완료 후 전투 시작</span>
-      </div>
-    </div>
-    <div class="step-arrow">➔</div>
-    <div class="step-item" id="step3">
-      <div class="step-number">3</div>
-      <div class="step-text">
-        <span class="step-title">전투 & 특수무기</span>
-        <span class="step-desc">적군 해역 공격 (턴제)</span>
-      </div>
-    </div>
-  </div>
-
   <!-- Dynamic Guide Banner (Contextual Tutorial Tip) -->
   <div class="guide-callout" id="guideCallout">
     <div class="guide-callout-content">
@@ -1537,8 +1504,10 @@
 
 <!-- 타이틀 화면 (6단계). 첫 입력으로 시작 -->
 <div id="titleScreen" role="button" tabindex="0" aria-label="게임 시작: 화면을 누르거나 스페이스 키를 누르세요">
+  <!-- 배경: 출격하는 함대 애니메이션 (5초 반복) -->
+  <canvas id="titleBg" aria-hidden="true"></canvas>
   <div class="title-hiscore title-arcade">HI-SCORE<b id="titleHiScore">000000</b></div>
-  <div class="title-fleet" id="titleFleet" aria-hidden="true"></div>
+  <div class="title-fleet" id="titleFleet" aria-hidden="true" hidden></div>
   <div class="title-logo-en title-arcade"><span>NAVAL</span><span>COMBAT</span></div>
   <div class="title-logo-ko">해양 전투 대작전</div>
   <div class="title-coin title-arcade" id="titleCoinText">INSERT COIN</div>
@@ -1564,6 +1533,8 @@
 
 <!-- 작전 브리핑 (7단계). 타이틀 다음 -->
 <div id="briefing" hidden role="dialog" aria-label="작전 브리핑" aria-describedby="briefBody">
+  <!-- 브리핑 오프닝 컷신 (처음 한 번, 6초). 탭하면 넘김 -->
+  <canvas id="briefCut" aria-hidden="true"></canvas>
   <div class="brief-head"><span><b>NAVAL COMMAND</b> · 작전 지휘소</span><span class="brief-stamp">극비</span></div>
   <div class="brief-body" id="briefBody" aria-live="polite"></div>
   <div class="brief-foot">
@@ -1628,6 +1599,9 @@
 
 <!-- 턴 배너 (13단계): YOUR TURN / ENEMY TURN. 클릭은 통과 -->
 <div id="turnBanner" aria-live="polite"><span class="tb-text"></span></div>
+
+<!-- 특수무기 발사 컷신 (5초). 터치는 통과 → 화면 탭 = 넘기기 -->
+<canvas id="cutCanvas" aria-hidden="true"></canvas>
 
 <!-- 이펙트 레이어 (폭발·화염·탄도 등. 3-A단계) -->
 <canvas id="fxCanvas" aria-hidden="true"></canvas>
@@ -1979,6 +1953,174 @@ const CRT = {
 // - 첫 입력은 Sound.unlock(캡처 단계)이 먼저 받아 iOS 소리 잠금이 풀린 뒤 동전 소리가 남
 // - 타이틀이 떠 있는 동안 게임 조작은 모두 막힘 (canAct가 false)
 // =========================================================
+
+// =========================================================
+// 타이틀 배경: 출격하는 함대 (5초 반복)
+// - 새벽 노을 바다를 아군 함대 4척이 대열을 지어 왼쪽 → 오른쪽으로 항진 (멀리 작은 배 → 가까이 큰 배)
+// - 함선마다 뱃머리 물보라·항적 거품·굴뚝 연기, 하늘에 갈매기, 수평선 빛줄기
+// - 모든 움직임은 5초 주기로 이어지게 계산 → 끊김 없이 반복 (시작점과 끝점이 같은 그림)
+// - 타이틀이 보일 때만 그림 (닫히면·백그라운드면 멈춤) · '동작 줄이기'면 첫 장면 1장만 그림
+// - 객체는 처음에 한 번만 만듦 (반복 중 새 객체 없음)
+// =========================================================
+const TITLE_LOOP = 5; // 초
+const TitleBG = {
+  canvas: null,
+  ctx: null,
+  raf: 0,
+  t0: 0,
+  running: false,
+  frames: 0,
+  // 함대: [깊이(0 멀리 ~ 1 가까이), 주기 안에서 출발 위치(0~1), 수평선 아래 깊이(px)]
+  // 화면을 건너는 데 정확히 5초 → 한 척이 오른쪽으로 나가면 같은 순간 다른 배가 왼쪽에서 들어옴
+  fleet: [[0.2, 0.10, 6], [0.4, 0.55, 22], [0.62, 0.30, 52], [0.85, 0.80, 100]],
+  gulls: [[0.0, 520, 0], [0.33, 600, 1.1], [0.66, 470, 2.2]],
+
+  init() {
+    this.canvas = document.getElementById('titleBg');
+    this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+    this.frame = this.frame.bind(this);
+    document.addEventListener('visibilitychange', () => (document.hidden ? this.stop() : this.start()));
+    Stage.onFit(() => this.resize());
+    this.start();
+  },
+
+  // 화면에 보이는 크기에 맞춰 캔버스 해상도 정함 (그리기 좌표는 항상 1170×2080)
+  resize() {
+    if (!this.ctx) return;
+    const dpr = Math.max(0.25, Math.min(2, (Stage.scale || 1) * (window.devicePixelRatio || 1)));
+    this.dpr = dpr;
+    this.canvas.width = Math.round(1170 * dpr);
+    this.canvas.height = Math.round(2080 * dpr);
+    if (Title.active) this.render(this.running ? ((performance.now() - this.t0) / 1000) % TITLE_LOOP : 1.2);
+  },
+
+  start() {
+    if (!this.ctx || this.running || !Title.active) return;
+    this.resize(); // 첫 장면은 항상 그림 (탭이 백그라운드로 열려도 빈 화면이 아니게)
+    if (document.hidden || prefersReducedMotion()) return; // 움직임은 화면이 보일 때만 · '동작 줄이기'면 한 장면만
+    this.running = true;
+    this.t0 = performance.now();
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  stop() {
+    this.running = false;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+  },
+
+  frame() {
+    if (!this.running) return;
+    if (!Title.active) return this.stop();
+    const t = ((performance.now() - this.t0) / 1000) % TITLE_LOOP;
+    this.render(t);
+    this.frames++;
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  // t: 0 ~ 5초 (반복 주기 안의 시각)
+  render(t) {
+    const c = this.ctx, W = 1170, H = 2080, dpr = this.dpr || 1;
+    const ph = (t / TITLE_LOOP) * TAU; // 주기 위상 (0 ~ 2π) → sin·cos로 쓰면 자동으로 이어짐
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const horizon = 1640; // 글자(로고~안내 문구, y≈690~1460) 아래 → 함대가 글자를 가리지 않음
+    // 하늘: 새벽 노을 (주기에 맞춰 아주 살짝 밝아졌다 어두워짐)
+    const glow = 0.5 + 0.5 * Math.sin(ph);
+    const sky = c.createLinearGradient(0, 0, 0, horizon);
+    sky.addColorStop(0, '#0b1230');
+    sky.addColorStop(0.45, '#2e2350');
+    sky.addColorStop(0.78, `rgb(${196 + glow * 20}, ${88 + glow * 14}, ${70 + glow * 8})`);
+    sky.addColorStop(1, '#ffb36b');
+    c.fillStyle = sky; c.fillRect(0, 0, W, horizon);
+    // 해 + 빛줄기 (천천히 회전, 주기에 맞춰 한 칸만큼)
+    const sunX = 585, sunY = horizon + 30;
+    c.save();
+    c.translate(sunX, sunY);
+    c.rotate(ph / 12);
+    c.globalAlpha = 0.14;
+    for (let i = 0; i < 12; i++) {
+      c.rotate(TAU / 12);
+      c.fillStyle = '#ffe2b0';
+      c.beginPath(); c.moveTo(-20, 0); c.lineTo(20, 0); c.lineTo(80, -1500); c.lineTo(-80, -1500); c.closePath(); c.fill();
+    }
+    c.restore();
+    const sun = c.createRadialGradient(sunX, sunY, 10, sunX, sunY, 420);
+    sun.addColorStop(0, 'rgba(255, 246, 220, 1)'); sun.addColorStop(0.16, 'rgba(255, 200, 120, 0.85)');
+    sun.addColorStop(0.5, 'rgba(255, 140, 70, 0.2)'); sun.addColorStop(1, 'rgba(255, 120, 60, 0)');
+    c.fillStyle = sun; c.fillRect(sunX - 440, sunY - 440, 880, 880);
+    // 구름 (한 주기에 화면 폭만큼 흘러 제자리)
+    for (let i = 0; i < 5; i++) {
+      const x = ((i / 5 + t / TITLE_LOOP) % 1) * (W + 900) - 450, y = 380 + i * 170;
+      c.fillStyle = 'rgba(40, 24, 60, 0.45)';
+      c.beginPath(); c.ellipse(x, y, 420, 34 + i * 6, 0, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(255, 150, 100, 0.16)';
+      c.beginPath(); c.ellipse(x, y + 16, 360, 8, 0, 0, TAU); c.fill();
+    }
+    // 바다
+    const sea = c.createLinearGradient(0, horizon, 0, H);
+    sea.addColorStop(0, '#6a3448'); sea.addColorStop(0.25, '#2a1d38'); sea.addColorStop(1, '#060a16');
+    c.fillStyle = sea; c.fillRect(0, horizon, W, H - horizon);
+    c.fillStyle = 'rgba(255, 200, 130, 0.35)';
+    c.beginPath(); c.moveTo(sunX - 50, horizon); c.lineTo(sunX + 50, horizon); c.lineTo(sunX + 320, H); c.lineTo(sunX - 320, H); c.closePath(); c.fill();
+    // 파도 (위상이 정수 바퀴로 돌아 주기마다 같은 그림)
+    for (let k = 0; k < 14; k++) {
+      const d = k / 13, y = horizon + 10 + d * d * 420;
+      c.strokeStyle = `rgba(255, ${160 + k * 4}, ${120 + k * 6}, ${0.26 - d * 0.14})`;
+      c.lineWidth = 1 + d * 4;
+      c.beginPath();
+      for (let x = -40; x <= W + 40; x += 30) {
+        const yy = y + Math.sin(x / (80 + d * 240) * TAU + ph * (1 + (k % 3))) * (2 + d * 18);
+        x === -40 ? c.moveTo(x, yy) : c.lineTo(x, yy);
+      }
+      c.stroke();
+    }
+    // 함대: 멀리 있는 배부터 그림
+    this.fleet.forEach(([depth, start, dy], i) => {
+      const s = 0.26 + depth * 0.42;
+      const span = W + 1400 * s;                                  // 화면 + 배 길이만큼
+      const x = ((start + t / TITLE_LOOP) % 1) * span - 700 * s;  // 5초에 한 번 건넘
+      const y = horizon + dy + Math.sin(ph * 2 + i) * 6 * s;
+      // 항적 (배 뒤로 길게)
+      c.fillStyle = `rgba(255, 235, 220, ${0.18 + depth * 0.12})`;
+      c.beginPath(); c.moveTo(x - 520 * s, y + 6 * s); c.lineTo(x + 420 * s, y + 4 * s); c.lineTo(x + 420 * s, y + 22 * s); c.lineTo(x - 900 * s, y + 30 * s); c.closePath(); c.fill();
+      // 굴뚝 연기 (뒤로 흩어짐)
+      for (let k = 0; k < 6; k++) {
+        const q = ((k / 6 + t * 0.6) % 1);
+        c.fillStyle = `rgba(70, 60, 70, ${0.35 * (1 - q)})`;
+        c.beginPath(); c.arc(x - 390 * s - q * 260 * s, y - 200 * s - q * 120 * s, (16 + q * 40) * s, 0, TAU); c.fill();
+      }
+      c.save();
+      c.translate(x, y);
+      c.rotate(Math.sin(ph * 2 + i * 1.7) * 0.012);
+      c.scale(s, s);
+      Cutscene.ship(c, -0.12, 0, '#ffb070');
+      // 깃발
+      c.fillStyle = '#e63946';
+      const wv = Math.sin(ph * 6 + i) * 8;
+      c.beginPath(); c.moveTo(-115, -470); c.lineTo(-30, -458 + wv); c.lineTo(-115, -442); c.closePath(); c.fill();
+      c.restore();
+      // 뱃머리 물보라
+      c.fillStyle = `rgba(255, 240, 230, ${0.45 + depth * 0.25})`;
+      for (let k = 0; k < 6; k++) {
+        const by = y + 8 * s - Math.abs(Math.sin(ph * 6 + k)) * 30 * s;
+        c.beginPath(); c.ellipse(x + 470 * s + k * 16 * s, by, (16 - k * 1.5) * s, 6 * s, 0, 0, TAU); c.fill();
+      }
+    });
+    // 갈매기 (한 주기에 화면을 건넘)
+    this.gulls.forEach(([start, gy, gp]) => {
+      const x = ((start + t / TITLE_LOOP) % 1) * (W + 200) - 100, y = gy + Math.sin(ph + gp) * 30;
+      const fl = Math.sin(ph * 10 + gp) * 14;
+      c.strokeStyle = 'rgba(30, 24, 40, 0.8)'; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(x - 30, y - fl); c.quadraticCurveTo(x - 12, y - 14, x, y); c.quadraticCurveTo(x + 12, y - 14, x + 30, y - fl); c.stroke();
+    });
+    // 글자가 잘 보이도록 위·아래를 살짝 어둡게
+    const veil = c.createLinearGradient(0, 0, 0, H);
+    veil.addColorStop(0, 'rgba(3, 6, 14, 0.55)'); veil.addColorStop(0.35, 'rgba(3, 6, 14, 0.15)');
+    veil.addColorStop(0.78, 'rgba(3, 6, 14, 0.05)'); veil.addColorStop(1, 'rgba(3, 6, 14, 0.55)');
+    c.fillStyle = veil; c.fillRect(0, 0, W, H);
+  }
+};
+
 const Title = {
   HISCORE_KEY: 'battleship.hiscore',
   LEAVE_MS: 600,
@@ -2012,6 +2154,8 @@ const Title = {
     playSound('coin');
     document.getElementById('titleCoinText').textContent = 'START!';
     document.getElementById('titleCredit').textContent = 'CREDIT 01';
+    // 타이틀이 흐려지며 사라지는 동안 뒤에 게임 화면이 비치지 않도록, 브리핑(컷신) 화면을 먼저 깔아 둠
+    if (!this.noBriefing) Briefing.start();
     this.el.classList.add('leaving');
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setTimeout(() => this.finish(), reduce ? 0 : this.LEAVE_MS);
@@ -2022,8 +2166,9 @@ const Title = {
     this.active = false;
     this.leaving = false;
     this.el.hidden = true;
+    TitleBG.stop(); // 배경 애니메이션 멈춤 (화면에 안 보이는 동안 그리지 않음)
     document.documentElement.classList.remove('title-open');
-    if (!this.noBriefing) Briefing.start();
+    if (!this.noBriefing && !Briefing.active) Briefing.start(); // (탭으로 시작했다면 이미 시작됨)
     updateGuide();
     BGM.update(); // 타이틀이 닫히면 배치 곡 시작 (23단계)
   },
@@ -2223,7 +2368,13 @@ const Briefing = {
       return d;
     });
     this.el.hidden = false;
-    this.beginLine();
+    // 오프닝 컷신 → 끝나면 타자 시작
+    if (BriefCut.wanted()) {
+      document.getElementById('briefHint').textContent = '화면을 누르면 넘기기 · Space';
+      BriefCut.start(() => this.beginLine());
+    } else {
+      this.beginLine();
+    }
   },
 
   // 현재 줄 출력 시작
@@ -2288,12 +2439,14 @@ const Briefing = {
   // 탭·Space·Enter
   advance() {
     if (!this.active) return;
+    if (BriefCut.active) return BriefCut.end(); // 컷신 중 탭 → 바로 타자 브리핑으로
     if (!this.lineFinished()) this.completeLine();
     else this.nextLine();
   },
 
   finish(skipped) {
     if (!this.active) return;
+    BriefCut.stop();
     clearTimeout(this.timer);
     this.active = false;
     this.markSeen();
@@ -2303,6 +2456,342 @@ const Briefing = {
     playSound('click');
     if (!Practice.hasDone()) Practice.start(false); // 처음 한 번만 연습 훈련
     updateGuide();
+  }
+};
+
+
+// =========================================================
+// 브리핑 오프닝 컷신 (처음 브리핑 때 한 번, 6초)
+//  A 0.0~2.2  밤바다: 달빛 아래 수평선 안개 속에서 적 함대 실루엣이 나타남 (붉은 탐조등 깜빡)
+//  B 2.2~4.2  레이더: 녹색 화면을 훑는 빛이 지나갈 때마다 적 5척이 붉게 잡힘
+//  C 4.2~6.0  새벽 항구: 아군 구축함 3척이 파도를 가르며 출격 → '제7함대, 출격하라'
+// - 끝나면(또는 탭하면) 기존 타자 브리핑 시작 · 건너뛰기 버튼은 브리핑 전체를 건너뜀
+// - 별·적 함대 위치는 처음에 한 번만 계산 (재생 중 새 객체 없음)
+// - 게임을 열 때마다 나옴 (짧은 브리핑일 때도) · '동작 줄이기' 설정이면 나오지 않음
+// =========================================================
+const BRIEF_CUT_MS = 6000;
+const BriefCut = {
+  enabled: true, // 실제 게임은 항상 켜짐 (테스트 도구에서 기존 테스트용으로만 끔)
+  active: false,
+  played: 0,
+  canvas: null,
+  ctx: null,
+  t0: 0,
+  raf: 0,
+  timer: 0,
+  onDone: null,
+  bus: null,
+  stars: Array.from({ length: 70 }, (_, i) => ({ x: (i * 397) % 1170, y: 260 + ((i * 211) % 760), r: 1 + (i % 3), tw: i * 0.7 })),
+  fleet: [[-420, 0.42, 0], [-200, 0.6, 26], [30, 0.85, 58], [260, 0.55, 18], [450, 0.4, 4]], // 적 함대: x 위치, 크기, 수평선 아래 깊이(가까울수록 큼·아래)
+  blips: [[0.7, 0.62], [1.4, 0.45], [2.3, 0.78], [3.6, 0.55], [4.9, 0.7]],      // 레이더: 각도(rad), 거리(0~1)
+  convoy: [[-200, 0.6, 0, 70], [-760, 0.36, 0.3, 8], [-1180, 0.26, 0.6, -14]],   // 아군: x 시작, 크기, 늦게 출발, 수평선 아래 깊이
+
+  init() {
+    this.canvas = document.getElementById('briefCut');
+    this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+    this.frame = this.frame.bind(this);
+  },
+
+  // 재생할지: 게임을 열 때마다 브리핑 앞에서 재생 (탭하면 넘김) · '동작 줄이기'면 안 함
+  wanted() {
+    return this.enabled && !!this.ctx && !prefersReducedMotion();
+  },
+
+  start(onDone) {
+    this.played++;
+    this.active = true;
+    this.onDone = onDone;
+    this.t0 = performance.now();
+    const dpr = FX.dpr || 1;
+    this.canvas.width = Math.round(1170 * dpr);
+    this.canvas.height = Math.round(2080 * dpr);
+    this.canvas.classList.add('on');
+    this.sound();
+    this.render(0);
+    this.raf = requestAnimationFrame(this.frame);
+    this.timer = setTimeout(() => this.end(), BRIEF_CUT_MS);
+  },
+
+  // 끝까지 봤거나 탭으로 넘김 → 타자 브리핑 시작
+  end() {
+    if (!this.active) return;
+    const done = this.onDone;
+    this.stop();
+    if (done) done();
+  },
+
+  // 정리만 (건너뛰기·브리핑 종료)
+  stop() {
+    if (!this.active) return;
+    this.active = false;
+    this.onDone = null;
+    clearTimeout(this.timer);
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.canvas.classList.remove('on');
+    if (this.bus) {
+      try {
+        const now = Sound.ctx.currentTime;
+        if (this.bus.gain.cancelScheduledValues) this.bus.gain.cancelScheduledValues(now);
+        this.bus.gain.setValueAtTime(0, now);
+        this.bus.disconnect();
+      } catch (e) { /* 이미 정리됨 */ }
+      this.bus = null;
+    }
+  },
+
+  frame() {
+    if (!this.active) return;
+    this.render(Math.min((performance.now() - this.t0) / 1000, BRIEF_CUT_MS / 1000));
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  render(t) {
+    const c = this.ctx, W = 1170, H = 2080, dpr = FX.dpr || 1;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.fillStyle = '#000';
+    c.fillRect(0, 0, W, H);
+    c.save();
+    c.globalAlpha = cutSeg(t, 0, 0.5) * (1 - cutSeg(t, 5.6, 6.0));
+    if (t < 2.2) this.sceneNight(c, t);
+    else if (t < 4.2) this.sceneRadar(c, t - 2.2);
+    else this.sceneDawn(c, t - 4.2);
+    c.restore();
+    // 장면 전환: 짧은 암전
+    [2.2, 4.2].forEach(at => {
+      const d = t - at;
+      if (d >= 0 && d < 0.18) { c.fillStyle = `rgba(0, 0, 0, ${1 - d / 0.18})`; c.fillRect(0, 0, W, H); }
+    });
+    this.bars(c, t);
+  },
+
+  // A. 밤바다 + 적 함대 실루엣
+  sceneNight(c, t) {
+    const W = 1170, H = 2080, horizon = 1240;
+    const z = 1 + t * 0.06; // 느리게 앞으로 다가감
+    c.save();
+    c.translate(W / 2, horizon);
+    c.scale(z, z);
+    c.translate(-W / 2, -horizon);
+    const sky = c.createLinearGradient(0, 200, 0, horizon);
+    sky.addColorStop(0, '#02040c'); sky.addColorStop(0.7, '#0b1630'); sky.addColorStop(1, '#1d2b4a');
+    c.fillStyle = sky; c.fillRect(-200, 0, W + 400, horizon);
+    this.stars.forEach(s => {
+      c.globalAlpha = 0.4 + 0.4 * Math.sin(t * 3 + s.tw);
+      c.fillStyle = '#dfe8ff';
+      c.fillRect(s.x, s.y, s.r, s.r);
+    });
+    c.globalAlpha = 1;
+    // 달
+    const moon = c.createRadialGradient(860, 520, 10, 860, 520, 240);
+    moon.addColorStop(0, 'rgba(240, 244, 255, 1)'); moon.addColorStop(0.18, 'rgba(210, 222, 255, 0.85)');
+    moon.addColorStop(0.45, 'rgba(120, 150, 220, 0.18)'); moon.addColorStop(1, 'rgba(60, 90, 160, 0)');
+    c.fillStyle = moon; c.fillRect(600, 260, 520, 520);
+    // 바다 + 달빛 기둥
+    const sea = c.createLinearGradient(0, horizon, 0, H);
+    sea.addColorStop(0, '#16223c'); sea.addColorStop(1, '#03060d');
+    c.fillStyle = sea; c.fillRect(-200, horizon, W + 400, H);
+    c.fillStyle = 'rgba(200, 215, 255, 0.16)';
+    c.beginPath(); c.moveTo(830, horizon); c.lineTo(890, horizon); c.lineTo(1040, H); c.lineTo(700, H); c.closePath(); c.fill();
+    for (let k = 0; k < 12; k++) {
+      const d = k / 11, y = horizon + 14 + d * d * 900;
+      c.strokeStyle = `rgba(170, 195, 255, ${0.22 - d * 0.14})`;
+      c.lineWidth = 1 + d * 3;
+      c.beginPath();
+      for (let x = -200; x <= W + 200; x += 30) {
+        const yy = y + Math.sin((x + t * 120 * (1 + d)) / (80 + d * 240) * TAU) * (2 + d * 16);
+        x === -200 ? c.moveTo(x, yy) : c.lineTo(x, yy);
+      }
+      c.stroke();
+    }
+    // 적 함대 실루엣 (안개 속에서 점점 진해짐) + 붉은 탐조등
+    const show = cutEase.out(cutSeg(t, 0.3, 1.8));
+    // 먼 배부터 그림 (가까운 배가 위에 겹침)
+    this.fleet.slice().sort((p, q) => p[1] - q[1]).forEach(([dx, s, dy], i) => {
+      const x = 585 + dx, y = horizon + 4 + dy;
+      c.save();
+      c.translate(x, y);
+      c.scale(s * 0.42, s * 0.42);
+      c.globalAlpha = show;
+      c.fillStyle = '#05070c';
+      c.beginPath();
+      c.moveTo(-420, -40); c.lineTo(380, -50); c.lineTo(440, -20); c.lineTo(380, 20); c.lineTo(-400, 20); c.closePath(); c.fill();
+      c.fillRect(-220, -170, 220, 130); c.fillRect(-160, -250, 110, 80); c.fillRect(-110, -380, 10, 130);
+      c.fillRect(120, -95, 140, 46); c.fillRect(250, -82, 160, 16);
+      c.restore();
+      if (show > 0.5 && Math.floor(t * 2.5 + i) % 2 === 0) {
+        const lx = x - 50 * s, ly = y - 160 * s * 0.42;
+        const glow = c.createRadialGradient(lx, ly, 1, lx, ly, 26);
+        glow.addColorStop(0, 'rgba(255, 70, 70, 1)'); glow.addColorStop(1, 'rgba(255, 40, 40, 0)');
+        c.fillStyle = glow; c.beginPath(); c.arc(lx, ly, 26, 0, TAU); c.fill();
+      }
+    });
+    // 수평선 안개
+    const fog = c.createLinearGradient(0, horizon - 120, 0, horizon + 60);
+    fog.addColorStop(0, 'rgba(140, 160, 200, 0)'); fog.addColorStop(0.6, `rgba(140, 160, 200, ${0.35 * (1 - show * 0.6)})`); fog.addColorStop(1, 'rgba(140, 160, 200, 0)');
+    c.fillStyle = fog; c.fillRect(-200, horizon - 120, W + 400, 180);
+    c.restore();
+    this.caption(c, t, 0.2, '서해 · 02:00', '정체불명 함대 접근 중');
+  },
+
+  // B. 레이더 화면
+  sceneRadar(c, t) {
+    const W = 1170, H = 2080, cx = 585, cy = 1040, R = 470;
+    c.fillStyle = '#010a06'; c.fillRect(0, 0, W, H);
+    const glow = c.createRadialGradient(cx, cy, 20, cx, cy, R + 80);
+    glow.addColorStop(0, 'rgba(0, 120, 70, 0.35)'); glow.addColorStop(1, 'rgba(0, 40, 20, 0)');
+    c.fillStyle = glow; c.beginPath(); c.arc(cx, cy, R + 80, 0, TAU); c.fill();
+    c.strokeStyle = 'rgba(0, 255, 170, 0.35)'; c.lineWidth = 3;
+    [0.25, 0.5, 0.75, 1].forEach(k => { c.beginPath(); c.arc(cx, cy, R * k, 0, TAU); c.stroke(); });
+    c.beginPath(); c.moveTo(cx - R, cy); c.lineTo(cx + R, cy); c.moveTo(cx, cy - R); c.lineTo(cx, cy + R); c.stroke();
+    // 훑는 빛 (한 바퀴 1.6초)
+    const ang = (t / 1.6) * TAU - Math.PI / 2;
+    for (let i = 0; i < 24; i++) {
+      const a = ang - i * 0.03;
+      c.strokeStyle = `rgba(0, 255, 170, ${0.5 * (1 - i / 24)})`;
+      c.lineWidth = 6;
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); c.stroke();
+    }
+    // 적 표시: 빛이 지나간 뒤부터 붉게, 서서히 약해짐
+    let found = 0;
+    this.blips.forEach(([ba, d]) => {
+      const a = ba - Math.PI / 2;
+      if ((t / 1.6) * TAU < ba) return; // 아직 빛이 안 지나감
+      found++;
+      const passed = ((ang - a) % TAU + TAU) % TAU;
+      const fade = 1 - passed / TAU * 0.7;
+      const x = cx + Math.cos(a) * R * d, y = cy + Math.sin(a) * R * d;
+      const g = c.createRadialGradient(x, y, 2, x, y, 34);
+      g.addColorStop(0, `rgba(255, 90, 90, ${fade})`); g.addColorStop(1, 'rgba(255, 40, 40, 0)');
+      c.fillStyle = g; c.beginPath(); c.arc(x, y, 34, 0, TAU); c.fill();
+      c.fillStyle = `rgba(255, 210, 210, ${fade})`; c.beginPath(); c.arc(x, y, 7, 0, TAU); c.fill();
+    });
+    this.found = found;
+    c.save();
+    c.textAlign = 'center';
+    c.fillStyle = '#6cffc4';
+    c.font = "34px 'Press Start 2P', 'Courier New', monospace";
+    c.fillText('RADAR CONTACT', cx, cy - R - 70);
+    c.fillStyle = found >= 5 ? '#ff6b6b' : '#6cffc4';
+    c.font = "900 64px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+    c.fillText(`적 함대 ${found}척 포착`, cx, cy + R + 120);
+    c.restore();
+  },
+
+  // C. 새벽 항구 출격
+  sceneDawn(c, t) {
+    const W = 1170, H = 2080, horizon = 1260;
+    const sky = c.createLinearGradient(0, 200, 0, horizon);
+    sky.addColorStop(0, '#1a1438'); sky.addColorStop(0.55, '#5b2a4e'); sky.addColorStop(0.85, '#d9644a'); sky.addColorStop(1, '#ffb36b');
+    c.fillStyle = sky; c.fillRect(0, 0, W, horizon);
+    const sun = c.createRadialGradient(320, horizon, 10, 320, horizon, 420);
+    sun.addColorStop(0, 'rgba(255, 236, 190, 1)'); sun.addColorStop(0.15, 'rgba(255, 190, 110, 0.8)'); sun.addColorStop(1, 'rgba(255, 120, 60, 0)');
+    c.fillStyle = sun; c.fillRect(-100, horizon - 420, 840, 420);
+    // 먼 항구 크레인 실루엣
+    c.fillStyle = 'rgba(60, 34, 62, 0.75)';
+    for (let i = 0; i < 4; i++) {
+      const x = 930 + i * 62;
+      c.fillRect(x, horizon - 110, 7, 110);
+      c.fillRect(x - 32, horizon - 110, 70, 6);
+    }
+    const sea = c.createLinearGradient(0, horizon, 0, H);
+    sea.addColorStop(0, '#6a3448'); sea.addColorStop(0.3, '#2a1d38'); sea.addColorStop(1, '#070b18');
+    c.fillStyle = sea; c.fillRect(0, horizon, W, H);
+    Cutscene.waves(c, horizon, t + 4.2, 140);
+    // 아군 구축함 3척: 먼 배부터 그림 (가까운 배가 위에)
+    this.convoy.slice().reverse().forEach(([x0, s, delay, dy]) => {
+      const k = cutEase.out(cutSeg(t, delay * 0.6, 1.8));
+      const x = x0 + k * 1000, y = horizon + dy + Math.sin((t + delay) * 2) * 6 * s;
+      c.save();
+      c.translate(x, y);
+      c.rotate(Math.sin((t + delay) * 1.6) * 0.012);
+      c.scale(s, s);
+      Cutscene.ship(c, -0.18, 0, '#ffb070');
+      c.restore();
+    });
+    // 제목
+    const a = cutSeg(t, 0.5, 1.0);
+    if (a > 0) {
+      c.save();
+      c.globalAlpha *= a;
+      c.textAlign = 'center';
+      c.shadowColor = '#ff9a55';
+      c.shadowBlur = 30;
+      c.fillStyle = '#ffffff';
+      c.font = "900 92px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+      c.fillText('제7함대, 출격하라', 585, 640 - (1 - a) * 30);
+      c.shadowBlur = 0;
+      c.fillStyle = '#ffd166';
+      c.font = "30px 'Press Start 2P', 'Courier New', monospace";
+      c.fillText('OPERATION: NAVAL STORM', 585, 730);
+      c.restore();
+    }
+  },
+
+  // 장면 A 왼쪽 위 자막 (한 글자씩)
+  caption(c, t, at, l1, l2) {
+    const n1 = Math.floor(cutSeg(t, at, at + 0.6) * (l1.length + 0.999));
+    const n2 = Math.floor(cutSeg(t, at + 0.7, at + 1.5) * (l2.length + 0.999));
+    c.save();
+    c.textAlign = 'left';
+    c.fillStyle = '#d9e4ff';
+    c.font = "30px 'Press Start 2P', 'Courier New', monospace";
+    c.fillText(l1.slice(0, n1), 70, 330);
+    c.fillStyle = '#ff8a8a';
+    c.font = "900 46px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+    c.fillText(l2.slice(0, n2), 70, 400);
+    c.restore();
+  },
+
+  bars(c, t) {
+    const W = 1170, H = 2080;
+    const h = 200 * cutEase.out(cutSeg(t, 0, 0.5)) * (1 - cutEase.in(cutSeg(t, 5.6, 6.0)));
+    c.fillStyle = '#000';
+    c.fillRect(0, 0, W, h);
+    c.fillRect(0, H - h, W, h);
+  },
+
+  // 음향: 낮은 드론 + 바다 소리 → 레이더 핑 5번 → 출격 뱃고동 + 팀파니
+  sound() {
+    const ctx = Sound.ctx;
+    if (!ctx || Sound.muted || ctx.state !== 'running' || !ctx.createBiquadFilter) return;
+    const now = ctx.currentTime;
+    const bus = ctx.createGain();
+    bus.gain.value = 0.85;
+    bus.connect(Sound.master);
+    this.bus = bus;
+    Sound.duck(now, 5.6);
+    if (!Cutscene.noise) {
+      const len = ctx.sampleRate * 2;
+      Cutscene.noise = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = Cutscene.noise.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const tone = (type, f0, f1, at, dur, vol, cutoff) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, now + at);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, now + at + dur);
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.linearRampToValueAtTime(vol, now + at + Math.min(0.5, dur * 0.3));
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
+      let out = o;
+      if (cutoff) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; o.connect(f); out = f; }
+      out.connect(g); g.connect(bus);
+      o.start(now + at); o.stop(now + at + dur + 0.05);
+    };
+    // 바다 소리 (노이즈를 낮게 걸러 파도처럼)
+    const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = Cutscene.noise; src.loop = true;
+    f.type = 'lowpass'; f.frequency.value = 500;
+    g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.18, now + 0.8); g.gain.linearRampToValueAtTime(0.0001, now + 2.3);
+    src.connect(f); f.connect(g); g.connect(bus);
+    src.start(now); src.stop(now + 2.4);
+    [[55, 0.14], [82.4, 0.09]].forEach(([fq, v]) => tone('sawtooth', fq, fq, 0, 4.4, v, 400)); // 낮은 드론
+    this.blips.forEach(([ba]) => tone('sine', 1320, 1320, 2.2 + (ba / TAU) * 1.6 + 0.05, 0.25, 0.12)); // 레이더 핑 (빛이 지나갈 때)
+    tone('sawtooth', 98, 92, 4.25, 1.4, 0.22, 700);   // 출격 뱃고동
+    tone('sawtooth', 146.8, 138, 4.25, 1.4, 0.12, 900);
+    [4.3, 4.75, 5.2].forEach(at => tone('sine', 70, 40, at, 0.5, 0.45)); // 팀파니
   }
 };
 
@@ -3126,7 +3615,9 @@ const TIMING = {
   CHAIN_MS: 110,         // 침몰 (20단계): 연쇄 폭발 칸 간격
   SINK_MS: 650,          // 침몰 (20단계): 가라앉는 시간 (기포는 그 뒤에도 잠시 남지만 기다리지 않음)
   AFTER_SHOT_MS: 1500,   // 내 포탄이 떨어진 뒤 적 턴으로 넘어가기까지 (폭발·침몰 연출 시간 포함)
-  CAP: { normal: 1200, special: 2000, sunk: 2500, think: 850, banner: 600, afterShot: 1500 }
+  CUTSCENE_MS: 5000,     // 특수무기 발사 컷신 (탭하면 넘김)
+  SHORTCUT_MS: 2000,     // 일반 포격 짧은 컷신 (탭하면 넘김)
+  CAP: { normal: 1200, special: 2000, sunk: 2500, think: 850, banner: 600, afterShot: 1500, cutscene: 5000, shortcut: 2000, sinkcut: 4000, wincut: 7000, losecut: 7000 }
 };
 
 // =========================================================
@@ -3290,6 +3781,1621 @@ const Seq = {
 // - 적 턴 배너는 CPU 생각 시간(0.85초) 안에서 재생 → 턴 전체 시간은 늘지 않음
 // - 내 턴 배너는 보드를 적 해역으로 바꾼 뒤 재생 → 배너가 사라지면 바로 조준 가능
 // =========================================================
+
+// =========================================================
+// 특수무기 발사 컷신 (5초)
+// 노을 진 바다 → 아군 구축함 등장 → 포탑 클로즈업·포신 상승 → 발사(섬광·반동·충격파) → 미사일 추적 → 복귀
+//  0.0~0.4  레터박스·페이드 인        0.2~1.6  광각: 함선이 파도를 가르며 진입 (롤링·피칭)
+//  1.6~2.8  카메라가 포탑으로 줌인, 포신 상승·장전음   2.8  발사: 섬광·화면 흔들림·반동·포연
+//  3.1~4.6  미사일 추적: 십자탄=분열 / X자탄=4발 편대 / 물수제비탄=수면 위를 튀며 비행
+//  4.6~5.0  페이드 아웃 → 기존 조준·착탄 연출로 이어짐
+// - 시간은 Seq 비트(5초)로 관리 → 탭하면 즉시 종료, 재시작하면 취소
+// - 음향은 전용 버스 → 넘기면 예약된 소리까지 한 번에 끔
+// - 연기 입자 48개는 처음에 만들어 재사용 (재생 중 새 객체 없음)
+// - '동작 줄이기' 설정이면 재생 안 함
+// =========================================================
+const CUT_INFO = {
+  cross: { ko: '십자탄', en: 'CROSS STRIKE', glow: '#ffd166' },
+  x:     { ko: 'X자탄', en: 'X-SALVO', glow: '#ff8fa3' },
+  skip:  { ko: '물수제비탄', en: 'RICOCHET SHELL', glow: '#90e0ef' },
+  normal: { ko: '주포 발사', en: 'MAIN GUN', glow: '#ffb703' }
+};
+// 특수무기(5초) / 일반 포격(2초) 시간표. 그리기는 같은 장면을 쓰고 시간만 다르게
+const CUT_FULL = { FIRE: 2.8, MISSILE: 3.1, END: 5.0, short: false };
+const CUT_SHORT = { FIRE: 0.75, MISSILE: 1.0, END: 2.0, short: true };
+let CUT_T = CUT_FULL;
+const cutClamp = v => (v < 0 ? 0 : v > 1 ? 1 : v);
+const cutSeg = (t, a, b) => cutClamp((t - a) / (b - a));
+const cutEase = {
+  io: k => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2),
+  out: k => 1 - Math.pow(1 - k, 3),
+  in: k => k * k * k
+};
+
+const Cutscene = {
+  enabled: true, // 실제 게임은 항상 켜짐 (테스트 도구에서 기존 테스트용으로만 끔)
+  active: false,
+  played: 0,
+  weapon: null,
+  target: null,
+  t0: 0,
+  lastT: 0,
+  raf: 0,
+  canvas: null,
+  ctx: null,
+  bus: null,
+  noise: null,
+  smoke: Array.from({ length: 48 }, () => ({ x: 0, y: 0, vx: 0, vy: 0, r: 0, age: 9, life: 1 })),
+  smokeFired: false,
+
+  init() {
+    this.canvas = document.getElementById('cutCanvas');
+    this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+    this.frame = this.frame.bind(this);
+  },
+
+  async play(weapon, target, wait, beat) {
+    if (!this.enabled || !this.ctx || !CUT_INFO[weapon] || prefersReducedMotion()) return;
+    const short = weapon === 'normal';
+    await beat(short ? 'shortcut' : 'cutscene', async () => {
+      this.start(weapon, target);
+      try { await wait(short ? TIMING.SHORTCUT_MS : TIMING.CUTSCENE_MS); } finally { this.stop(); }
+    });
+  },
+
+  start(weapon, target) {
+    this.played++;
+    CUT_T = weapon === 'normal' ? CUT_SHORT : CUT_FULL;
+    this.active = true;
+    this.weapon = weapon;
+    this.target = target;
+    this.t0 = performance.now();
+    this.lastT = 0;
+    this.smokeFired = false;
+    this.smoke.forEach(p => { p.age = 9; });
+    const dpr = FX.dpr || 1;
+    this.canvas.width = Math.round(1170 * dpr);
+    this.canvas.height = Math.round(2080 * dpr);
+    this.canvas.classList.add('on');
+    this.sound();
+    this.render(0);
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  stop() {
+    if (!this.active) return;
+    this.active = false;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.canvas.classList.remove('on');
+    if (this.bus) {
+      try {
+        const now = Sound.ctx.currentTime;
+        if (this.bus.gain.cancelScheduledValues) this.bus.gain.cancelScheduledValues(now);
+        this.bus.gain.setValueAtTime(0, now);
+        this.bus.disconnect();
+      } catch (e) { /* 이미 정리됨 */ }
+      this.bus = null;
+    }
+  },
+
+  frame() {
+    if (!this.active) return;
+    this.render(Math.min((performance.now() - this.t0) / 1000, CUT_T.END));
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  // ---------- 그리기 ----------
+  render(t) {
+    const c = this.ctx, W = 1170, H = 2080, dpr = FX.dpr || 1;
+    const dt = Math.max(0, Math.min(0.05, t - this.lastT));
+    this.lastT = t;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    c.save();
+    // 게임 화면과 겹치며 들어오고 나감
+    const E = CUT_T.END;
+    c.globalAlpha = cutSeg(t, 0, CUT_T.short ? 0.12 : 0.3) * (1 - cutSeg(t, E - (CUT_T.short ? 0.2 : 0.35), E));
+    // 발사 충격 흔들림 (감쇠)
+    const since = t - CUT_T.FIRE;
+    const amp = since > 0 && since < 1.2 ? (CUT_T.short ? 20 : 30) * Math.exp(-since * 4.5) : 0;
+    c.translate(amp * Math.sin(t * 97), amp * Math.cos(t * 71));
+    if (t < CUT_T.MISSILE) this.shotShip(c, t, dt);
+    else this.shotMissile(c, t);
+    c.restore();
+    // 포구 섬광 (화면 전체가 하얗게)
+    if (since >= 0 && since < 0.32) {
+      c.fillStyle = `rgba(255, 240, 214, ${0.9 * (1 - since / 0.32)})`;
+      c.fillRect(0, 0, W, H);
+    }
+    // 장면 전환 순간의 짧은 암전
+    const cut = t - CUT_T.MISSILE;
+    if (cut >= 0 && cut < 0.12) {
+      c.fillStyle = `rgba(0, 0, 0, ${0.8 * (1 - cut / 0.12)})`;
+      c.fillRect(0, 0, W, H);
+    }
+    this.bars(c, t);
+  },
+
+  // 하늘 + 바다 (horizon: 수평선 y, drift: 구름 이동)
+  backdrop(c, horizon, drift, sunX) {
+    const W = 1170, H = 2080;
+    const sky = c.createLinearGradient(0, horizon - 1400, 0, horizon);
+    sky.addColorStop(0, '#120b26');
+    sky.addColorStop(0.45, '#4a1636');
+    sky.addColorStop(0.78, '#c2412d');
+    sky.addColorStop(1, '#f6a04a');
+    c.fillStyle = sky;
+    c.fillRect(-2000, horizon - 3000, W + 4000, 3000);
+    // 해
+    const sun = c.createRadialGradient(sunX, horizon - 30, 10, sunX, horizon - 30, 420);
+    sun.addColorStop(0, 'rgba(255, 236, 190, 1)');
+    sun.addColorStop(0.12, 'rgba(255, 200, 120, 0.9)');
+    sun.addColorStop(0.4, 'rgba(255, 120, 60, 0.25)');
+    sun.addColorStop(1, 'rgba(255, 90, 40, 0)');
+    c.fillStyle = sun;
+    c.fillRect(sunX - 440, horizon - 470, 880, 470);
+    // 길게 깔린 구름
+    for (let i = 0; i < 6; i++) {
+      const y = horizon - 160 - i * 150, x = ((i * 397 + drift * (40 + i * 18)) % (W + 1400)) - 700;
+      c.fillStyle = `rgba(${40 + i * 6}, ${16 + i * 3}, ${44 + i * 4}, 0.55)`;
+      c.beginPath(); c.ellipse(x + 300, y, 520 - i * 30, 26 + i * 6, 0, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(255, 150, 90, 0.18)';
+      c.beginPath(); c.ellipse(x + 300, y + 14 + i * 2, 460 - i * 30, 8, 0, 0, TAU); c.fill();
+    }
+    // 바다
+    const sea = c.createLinearGradient(0, horizon, 0, horizon + 1400);
+    sea.addColorStop(0, '#5a2a3a');
+    sea.addColorStop(0.25, '#241a33');
+    sea.addColorStop(1, '#070b18');
+    c.fillStyle = sea;
+    c.fillRect(-2000, horizon, W + 4000, 3000);
+    // 해 반사광 기둥
+    const glare = c.createLinearGradient(0, horizon, 0, horizon + 900);
+    glare.addColorStop(0, 'rgba(255, 190, 110, 0.55)');
+    glare.addColorStop(1, 'rgba(255, 140, 80, 0)');
+    c.fillStyle = glare;
+    c.beginPath();
+    c.moveTo(sunX - 60, horizon); c.lineTo(sunX + 60, horizon);
+    c.lineTo(sunX + 260, horizon + 900); c.lineTo(sunX - 260, horizon + 900); c.closePath();
+    c.fill();
+  },
+
+  // 파도 줄 (멀수록 촘촘·옅게)
+  waves(c, horizon, t, speed) {
+    for (let k = 0; k < 14; k++) {
+      const depth = k / 13, y = horizon + 18 + depth * depth * 1100;
+      const amp = 3 + depth * 22, len = 90 + depth * 260;
+      c.strokeStyle = `rgba(255, ${150 + k * 4}, ${110 + k * 6}, ${0.28 - depth * 0.16})`;
+      c.lineWidth = 1 + depth * 4;
+      c.beginPath();
+      for (let x = -400; x <= 1600; x += 30) {
+        const yy = y + Math.sin((x + t * speed * (1 + depth)) / len * TAU) * amp + Math.sin((x * 0.37 - t * 80) / len * TAU) * amp * 0.4;
+        x === -400 ? c.moveTo(x, yy) : c.lineTo(x, yy);
+      }
+      c.stroke();
+    }
+  },
+
+  // 구축함 (원점 = 흘수선 가운데, 오른쪽이 함수)
+  ship(c, elev, recoil, rim) {
+    const steel = c.createLinearGradient(0, -300, 0, 40);
+    steel.addColorStop(0, '#6c7685');
+    steel.addColorStop(0.55, '#323a46');
+    steel.addColorStop(1, '#12161d');
+    // 선체
+    c.fillStyle = steel;
+    c.beginPath();
+    c.moveTo(-520, -58); c.lineTo(400, -74);
+    c.quadraticCurveTo(520, -78, 560, -46);
+    c.lineTo(470, 42); c.lineTo(-480, 42); c.lineTo(-530, -8);
+    c.closePath(); c.fill();
+    c.fillStyle = '#5c1b1b';
+    c.fillRect(-490, 24, 960, 18);
+    // 상부 구조물·굴뚝·마스트
+    c.fillStyle = '#3b4452';
+    c.fillRect(-300, -196, 300, 140);
+    c.fillRect(-240, -280, 170, 86);
+    c.fillRect(-150, -330, 70, 52);
+    c.fillStyle = '#2a313b';
+    c.fillRect(-430, -186, 76, 128);
+    c.fillStyle = 'rgba(255, 214, 140, 0.85)';
+    for (let i = 0; i < 6; i++) c.fillRect(-230 + i * 26, -258, 14, 10);
+    c.strokeStyle = '#2a313b'; c.lineWidth = 6;
+    c.beginPath(); c.moveTo(-115, -330); c.lineTo(-115, -470); c.moveTo(-160, -430); c.lineTo(-70, -430); c.stroke();
+    // 노을 역광 테두리
+    c.strokeStyle = rim; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(-520, -58); c.lineTo(400, -74); c.quadraticCurveTo(520, -78, 560, -46); c.stroke();
+    c.beginPath(); c.moveTo(-300, -196); c.lineTo(0, -196); c.moveTo(-240, -280); c.lineTo(-70, -280); c.stroke();
+    // 주포 (포신 → 포탑 순서로 그려 포신이 포탑 안에서 나오게)
+    c.save();
+    c.translate(250, -112);
+    c.rotate(elev);
+    const bar = c.createLinearGradient(0, -16, 0, 16);
+    bar.addColorStop(0, '#8a94a3'); bar.addColorStop(0.5, '#3a424e'); bar.addColorStop(1, '#1a1f27');
+    c.fillStyle = bar;
+    c.fillRect(20 - recoil * 46, -15, 250, 30);
+    c.fillStyle = '#20262f';
+    c.fillRect(256 - recoil * 46, -19, 22, 38);
+    c.restore();
+    c.fillStyle = steel;
+    c.beginPath();
+    c.moveTo(160, -74); c.lineTo(170, -132); c.quadraticCurveTo(250, -168, 330, -132); c.lineTo(340, -74);
+    c.closePath(); c.fill();
+    c.strokeStyle = rim; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(170, -132); c.quadraticCurveTo(250, -168, 330, -132); c.stroke();
+  },
+
+  // 함선 화면 (0~3.1초): 광각 진입 → 포탑 줌인 → 발사
+  shotShip(c, t, dt) {
+    // 짧은 버전: 0~0.75초를 긴 버전의 2.05~2.8초(포탑 클로즈업·포신 상승 끝부분)로 옮겨 같은 그림을 씀
+    if (CUT_T.short) t = t < CUT_T.FIRE ? 2.05 + t : CUT_FULL.FIRE + (t - CUT_T.FIRE);
+    const W = 1170, H = 2080, horizon = 1180;
+    // 함선 위치·자세: 파도를 가르며 진입, 느린 롤링 + 피칭
+    const enter = cutEase.out(cutSeg(t, 0.15, 1.6));
+    const shipX = -760 + enter * 1260, shipY = horizon + 60 + Math.sin(t * 2.1) * 9;
+    const fire = t - CUT_FULL.FIRE;
+    const kick = fire > 0 ? Math.exp(-fire * 6) * Math.sin(fire * 18) : 0;
+    const heel = Math.sin(t * 1.7) * 0.012 - (fire > 0 ? 0.035 * Math.exp(-fire * 3) : 0);
+    const S = 0.82;
+    const elev = -0.56 * cutEase.io(cutSeg(t, 1.85, 2.6)) + kick * 0.04;
+    const recoil = fire > 0 ? Math.max(0, 1 - fire * 4) : 0;
+    // 포구 위치 (월드 좌표)
+    const pivX = 250 * S, pivY = -112 * S;
+    const ca = Math.cos(heel), sa = Math.sin(heel), ce = Math.cos(elev), se = Math.sin(elev);
+    const tipLx = pivX + (278 - recoil * 46) * S * ce, tipLy = pivY + (278 - recoil * 46) * S * se;
+    const tip = { x: shipX + tipLx * ca - tipLy * sa, y: shipY + tipLx * sa + tipLy * ca };
+    const turret = { x: shipX + pivX * ca - pivY * sa, y: shipY + pivX * sa + pivY * ca };
+    // 카메라: 1.15배 광각 → 포탑으로 2.7배 줌인
+    const zk = cutEase.io(cutSeg(t, 1.5, 2.35));
+    const z = 1.0 + 0.15 * cutSeg(t, 0, 1.6) + 1.55 * zk;
+    const fx = 585 + (turret.x + 120 - 585) * zk;
+    const fy = horizon - 120 + (turret.y - 60 - (horizon - 120)) * zk;
+    c.save();
+    c.translate(W / 2, H / 2);
+    c.scale(z, z);
+    c.translate(-fx, -fy);
+    this.backdrop(c, horizon, t, 760);
+    this.waves(c, horizon, t, 140);
+    // 뱃머리 물보라
+    c.fillStyle = 'rgba(255, 220, 200, 0.35)';
+    for (let i = 0; i < 7; i++) {
+      const bx = shipX + 470 * S + i * 18, by = shipY + 10 - Math.abs(Math.sin(t * 9 + i)) * 26;
+      c.beginPath(); c.ellipse(bx, by, 16 - i, 6, 0, 0, TAU); c.fill();
+    }
+    // 함선
+    c.save();
+    c.translate(shipX, shipY);
+    c.rotate(heel);
+    c.scale(S, S);
+    this.ship(c, elev, recoil, '#ff9a55');
+    c.restore();
+    // 장전 경고등 (줌인 중 깜빡)
+    if (t > 1.9 && t < CUT_FULL.FIRE && Math.floor(t * 6) % 2 === 0) {
+      c.fillStyle = 'rgba(255, 60, 60, 0.95)';
+      c.beginPath(); c.arc(turret.x - 40, turret.y - 48, 7, 0, TAU); c.fill();
+    }
+    // 발사: 포구 섬광 + 충격파 + 포연
+    if (fire > 0 && !this.smokeFired) {
+      this.smokeFired = true;
+      for (let i = 0; i < this.smoke.length; i++) {
+        const p = this.smoke[i], a = elev + (Math.random() - 0.5) * 0.9, sp = 120 + Math.random() * 420;
+        p.x = tip.x; p.y = tip.y;
+        p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp - 30;
+        p.r = 10 + Math.random() * 18; p.age = 0; p.life = 0.9 + Math.random() * 1.1;
+      }
+    }
+    if (fire > 0 && fire < 0.22) {
+      const k = 1 - fire / 0.22;
+      const fl = c.createRadialGradient(tip.x, tip.y, 4, tip.x, tip.y, 260 * k + 60);
+      fl.addColorStop(0, 'rgba(255, 255, 230, 1)');
+      fl.addColorStop(0.25, 'rgba(255, 200, 90, 0.9)');
+      fl.addColorStop(1, 'rgba(255, 90, 20, 0)');
+      c.fillStyle = fl;
+      c.beginPath(); c.arc(tip.x, tip.y, 260 * k + 60, 0, TAU); c.fill();
+    }
+    if (fire > 0 && fire < 0.6) {
+      c.strokeStyle = `rgba(255, 230, 200, ${0.6 * (1 - fire / 0.6)})`;
+      c.lineWidth = 6;
+      c.beginPath(); c.ellipse(tip.x, tip.y, 40 + fire * 700, 16 + fire * 260, elev, 0, TAU); c.stroke();
+    }
+    for (let i = 0; i < this.smoke.length; i++) {
+      const p = this.smoke[i];
+      if (p.age >= p.life) continue;
+      p.age += dt;
+      p.vx *= 1 - dt * 1.6; p.vy = p.vy * (1 - dt * 1.6) - 40 * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      const k = p.age / p.life;
+      c.fillStyle = `rgba(${150 - k * 60}, ${130 - k * 60}, ${130 - k * 50}, ${0.55 * (1 - k)})`;
+      c.beginPath(); c.arc(p.x, p.y, p.r * (1 + k * 3), 0, TAU); c.fill();
+    }
+    c.restore();
+  },
+
+  // 미사일 추적 화면 (3.1~5.0초)
+  shotMissile(c, t) {
+    const W = 1170, H = 2080;
+    if (CUT_T.short) return this.shortMissile(c, t);
+    const k = cutSeg(t, CUT_T.MISSILE, 4.7);
+    const skim = this.weapon === 'skip';
+    // 수평선을 크게 기울여 속도감 (물수제비탄은 바다 바로 위)
+    const horizon = skim ? 1350 : 1900 + k * 500;
+    c.save();
+    c.translate(W / 2, H / 2);
+    c.rotate(skim ? -0.04 : -0.18);
+    c.translate(-W / 2, -H / 2);
+    this.backdrop(c, horizon, t * 14, 300);
+    if (skim) this.waves(c, horizon, t, 900);
+    c.restore();
+    // 속도선
+    c.strokeStyle = 'rgba(255, 230, 210, 0.22)';
+    c.lineWidth = 3;
+    for (let i = 0; i < 14; i++) {
+      const y = (i * 151 + t * 2600) % (H + 400) - 200, x = (i * 263) % W;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x - 90, y - 260); c.stroke();
+    }
+    const info = CUT_INFO[this.weapon];
+    const lead = { x: 585 + Math.sin(t * 3) * 30, y: skim ? 1240 : 900 - k * 120 };
+    if (this.weapon === 'x') {
+      [[-170, -120], [170, -120], [-170, 140], [170, 140]].forEach(([dx, dy], i) =>
+        this.missile(c, lead.x + dx + Math.sin(t * 4 + i) * 10, lead.y + dy, -0.55, 0.8, t + i * 0.3, info.glow));
+    } else if (this.weapon === 'cross') {
+      const split = cutSeg(t, 4.1, 4.45);
+      if (split <= 0) this.missile(c, lead.x, lead.y, -0.55, 1.15, t, info.glow);
+      else {
+        const e = cutEase.out(split);
+        [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy], i) =>
+          this.missile(c, lead.x + dx * 260 * e, lead.y + dy * 260 * e, -0.55 + dx * 0.25, 0.75, t + i, info.glow));
+        if (split < 0.5) {
+          const fl = c.createRadialGradient(lead.x, lead.y, 5, lead.x, lead.y, 240);
+          fl.addColorStop(0, `rgba(255, 245, 210, ${1 - split * 2})`);
+          fl.addColorStop(1, 'rgba(255, 160, 60, 0)');
+          c.fillStyle = fl;
+          c.beginPath(); c.arc(lead.x, lead.y, 240, 0, TAU); c.fill();
+        }
+      }
+    } else {
+      // 물수제비탄: 3번 수면을 차고 튐
+      const hops = [3.55, 3.95, 4.35];
+      let y = lead.y;
+      hops.forEach(h => { const d = t - h; if (d > -0.2 && d < 0.2) y += (0.04 - d * d) * 2600; });
+      this.missile(c, lead.x, y, -0.08, 1.0, t, info.glow);
+      hops.forEach(h => {
+        const d = t - h;
+        if (d < 0 || d > 0.5) return;
+        c.fillStyle = `rgba(200, 235, 255, ${0.8 * (1 - d / 0.5)})`;
+        for (let i = 0; i < 9; i++) {
+          const a = -Math.PI / 2 + (i - 4) * 0.25;
+          c.beginPath(); c.arc(lead.x - 120 + Math.cos(a) * d * 420, 1300 + Math.sin(a) * d * 520 + d * d * 900, 9, 0, TAU); c.fill();
+        }
+      });
+    }
+  },
+
+  // 일반 포격 미사일 (1.0~2.0초): 기울어진 수평선 위로 한 발이 왼쪽 아래 → 오른쪽 위로 가로지름
+  shortMissile(c, t) {
+    const W = 1170, H = 2080;
+    const k = cutEase.io(cutSeg(t, CUT_T.MISSILE, CUT_T.END - 0.1));
+    c.save();
+    c.translate(W / 2, H / 2);
+    c.rotate(-0.18);
+    c.translate(-W / 2, -H / 2);
+    this.backdrop(c, 1900 + k * 300, t * 14, 300);
+    c.restore();
+    c.strokeStyle = 'rgba(255, 230, 210, 0.22)';
+    c.lineWidth = 3;
+    for (let i = 0; i < 12; i++) {
+      const y = (i * 173 + t * 3000) % (H + 400) - 200, x = (i * 263) % W;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x - 90, y - 260); c.stroke();
+    }
+    this.missile(c, 160 + k * 820, 1500 - k * 900, -0.55, 1.05, t, CUT_INFO.normal.glow);
+  },
+
+  // 미사일 한 발: 기체 + 불꽃 + 연기 꼬리 (각도 a, 크기 s)
+  missile(c, x, y, a, s, t, glow) {
+    c.save();
+    c.translate(x, y);
+    c.rotate(a);
+    c.scale(s, s);
+    // 연기 꼬리
+    for (let i = 1; i <= 18; i++) {
+      c.fillStyle = `rgba(210, 190, 190, ${0.32 * (1 - i / 19)})`;
+      c.beginPath(); c.arc(-90 - i * 46, Math.sin(t * 12 + i) * (3 + i * 1.6), 14 + i * 4, 0, TAU); c.fill();
+    }
+    // 분사 불꽃 (깜빡임)
+    const len = 120 + Math.sin(t * 60) * 26;
+    const fl = c.createLinearGradient(-90 - len, 0, -90, 0);
+    fl.addColorStop(0, 'rgba(255, 90, 20, 0)');
+    fl.addColorStop(0.6, 'rgba(255, 170, 60, 0.9)');
+    fl.addColorStop(1, 'rgba(255, 255, 230, 1)');
+    c.fillStyle = fl;
+    c.beginPath(); c.moveTo(-90, -14); c.lineTo(-90 - len, 0); c.lineTo(-90, 14); c.closePath(); c.fill();
+    // 기체
+    const body = c.createLinearGradient(0, -18, 0, 18);
+    body.addColorStop(0, '#e8ecf1'); body.addColorStop(0.5, '#9aa3ae'); body.addColorStop(1, '#4b525c');
+    c.fillStyle = body;
+    c.beginPath();
+    c.moveTo(-90, -16); c.lineTo(90, -16); c.quadraticCurveTo(150, 0, 90, 16); c.lineTo(-90, 16);
+    c.closePath(); c.fill();
+    c.fillStyle = '#b3262e';
+    c.fillRect(40, -16, 14, 32);
+    c.fillStyle = '#3c434d';
+    c.beginPath(); c.moveTo(-90, -16); c.lineTo(-60, -16); c.lineTo(-100, -46); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(-90, 16); c.lineTo(-60, 16); c.lineTo(-100, 46); c.closePath(); c.fill();
+    c.strokeStyle = glow; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(-90, -16); c.lineTo(90, -16); c.stroke();
+    c.restore();
+  },
+
+  // 레터박스 + 자막
+  bars(c, t) {
+    const W = 1170, H = 2080;
+    const E = CUT_T.END;
+    const h = (CUT_T.short ? 150 : 230) * cutEase.out(cutSeg(t, 0, CUT_T.short ? 0.15 : 0.4)) * (1 - cutEase.in(cutSeg(t, E - 0.3, E)));
+    if (h <= 0) return;
+    if (CUT_T.short) {
+      // 일반 포격: 얇은 레터박스 + 'FIRE · D4' 한 줄
+      c.fillStyle = '#000';
+      c.fillRect(0, 0, W, h);
+      c.fillRect(0, H - h, W, h);
+      const a = cutSeg(t, 0.1, 0.3) * (1 - cutSeg(t, E - 0.35, E - 0.15));
+      if (a <= 0) return;
+      c.save();
+      c.globalAlpha = a;
+      c.textBaseline = 'middle';
+      c.textAlign = 'center';
+      c.fillStyle = '#ffd166';
+      c.shadowColor = CUT_INFO.normal.glow;
+      c.shadowBlur = 16;
+      c.font = "34px 'Press Start 2P', 'Courier New', monospace";
+      const tgt = this.target ? ` · ${COLS[this.target.c]}${ROWS[this.target.r]}` : '';
+      c.fillText((t < CUT_T.FIRE ? 'READY' : 'FIRE!') + tgt, W / 2, H - h / 2);
+      c.restore();
+      return;
+    }
+    c.fillStyle = '#000';
+    c.fillRect(0, 0, W, h);
+    c.fillRect(0, H - h, W, h);
+    const info = CUT_INFO[this.weapon];
+    const a = cutSeg(t, 0.35, 0.7) * (1 - cutSeg(t, E - 0.45, E - 0.25));
+    if (a <= 0) return;
+    c.save();
+    c.globalAlpha = a;
+    c.textBaseline = 'middle';
+    // 위: 작전 승인 (빨간 점 깜빡)
+    if (Math.floor(t * 3) % 2 === 0) { c.fillStyle = '#ff3b3b'; c.beginPath(); c.arc(70, h / 2, 10, 0, TAU); c.fill(); }
+    c.fillStyle = '#d9d9d9';
+    c.font = "26px 'Press Start 2P', 'Courier New', monospace";
+    c.textAlign = 'left';
+    c.fillText('SPECIAL WEAPON AUTHORIZED', 100, h / 2);
+    c.textAlign = 'right';
+    c.fillStyle = '#ffd166';
+    const tgt = this.target ? `TARGET ${COLS[this.target.c]}${ROWS[this.target.r]}` : '';
+    c.fillText(tgt, W - 60, h / 2);
+    // 아래: 무기 이름 (한 글자씩 타자)
+    const n = Math.floor(cutSeg(t, 0.5, 1.4) * (info.ko.length + 0.999));
+    c.textAlign = 'center';
+    c.fillStyle = '#ffffff';
+    c.shadowColor = info.glow;
+    c.shadowBlur = 24;
+    c.font = "900 76px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+    c.fillText(info.ko.slice(0, n), W / 2, H - h / 2 - 26);
+    c.shadowBlur = 0;
+    c.fillStyle = info.glow;
+    c.font = "28px 'Press Start 2P', 'Courier New', monospace";
+    if (t > 1.2) c.fillText(info.en, W / 2, H - h / 2 + 54);
+    c.restore();
+  },
+
+  // ---------- 음향 ----------
+  // 단조 드론(비장함) → 심장 박동 같은 팀파니 → 장전 금속음 → 발사 굉음 → 비행음
+  sound() {
+    const ctx = Sound.ctx;
+    if (!ctx || Sound.muted || ctx.state !== 'running' || !ctx.createBiquadFilter) return;
+    const now = ctx.currentTime;
+    const bus = ctx.createGain();
+    bus.gain.value = 0.9;
+    bus.connect(Sound.master);
+    this.bus = bus;
+    Sound.duck(now, CUT_T.END - 0.3);
+    const short = CUT_T.short;
+    if (!this.noise) {
+      const len = ctx.sampleRate * 2;
+      this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = this.noise.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const tone = (type, f0, f1, at, dur, vol, cutoff) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, now + at);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, now + at + dur);
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.linearRampToValueAtTime(vol, now + at + Math.min(0.4, dur * 0.3));
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
+      let out = o;
+      if (cutoff) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; o.connect(f); out = f; }
+      out.connect(g); g.connect(bus);
+      o.start(now + at); o.stop(now + at + dur + 0.05);
+    };
+    const noise = (at, dur, vol, type, f0, f1, q) => {
+      const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = this.noise;
+      f.type = type; f.Q.value = q || 1;
+      f.frequency.setValueAtTime(f0, now + at);
+      f.frequency.exponentialRampToValueAtTime(f1, now + at + dur);
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.linearRampToValueAtTime(vol, now + at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
+      src.connect(f); f.connect(g); g.connect(bus);
+      src.start(now + at); src.stop(now + at + dur + 0.05);
+    };
+    if (short) {
+      // 일반 포격: 낮은 드론 한 겹 → 장전음 → 발사 굉음 → 쉬익
+      tone('sawtooth', 73.4, 73.4, 0, 1.6, 0.09, 520);
+      tone('sine', 62, 38, 0.1, 0.4, 0.4);
+      noise(0.45, 0.08, 0.3, 'bandpass', 2600, 1800, 6);
+      tone('sine', 90, 28, CUT_T.FIRE, 0.9, 0.8);
+      noise(CUT_T.FIRE, 1.0, 0.65, 'lowpass', 1800, 140, 0.7);
+      noise(CUT_T.MISSILE - 0.05, 0.95, 0.24, 'bandpass', 700, 3200, 2.5);
+      return;
+    }
+    // 단조 드론 D-A-F (낮은 금관 느낌)
+    [[73.4, 0.12], [110, 0.09], [174.6, 0.06]].forEach(([f, v]) => tone('sawtooth', f, f, 0.0, 4.4, v, 520));
+    tone('sawtooth', 146.8, 146.8, 1.6, 2.8, 0.06, 900);          // 줌인과 함께 한 겹 위로 (긴장 상승)
+    [0.35, 1.05, 1.75, 2.3].forEach(at => tone('sine', 62, 38, at, 0.5, 0.5)); // 심장 박동 팀파니
+    // 장전 금속음 2번
+    [1.95, 2.55].forEach(at => { noise(at, 0.09, 0.35, 'bandpass', 2600, 1800, 6); tone('square', 190, 120, at, 0.08, 0.08); });
+    // 발사 굉음: 저음 펀치 + 넓은 폭발 노이즈
+    tone('sine', 90, 28, CUT_T.FIRE, 1.1, 0.9);
+    noise(CUT_T.FIRE, 1.4, 0.8, 'lowpass', 1800, 140, 0.7);
+    // 비행음: 쉬~익
+    noise(3.05, 1.5, 0.28, 'bandpass', 700, 3200, 2.5);
+    if (this.weapon === 'cross') noise(4.12, 0.3, 0.45, 'bandpass', 1400, 500, 2);
+    if (this.weapon === 'x') [3.2, 3.32, 3.44].forEach(at => noise(at, 1.1, 0.12, 'bandpass', 900, 2800, 3));
+    if (this.weapon === 'skip') [3.55, 3.95, 4.35].forEach(at => noise(at, 0.25, 0.35, 'highpass', 900, 3000, 1));
+  }
+};
+
+
+// =========================================================
+// 격침 컷신 (함선 1척마다 4초) — 보드의 침몰 연출이 끝난 뒤 재생
+//  0.0~0.3  레터박스·페이드 인
+//  0.2~1.3  피격: 함선 중앙에서 2차 폭발 연쇄 (섬광·화염 구름·화면 흔들림)
+//  1.3~3.3  침몰: 선체가 기울며 가라앉음, 화염·검은 연기 기둥, 물기둥과 거품
+//              - 항공모함: 갑판의 함재기가 미끄러져 떨어짐, 함교가 마지막에 잠김
+//              - 순양함: 선체가 두 동강 나며 앞뒤가 각각 솟았다 가라앉음
+//              - 잠수함: 수면 위로 솟구쳤다가 함수부터 수직으로 빨려 들어감
+//  3.3~4.0  수면에 기름띠와 잔불만 남고 자막 → 페이드 아웃
+// - 적 함선(내가 격침) = 붉은 노을 + 'ENEMY DESTROYED' / 아군 함선 = 차가운 잿빛 + 'SHIP LOST'
+// - 한 사격에 여러 척 격침되면 큰 함선 1척만 대표로 (턴이 너무 길어지지 않게)
+// - 탭하면 넘김 · 재시작하면 정리 · '동작 줄이기'면 재생 안 함
+// - 연기·불꽃 입자 64개는 처음에 만들어 재사용
+// =========================================================
+const SINK_CUT_MS = 4000;
+const SINK_KIND = { carrier: 'carrier', cruiser1: 'cruiser', cruiser2: 'cruiser', sub1: 'sub', sub2: 'sub' };
+const SinkCut = {
+  enabled: true, // 실제 게임은 항상 켜짐 (테스트 도구에서 기존 테스트용으로만 끔)
+  active: false,
+  played: 0,
+  ship: null,      // { id, name, size }
+  kind: 'cruiser',
+  enemy: true,     // true = 적 함선(내가 격침)
+  t0: 0,
+  lastT: 0,
+  raf: 0,
+  canvas: null,
+  ctx: null,
+  bus: null,
+  parts: Array.from({ length: 64 }, () => ({ x: 0, y: 0, vx: 0, vy: 0, r: 0, age: 9, life: 1, fire: false })),
+  nextPart: 0,
+
+  init() {
+    this.canvas = document.getElementById('cutCanvas'); // 발사 컷신과 같은 캔버스 사용 (동시에 재생되지 않음)
+    this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+    this.frame = this.frame.bind(this);
+  },
+
+  async play(ships, enemy, wait, beat) {
+    if (!this.enabled || !this.ctx || !ships.length || prefersReducedMotion()) return;
+    const ship = ships.slice().sort((a, b) => b.size - a.size)[0];
+    await beat('sinkcut', async () => {
+      this.start(ship, enemy);
+      try { await wait(SINK_CUT_MS); } finally { this.stop(); }
+    });
+  },
+
+  start(ship, enemy) {
+    this.played++;
+    this.active = true;
+    this.ship = ship;
+    this.kind = SINK_KIND[ship.id] || 'cruiser';
+    this.enemy = enemy;
+    this.t0 = performance.now();
+    this.lastT = 0;
+    this.parts.forEach(p => { p.age = 9; });
+    const dpr = FX.dpr || 1;
+    this.canvas.width = Math.round(1170 * dpr);
+    this.canvas.height = Math.round(2080 * dpr);
+    this.canvas.classList.add('on');
+    this.sound();
+    this.render(0);
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  stop() {
+    if (!this.active) return;
+    this.active = false;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.canvas.classList.remove('on');
+    if (this.bus) {
+      try {
+        const now = Sound.ctx.currentTime;
+        if (this.bus.gain.cancelScheduledValues) this.bus.gain.cancelScheduledValues(now);
+        this.bus.gain.setValueAtTime(0, now);
+        this.bus.disconnect();
+      } catch (e) { /* 이미 정리됨 */ }
+      this.bus = null;
+    }
+  },
+
+  frame() {
+    if (!this.active) return;
+    this.render(Math.min((performance.now() - this.t0) / 1000, SINK_CUT_MS / 1000));
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  // 입자 하나 내보내기 (오래된 슬롯 재사용)
+  emit(x, y, vx, vy, r, life, fire) {
+    const p = this.parts[this.nextPart];
+    this.nextPart = (this.nextPart + 1) % this.parts.length;
+    p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.r = r; p.age = 0; p.life = life; p.fire = fire;
+  },
+
+  render(t) {
+    const c = this.ctx, W = 1170, H = 2080, dpr = FX.dpr || 1;
+    const dt = Math.max(0, Math.min(0.05, t - this.lastT));
+    this.lastT = t;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    c.save();
+    c.globalAlpha = cutSeg(t, 0, 0.3) * (1 - cutSeg(t, 3.65, 4.0));
+    // 폭발 흔들림 (0.25초·0.75초 두 번)
+    let amp = 0;
+    [0.25, 0.75].forEach((at, i) => { const d = t - at; if (d > 0 && d < 1) amp += (i ? 22 : 30) * Math.exp(-d * 5); });
+    c.translate(amp * Math.sin(t * 91), amp * Math.cos(t * 67));
+    this.scene(c, t, dt);
+    c.restore();
+    // 첫 폭발 섬광
+    const d0 = t - 0.25;
+    if (d0 >= 0 && d0 < 0.3) {
+      c.fillStyle = this.enemy ? `rgba(255, 220, 170, ${0.75 * (1 - d0 / 0.3)})` : `rgba(230, 235, 255, ${0.6 * (1 - d0 / 0.3)})`;
+      c.fillRect(0, 0, W, H);
+    }
+    this.bars(c, t);
+  },
+
+  scene(c, t, dt) {
+    const W = 1170, H = 2080, horizon = 1120;
+    // 하늘·바다: 적 격침 = 붉은 노을 / 아군 피격 = 차가운 잿빛
+    if (this.enemy) {
+      Cutscene.backdrop(c, horizon, t * 4, 880);
+    } else {
+      const sky = c.createLinearGradient(0, horizon - 1100, 0, horizon);
+      sky.addColorStop(0, '#0b0f17'); sky.addColorStop(0.6, '#2a3240'); sky.addColorStop(1, '#5d6676');
+      c.fillStyle = sky; c.fillRect(-200, 0, W + 400, horizon);
+      const sea = c.createLinearGradient(0, horizon, 0, H);
+      sea.addColorStop(0, '#3a4250'); sea.addColorStop(0.3, '#1a2029'); sea.addColorStop(1, '#05070b');
+      c.fillStyle = sea; c.fillRect(-200, horizon, W + 400, H);
+    }
+    Cutscene.waves(c, horizon, t, 110);
+    // 카메라: 아주 천천히 다가감
+    const z = 1.05 + t * 0.035;
+    c.save();
+    c.translate(585, horizon);
+    c.scale(z, z);
+    c.translate(-585, -horizon);
+    const k = cutEase.in(cutSeg(t, 1.3, 3.3)); // 침몰 진행
+    const cx = 585, cy = horizon + 60;
+    if (this.kind === 'sub') this.drawSub(c, t, k, cx, cy);
+    else if (this.kind === 'carrier') this.drawCarrier(c, t, k, cx, cy);
+    else this.drawCruiser(c, t, k, cx, cy);
+    // 2차 폭발: 함선 위에 화염 구름 (0.2~1.3초, 4번)
+    [[0.25, -60, 1.3], [0.55, 140, 0.9], [0.75, -200, 1.1], [1.05, 40, 0.8]].forEach(([at, dx, s]) => {
+      const d = t - at;
+      if (d < 0 || d > 0.9) return;
+      const r = (80 + d * 260) * s, a = 1 - d / 0.9;
+      const g = c.createRadialGradient(cx + dx, cy - 90, 4, cx + dx, cy - 90, r);
+      g.addColorStop(0, `rgba(255, 250, 220, ${a})`);
+      g.addColorStop(0.3, `rgba(255, 170, 60, ${0.9 * a})`);
+      g.addColorStop(0.7, `rgba(180, 50, 20, ${0.5 * a})`);
+      g.addColorStop(1, 'rgba(60, 20, 10, 0)');
+      c.fillStyle = g;
+      c.beginPath(); c.arc(cx + dx, cy - 90, r, 0, TAU); c.fill();
+      // 폭발 순간 연기·불꽃 뿌리기
+      if (d < dt + 1e-6) for (let i = 0; i < 10; i++) {
+        const a2 = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, sp = 120 + Math.random() * 380;
+        this.emit(cx + dx, cy - 90, Math.cos(a2) * sp, Math.sin(a2) * sp, 14 + Math.random() * 20, 1.2 + Math.random() * 1.4, i < 4);
+      }
+    });
+    // 침몰 중 꾸준히 피어오르는 검은 연기 기둥 + 잔불
+    if (t > 0.6 && t < 3.6 && Math.floor(t * 30) !== Math.floor((t - dt) * 30)) {
+      const sx = cx + (Math.random() - 0.5) * 260 * (1 - k * 0.6);
+      this.emit(sx, cy - 60 + k * 120, (Math.random() - 0.5) * 40, -120 - Math.random() * 90, 22 + Math.random() * 18, 1.8 + Math.random(), Math.random() < 0.3);
+    }
+    for (let i = 0; i < this.parts.length; i++) {
+      const p = this.parts[i];
+      if (p.age >= p.life) continue;
+      p.age += dt;
+      p.vx *= 1 - dt * 1.2;
+      p.vy = p.vy * (1 - dt * 1.2) - 30 * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      const q = p.age / p.life;
+      c.fillStyle = p.fire
+        ? `rgba(255, ${160 - q * 100}, 50, ${0.85 * (1 - q)})`
+        : `rgba(${40 + q * 30}, ${36 + q * 30}, ${38 + q * 30}, ${0.7 * (1 - q)})`;
+      c.beginPath(); c.arc(p.x, p.y, p.r * (1 + q * 2.5), 0, TAU); c.fill();
+    }
+    // 물기둥·거품 (가라앉는 자리)
+    if (k > 0.05) {
+      c.fillStyle = 'rgba(220, 235, 245, 0.55)';
+      for (let i = 0; i < 9; i++) {
+        const x = cx - 240 + i * 60, y = cy + 6 - Math.abs(Math.sin(t * 7 + i)) * 40 * (1 - k);
+        c.beginPath(); c.ellipse(x, y, 26, 9, 0, 0, TAU); c.fill();
+      }
+    }
+    // 끝: 기름띠
+    const oil = cutSeg(t, 2.8, 3.6);
+    if (oil > 0) {
+      c.fillStyle = `rgba(10, 10, 14, ${0.55 * oil})`;
+      c.beginPath(); c.ellipse(cx, cy + 10, 120 + oil * 300, 16 + oil * 20, 0, 0, TAU); c.fill();
+      c.strokeStyle = `rgba(160, 120, 200, ${0.25 * oil})`; c.lineWidth = 3;
+      c.beginPath(); c.ellipse(cx, cy + 10, 110 + oil * 290, 12 + oil * 18, 0, 0, TAU); c.stroke();
+    }
+    c.restore();
+  },
+
+  // 수면 아래 부분을 가리는 바다 (가라앉는 느낌)
+  waterline(c, cx, cy) {
+    c.save();
+    const sea = c.createLinearGradient(0, cy, 0, cy + 600);
+    sea.addColorStop(0, this.enemy ? 'rgba(60, 28, 44, 0.96)' : 'rgba(40, 46, 56, 0.96)');
+    sea.addColorStop(1, 'rgba(8, 10, 18, 1)');
+    c.fillStyle = sea;
+    c.fillRect(cx - 1600, cy + 4, 3200, 1400);
+    c.restore();
+    // 덮은 바다 위에 물결을 다시 그려 평평해 보이지 않게
+    Cutscene.waves(c, cy - 52, this.lastT, 110);
+  },
+
+  // 순양함: 두 동강 → 앞뒤가 각각 솟았다 가라앉음
+  drawCruiser(c, t, k, cx, cy) {
+    const split = cutEase.out(cutSeg(t, 1.0, 1.8));
+    const rim = this.enemy ? '#ff9a55' : '#9fb4c8';
+    [[-1, 1], [1, -1]].forEach(([side, tilt]) => {
+      c.save();
+      c.translate(cx + side * (40 + split * 90), cy + k * 420);
+      c.rotate(tilt * (split * 0.35 + k * 0.55));
+      c.beginPath();
+      c.rect(side < 0 ? -700 : 0, -600, 700, 800); // 반쪽만 보이게 자름
+      c.clip();
+      c.translate(-side * 10, 0);
+      c.scale(0.9, 0.9);
+      Cutscene.ship(c, 0.1 * k, 0, rim);
+      c.restore();
+    });
+    // 갈라진 틈의 불길
+    if (split > 0.1 && k < 0.9) {
+      const g = c.createRadialGradient(cx, cy - 40 + k * 300, 5, cx, cy - 40 + k * 300, 120);
+      g.addColorStop(0, 'rgba(255, 220, 140, 0.95)'); g.addColorStop(1, 'rgba(255, 80, 20, 0)');
+      c.fillStyle = g; c.beginPath(); c.arc(cx, cy - 40 + k * 300, 120, 0, TAU); c.fill();
+    }
+    this.waterline(c, cx, cy);
+  },
+
+  // 항공모함: 갑판이 기울고 함재기가 미끄러져 떨어짐 → 함교가 마지막에 잠김
+  drawCarrier(c, t, k, cx, cy) {
+    const tilt = cutEase.io(cutSeg(t, 0.9, 3.0)) * 0.42;
+    c.save();
+    c.translate(cx, cy + k * 380);
+    c.rotate(-tilt);
+    const steel = c.createLinearGradient(0, -220, 0, 40);
+    steel.addColorStop(0, this.enemy ? '#5f6977' : '#7c8794'); steel.addColorStop(1, '#151a21');
+    // 선체 + 비행갑판
+    c.fillStyle = steel;
+    c.beginPath(); c.moveTo(-560, -40); c.lineTo(560, -40); c.lineTo(500, 40); c.lineTo(-520, 40); c.closePath(); c.fill();
+    c.fillStyle = '#2b323c';
+    c.fillRect(-620, -78, 1220, 40);
+    c.strokeStyle = 'rgba(255, 240, 200, 0.55)'; c.lineWidth = 4; c.setLineDash([30, 22]);
+    c.beginPath(); c.moveTo(-600, -58); c.lineTo(580, -58); c.stroke(); c.setLineDash([]);
+    // 함교 (오른쪽)
+    c.fillStyle = '#3b4452';
+    c.fillRect(260, -220, 110, 142); c.fillRect(290, -290, 60, 70); c.fillRect(315, -370, 8, 80);
+    c.strokeStyle = this.enemy ? '#ff9a55' : '#9fb4c8'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(-620, -78); c.lineTo(600, -78); c.stroke();
+    // 함재기 3대: 기울면 갑판 아래쪽(왼쪽)으로 미끄러져 떨어짐
+    [-380, -180, 40].forEach((x0, i) => {
+      const slide = cutEase.in(cutSeg(t, 1.2 + i * 0.2, 2.4 + i * 0.2));
+      const x = x0 - slide * 520, drop = Math.max(0, x + 620 < 0 ? (-(x + 620)) * 1.4 : 0);
+      c.save();
+      c.translate(x, -92 + drop);
+      c.rotate(-slide * 1.4 * (drop > 0 ? 1 : 0.2));
+      c.fillStyle = '#9aa3ae';
+      c.beginPath(); c.moveTo(-50, 0); c.lineTo(50, 0); c.lineTo(36, -10); c.lineTo(-40, -10); c.closePath(); c.fill();
+      c.fillRect(-12, -26, 24, 26);
+      c.restore();
+    });
+    c.restore();
+    this.waterline(c, cx, cy);
+  },
+
+  // 잠수함: 수면 위로 솟구쳤다가 함수부터 수직으로 빨려 들어감
+  drawSub(c, t, k, cx, cy) {
+    const rise = cutEase.out(cutSeg(t, 0.2, 1.0)) * (1 - k);
+    const stand = cutEase.io(cutSeg(t, 1.3, 2.4)) * 1.15;
+    c.save();
+    c.translate(cx, cy - rise * 60 + k * 620);
+    c.rotate(stand);
+    const hull = c.createLinearGradient(0, -60, 0, 60);
+    hull.addColorStop(0, this.enemy ? '#4a5260' : '#6c7684'); hull.addColorStop(1, '#0f1318');
+    c.fillStyle = hull;
+    c.beginPath(); c.ellipse(0, 0, 420, 60, 0, 0, TAU); c.fill();
+    c.fillStyle = '#2a3038';
+    c.fillRect(-60, -130, 130, 80); c.fillRect(-20, -180, 12, 50); c.fillRect(20, -200, 8, 70);
+    c.fillRect(-440, -40, 40, 80);
+    c.strokeStyle = this.enemy ? '#ff9a55' : '#9fb4c8'; c.lineWidth = 4;
+    c.beginPath(); c.ellipse(0, 0, 420, 60, 0, Math.PI * 1.05, Math.PI * 1.95); c.stroke();
+    c.restore();
+    // 빨려 들어가는 소용돌이
+    if (k > 0.1) {
+      c.strokeStyle = `rgba(200, 225, 240, ${0.5 * (1 - k * 0.5)})`;
+      c.lineWidth = 4;
+      for (let i = 0; i < 3; i++) {
+        c.beginPath(); c.ellipse(cx, cy + 8, 60 + i * 70 + k * 80, 10 + i * 8, 0, t * (2 + i), t * (2 + i) + Math.PI * 1.4); c.stroke();
+      }
+    }
+    this.waterline(c, cx, cy);
+  },
+
+  // 레터박스 + 자막
+  bars(c, t) {
+    const W = 1170, H = 2080;
+    const h = 210 * cutEase.out(cutSeg(t, 0, 0.35)) * (1 - cutEase.in(cutSeg(t, 3.7, 4.0)));
+    if (h <= 0) return;
+    c.fillStyle = '#000';
+    c.fillRect(0, 0, W, h);
+    c.fillRect(0, H - h, W, h);
+    const a = cutSeg(t, 0.4, 0.7) * (1 - cutSeg(t, 3.5, 3.75));
+    if (a <= 0 || !this.ship) return;
+    c.save();
+    c.globalAlpha = a;
+    c.textBaseline = 'middle';
+    c.textAlign = 'center';
+    const col = this.enemy ? '#ffd166' : '#ff8fa3';
+    c.fillStyle = col;
+    c.font = "28px 'Press Start 2P', 'Courier New', monospace";
+    c.fillText(this.enemy ? 'ENEMY DESTROYED' : 'SHIP LOST', W / 2, h / 2);
+    c.fillStyle = '#ffffff';
+    c.shadowColor = col;
+    c.shadowBlur = 22;
+    c.font = "900 72px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+    const who = (this.enemy ? '적 ' : '아군 ') + this.ship.name;
+    c.fillText(t > 2.0 ? `${who} 격침` : who, W / 2, H - h / 2);
+    c.restore();
+  },
+
+  // 음향: 2차 폭발 2번 → 금속이 찢기는 소리 → 낮게 가라앉는 굉음 · 물 빨려드는 소리
+  // 적 격침 = 묵직하게 / 아군 = 비통하게 (단조 화음을 길게)
+  sound() {
+    const ctx = Sound.ctx;
+    if (!ctx || Sound.muted || ctx.state !== 'running' || !ctx.createBiquadFilter) return;
+    const now = ctx.currentTime;
+    const bus = ctx.createGain();
+    bus.gain.value = 0.9;
+    bus.connect(Sound.master);
+    this.bus = bus;
+    Sound.duck(now, 3.7);
+    if (!Cutscene.noise) {
+      const len = ctx.sampleRate * 2;
+      Cutscene.noise = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = Cutscene.noise.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const tone = (type, f0, f1, at, dur, vol, cutoff) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, now + at);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, now + at + dur);
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.linearRampToValueAtTime(vol, now + at + Math.min(0.3, dur * 0.25));
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
+      let out = o;
+      if (cutoff) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; o.connect(f); out = f; }
+      out.connect(g); g.connect(bus);
+      o.start(now + at); o.stop(now + at + dur + 0.05);
+    };
+    const noise = (at, dur, vol, type, f0, f1, q) => {
+      const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = Cutscene.noise;
+      f.type = type; f.Q.value = q || 1;
+      f.frequency.setValueAtTime(f0, now + at);
+      f.frequency.exponentialRampToValueAtTime(f1, now + at + dur);
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.linearRampToValueAtTime(vol, now + at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
+      src.connect(f); f.connect(g); g.connect(bus);
+      src.start(now + at); src.stop(now + at + dur + 0.05);
+    };
+    [0.25, 0.75].forEach((at, i) => { tone('sine', 80, 26, at, 1.0, i ? 0.7 : 0.9); noise(at, 1.2, i ? 0.55 : 0.75, 'lowpass', 1600, 120, 0.7); });
+    noise(1.1, 0.9, 0.22, 'bandpass', 900, 260, 4);            // 금속이 찢기는 소리
+    tone('sawtooth', 70, 38, 1.3, 2.2, 0.16, 300);              // 가라앉는 낮은 굉음
+    noise(1.6, 2.0, 0.2, 'lowpass', 700, 120, 1);               // 물이 빨려드는 소리
+    // 화음: 적 격침 = 낮은 단조 화음 짧게 / 아군 = 단조 화음 길게 내려감
+    const chord = this.enemy ? [[73.4, 0.08], [87.3, 0.06], [110, 0.05]] : [[110, 0.08], [130.8, 0.06], [164.8, 0.05]];
+    chord.forEach(([f, v]) => tone('triangle', f, this.enemy ? f : f * 0.94, 1.4, this.enemy ? 2.2 : 2.5, v, 900));
+  }
+};
+
+
+// =========================================================
+// 승리 컷신 (7초) — 마지막 적 함선을 격침한 뒤, 결과 화면 전에 재생
+//  0.0~1.6  고요: 연기가 걷히는 새벽 바다, 적 함대의 잔해와 잔불만 남음 (카메라가 천천히 수평으로 이동)
+//  1.4~3.6  귀환: 햇살이 수평선을 뚫고 떠오르며, 살아남은 아군 함대가 대열을 지어 화면을 가로지름
+//  3.4~5.4  환호: 함선마다 축포(조명탄)가 하늘로 솟아 터지고, 갈매기가 날아감
+//  4.8~7.0  'VICTORY' 제목이 떠오르고 금빛 입자가 흩날림 → 페이드 아웃 → 결과 화면
+// - 살아남은 아군 함선 수만큼 함대가 나옴 (최소 1척)
+// - 탭하면 넘김 · 재시작하면 정리 · '동작 줄이기'면 재생 안 함
+// - 축포 불꽃·금빛 입자 120개는 처음에 만들어 재사용
+// =========================================================
+const WIN_CUT_MS = 7000;
+const WinCut = {
+  enabled: true, // 실제 게임은 항상 켜짐 (테스트 도구에서 기존 테스트용으로만 끔)
+  active: false,
+  played: 0,
+  survivors: 0,
+  t0: 0,
+  lastT: 0,
+  raf: 0,
+  canvas: null,
+  ctx: null,
+  bus: null,
+  sparks: Array.from({ length: 120 }, () => ({ x: 0, y: 0, vx: 0, vy: 0, age: 9, life: 1, hue: 0, gold: false })),
+  next: 0,
+  burstsDone: 0,
+  wreck: [[-380, 0.5, -0.5], [-60, 0.7, 0.35], [300, 0.55, -0.25]], // 적 잔해: x, 크기, 기울기
+  gulls: [[-200, 520, 0], [-420, 600, 0.6], [-680, 470, 1.1]],     // 갈매기: x 시작, y, 날갯짓 위상
+
+  init() {
+    this.canvas = document.getElementById('cutCanvas'); // 다른 컷신과 같은 캔버스 (동시에 재생되지 않음)
+    this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+    this.frame = this.frame.bind(this);
+  },
+
+  async play(survivors, wait, beat) {
+    if (!this.enabled || !this.ctx || prefersReducedMotion()) return;
+    await beat('wincut', async () => {
+      this.start(survivors);
+      try { await wait(WIN_CUT_MS); } finally { this.stop(); }
+    });
+  },
+
+  start(survivors) {
+    this.played++;
+    this.active = true;
+    this.survivors = Math.max(1, Math.min(5, survivors));
+    this.t0 = performance.now();
+    this.lastT = 0;
+    this.burstsDone = 0;
+    this.sparks.forEach(p => { p.age = 9; });
+    const dpr = FX.dpr || 1;
+    this.canvas.width = Math.round(1170 * dpr);
+    this.canvas.height = Math.round(2080 * dpr);
+    this.canvas.classList.add('on');
+    this.sound();
+    this.render(0);
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  stop() {
+    if (!this.active) return;
+    this.active = false;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.canvas.classList.remove('on');
+    if (this.bus) {
+      try {
+        const now = Sound.ctx.currentTime;
+        if (this.bus.gain.cancelScheduledValues) this.bus.gain.cancelScheduledValues(now);
+        this.bus.gain.setValueAtTime(0, now);
+        this.bus.disconnect();
+      } catch (e) { /* 이미 정리됨 */ }
+      this.bus = null;
+    }
+  },
+
+  frame() {
+    if (!this.active) return;
+    this.render(Math.min((performance.now() - this.t0) / 1000, WIN_CUT_MS / 1000));
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  spark(x, y, vx, vy, life, hue, gold) {
+    const p = this.sparks[this.next];
+    this.next = (this.next + 1) % this.sparks.length;
+    p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.age = 0; p.life = life; p.hue = hue; p.gold = gold;
+  },
+
+  render(t) {
+    const c = this.ctx, W = 1170, H = 2080, dpr = FX.dpr || 1;
+    const dt = Math.max(0, Math.min(0.05, t - this.lastT));
+    this.lastT = t;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    c.save();
+    c.globalAlpha = cutSeg(t, 0, 0.4) * (1 - cutSeg(t, 6.5, 7.0));
+    this.scene(c, t, dt);
+    c.restore();
+    this.bars(c, t);
+  },
+
+  scene(c, t, dt) {
+    const W = 1170, H = 2080, horizon = 1180;
+    const dawn = cutEase.io(cutSeg(t, 0.4, 3.6)); // 0 = 어스름, 1 = 해가 뜬 아침
+    // 하늘: 어스름 보랏빛 → 금빛 아침
+    const mix = (a, b) => a.map((v, i) => Math.round(v + (b[i] - v) * dawn));
+    const top = mix([18, 14, 40], [70, 120, 190]), mid = mix([74, 40, 70], [255, 170, 110]), low = mix([150, 80, 70], [255, 225, 170]);
+    const sky = c.createLinearGradient(0, horizon - 1100, 0, horizon);
+    sky.addColorStop(0, `rgb(${top})`); sky.addColorStop(0.6, `rgb(${mid})`); sky.addColorStop(1, `rgb(${low})`);
+    c.fillStyle = sky; c.fillRect(0, 0, W, horizon);
+    // 떠오르는 해 + 빛줄기
+    const sunY = horizon + 90 - dawn * 260, sunX = 585;
+    c.save();
+    c.globalAlpha *= 0.35 * dawn;
+    c.translate(sunX, sunY);
+    for (let i = 0; i < 12; i++) {
+      c.rotate(TAU / 12);
+      const g = c.createLinearGradient(0, 0, 0, -1100);
+      g.addColorStop(0, 'rgba(255, 240, 200, 0.8)'); g.addColorStop(1, 'rgba(255, 240, 200, 0)');
+      c.fillStyle = g;
+      c.beginPath(); c.moveTo(-24, 0); c.lineTo(24, 0); c.lineTo(70, -1100); c.lineTo(-70, -1100); c.closePath(); c.fill();
+    }
+    c.restore();
+    const sun = c.createRadialGradient(sunX, sunY, 10, sunX, sunY, 380);
+    sun.addColorStop(0, 'rgba(255, 252, 230, 1)'); sun.addColorStop(0.18, 'rgba(255, 220, 140, 0.9)');
+    sun.addColorStop(0.5, 'rgba(255, 170, 90, 0.25)'); sun.addColorStop(1, 'rgba(255, 140, 60, 0)');
+    c.fillStyle = sun; c.fillRect(sunX - 400, sunY - 400, 800, 800);
+    // 바다
+    const sea = c.createLinearGradient(0, horizon, 0, H);
+    const s1 = mix([60, 34, 56], [120, 150, 190]), s2 = mix([16, 14, 30], [20, 44, 80]);
+    sea.addColorStop(0, `rgb(${s1})`); sea.addColorStop(1, `rgb(${s2})`);
+    c.fillStyle = sea; c.fillRect(0, horizon, W, H);
+    // 햇빛 반사 기둥
+    c.fillStyle = `rgba(255, 230, 170, ${0.45 * dawn})`;
+    c.beginPath(); c.moveTo(sunX - 40, horizon); c.lineTo(sunX + 40, horizon); c.lineTo(sunX + 300, H); c.lineTo(sunX - 300, H); c.closePath(); c.fill();
+    // 카메라가 천천히 옆으로 (0~2초)
+    const pan = (1 - cutEase.out(cutSeg(t, 0, 2.2))) * 140;
+    c.save();
+    c.translate(pan, 0);
+    Cutscene.waves(c, horizon, t, 90);
+    // 적 잔해 (기울어진 채 반쯤 잠긴 선체 + 잔불·연기) — 아침이 되며 흐려짐
+    this.wreck.forEach(([dx, s, rot], i) => {
+      const x = 585 + dx, y = horizon + 30 + s * 40;
+      c.save();
+      c.globalAlpha *= 1 - dawn; // 해가 뜨면 완전히 사라짐
+      c.translate(x, y);
+      c.rotate(rot);
+      c.scale(s, s);
+      c.fillStyle = '#1a1416';
+      c.beginPath(); c.moveTo(-220, -10); c.lineTo(200, -30); c.lineTo(240, 10); c.lineTo(-240, 30); c.closePath(); c.fill();
+      c.fillRect(-40, -110, 70, 90);
+      c.restore();
+      if (t < 2.0 && Math.floor(t * 12 + i) !== Math.floor((t - dt) * 12 + i)) { // 잔해 연기는 함대가 지나가기 전에 걷힘
+        this.spark(x + (Math.random() - 0.5) * 60, y - 30, (Math.random() - 0.5) * 20, -60 - Math.random() * 50, 1.6, 0, false);
+      }
+    });
+    c.restore();
+    // 아군 함대 대열 (살아남은 수만큼): 1.4초부터 오른쪽으로 항진
+    const sail = cutEase.out(cutSeg(t, 1.4, 5.6));
+    for (let i = this.survivors - 1; i >= 0; i--) {
+      // 선두(i=0)가 가장 크고 앞에, 뒤로 갈수록 작고 수평선 쪽으로 → 대열이 멀리 이어지는 원근
+      const s = 0.62 - i * 0.09;
+      const xEnd = 860 - i * 340;
+      const x = xEnd - 1500 * (1 - sail), y = horizon + 90 - i * 20 + Math.sin(t * 2 + i) * 5 * s;
+      c.save();
+      c.translate(x, y);
+      c.rotate(Math.sin(t * 1.6 + i) * 0.01);
+      c.scale(s, s);
+      Cutscene.ship(c, -0.28, 0, '#ffd59a');
+      // 깃발
+      c.fillStyle = '#e63946';
+      const wave = Math.sin(t * 9 + i) * 8;
+      c.beginPath(); c.moveTo(-115, -470); c.lineTo(-30, -455 + wave); c.lineTo(-115, -440); c.closePath(); c.fill();
+      c.restore();
+      // 축포: 함선마다 한 번씩 (3.4초부터 0.35초 간격)
+      const at = 3.4 + i * 0.35;
+      if (this.burstsDone <= i && t >= at) {
+        this.burstsDone = i + 1;
+        const bx = x + 140 * s, by = 380 + i * 60, hue = [45, 200, 340, 120, 280][i];
+        for (let k = 0; k < 18; k++) {
+          const a = (k / 18) * TAU, sp = 260 + Math.random() * 120;
+          this.spark(bx, by, Math.cos(a) * sp, Math.sin(a) * sp, 1.1 + Math.random() * 0.4, hue, false);
+        }
+      }
+    }
+    // 갈매기
+    this.gulls.forEach(([x0, y0, ph]) => {
+      const x = x0 + cutSeg(t, 2.6, 7) * 1700, y = y0 + Math.sin(t * 1.4 + ph) * 20;
+      if (x < -50 || x > W + 50) return;
+      const fl = Math.sin(t * 10 + ph * 5) * 14;
+      c.strokeStyle = 'rgba(40, 40, 50, 0.85)'; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(x - 30, y - fl); c.quadraticCurveTo(x - 12, y - 14, x, y); c.quadraticCurveTo(x + 12, y - 14, x + 30, y - fl); c.stroke();
+    });
+    // 금빛 입자 (제목이 뜰 때)
+    if (t > 4.8 && t < 6.6 && Math.floor(t * 40) !== Math.floor((t - dt) * 40)) {
+      this.spark(Math.random() * W, 240 + Math.random() * 120, (Math.random() - 0.5) * 40, 60 + Math.random() * 80, 2.2, 45, true);
+    }
+    // 입자 그리기
+    for (let i = 0; i < this.sparks.length; i++) {
+      const p = this.sparks[i];
+      if (p.age >= p.life) continue;
+      p.age += dt;
+      const q = p.age / p.life;
+      if (p.gold) { p.vx += Math.sin(p.age * 6 + i) * 20 * dt; }
+      else if (p.hue) { p.vx *= 1 - dt * 1.5; p.vy = p.vy * (1 - dt * 1.5) + 120 * dt; }
+      else { p.vy -= 10 * dt; }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.gold) {
+        c.fillStyle = `rgba(255, ${210 + Math.sin(p.age * 12) * 40}, 90, ${1 - q})`;
+        c.fillRect(p.x - 4, p.y - 4, 8, 8);
+      } else if (p.hue) {
+        c.fillStyle = `hsla(${p.hue}, 100%, ${70 - q * 20}%, ${1 - q})`;
+        c.beginPath(); c.arc(p.x, p.y, 11 * (1 - q * 0.5), 0, TAU); c.fill();
+      } else {
+        c.fillStyle = `rgba(60, 50, 50, ${0.45 * (1 - q)})`;
+        c.beginPath(); c.arc(p.x, p.y, 18 + q * 40, 0, TAU); c.fill();
+      }
+    }
+    // VICTORY 제목
+    const a = cutEase.out(cutSeg(t, 4.8, 5.4));
+    if (a > 0) {
+      c.save();
+      c.globalAlpha *= a;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      const sc = 1.25 - 0.25 * a;
+      c.translate(585, 760);
+      c.scale(sc, sc);
+      c.lineJoin = 'round';
+      c.font = "900 132px 'Press Start 2P', 'Courier New', monospace";
+      c.lineWidth = 16;
+      c.strokeStyle = 'rgba(60, 20, 0, 0.9)';
+      c.strokeText('VICTORY', 0, 0);
+      c.shadowColor = '#ff9a00';
+      c.shadowBlur = 40;
+      c.fillStyle = '#ffe27a';
+      c.fillText('VICTORY', 0, 0);
+      c.shadowBlur = 0;
+      c.font = "900 64px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+      c.lineWidth = 10;
+      c.strokeText('작전 성공 · 해역 확보', 0, 140);
+      c.fillStyle = '#ffffff';
+      c.fillText('작전 성공 · 해역 확보', 0, 140);
+      c.restore();
+    }
+  },
+
+  bars(c, t) {
+    const W = 1170, H = 2080;
+    const h = 200 * cutEase.out(cutSeg(t, 0, 0.5)) * (1 - cutEase.in(cutSeg(t, 6.6, 7.0)));
+    if (h <= 0) return;
+    c.fillStyle = '#000';
+    c.fillRect(0, 0, W, h);
+    c.fillRect(0, H - h, W, h);
+    const a = cutSeg(t, 0.5, 0.9) * (1 - cutSeg(t, 6.3, 6.6));
+    if (a <= 0) return;
+    c.save();
+    c.globalAlpha = a;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillStyle = '#d9e4ff';
+    c.font = "26px 'Press Start 2P', 'Courier New', monospace";
+    c.fillText(t < 1.6 ? 'ALL ENEMY SHIPS DESTROYED' : 'FLEET RETURNING TO PORT', W / 2, h / 2);
+    c.fillStyle = '#ffd166';
+    c.font = "900 44px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+    c.fillText(`생존 함선 ${this.survivors}척 귀환`, W / 2, H - h / 2);
+    c.restore();
+  },
+
+  // 음향: 잔잔한 바다 → 장조 금관 팡파르(밝게 상승) → 축포 소리 → 마지막 큰 화음
+  sound() {
+    const ctx = Sound.ctx;
+    if (!ctx || Sound.muted || ctx.state !== 'running' || !ctx.createBiquadFilter) return;
+    const now = ctx.currentTime;
+    const bus = ctx.createGain();
+    bus.gain.value = 0.85;
+    bus.connect(Sound.master);
+    this.bus = bus;
+    Sound.duck(now, 6.6);
+    if (BGM.song) BGM.stop(); // 결과 화면 음악과 겹치지 않게
+    if (!Cutscene.noise) {
+      const len = ctx.sampleRate * 2;
+      Cutscene.noise = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = Cutscene.noise.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const tone = (type, f, at, dur, vol, cutoff) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f, now + at);
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.linearRampToValueAtTime(vol, now + at + Math.min(0.08, dur * 0.2));
+      g.gain.setValueAtTime(vol * 0.8, now + at + dur * 0.7);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
+      let out = o;
+      if (cutoff) { const fl = ctx.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = cutoff; o.connect(fl); out = fl; }
+      out.connect(g); g.connect(bus);
+      o.start(now + at); o.stop(now + at + dur + 0.05);
+    };
+    const noise = (at, dur, vol, type, f0, f1) => {
+      const src = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = Cutscene.noise;
+      fl.type = type;
+      fl.frequency.setValueAtTime(f0, now + at);
+      fl.frequency.exponentialRampToValueAtTime(f1, now + at + dur);
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.linearRampToValueAtTime(vol, now + at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
+      src.connect(fl); fl.connect(g); g.connect(bus);
+      src.start(now + at); src.stop(now + at + dur + 0.05);
+    };
+    noise(0, 1.8, 0.12, 'lowpass', 500, 300);                                   // 잔잔한 바다
+    tone('triangle', 130.8, 0.2, 1.4, 0.10, 800);                              // 낮은 C 깔림
+    // 팡파르 (C 장조, 금관 느낌의 톱니파를 걸러서): 솔-도-미-솔 … 도(높게)
+    const fan = [[1.5, 392, 0.22], [1.72, 523.3, 0.22], [1.94, 659.3, 0.22], [2.16, 784, 0.5],
+                 [2.75, 659.3, 0.2], [2.95, 784, 0.7], [3.8, 880, 0.3], [4.1, 784, 0.3], [4.4, 1046.5, 1.4]];
+    fan.forEach(([at, f, d]) => { tone('sawtooth', f, at, d, 0.11, 2200); tone('square', f / 2, at, d, 0.05, 900); });
+    // 받쳐 주는 화음 (C - F - G - C)
+    [[1.5, [130.8, 164.8, 196]], [2.75, [174.6, 220, 261.6]], [3.8, [196, 246.9, 293.7]], [4.4, [130.8, 164.8, 196, 261.6]]]
+      .forEach(([at, ch], i) => ch.forEach(f => tone('triangle', f, at, i === 3 ? 2.4 : 1.1, 0.07, 1200)));
+    [3.4, 3.75, 4.1, 4.45, 4.8].slice(0, this.survivors).forEach(at => { noise(at - 0.3, 0.3, 0.12, 'bandpass', 600, 3000); noise(at, 0.5, 0.3, 'lowpass', 2500, 200); }); // 축포
+    [0.0, 0.5, 1.0].forEach(at => tone('sine', 65.4, 4.4 + at, 0.5, 0.35));   // 팀파니
+  }
+};
+
+
+// =========================================================
+// 패배 컷신 (7초) — 마지막 아군 함선이 격침된 뒤, 결과 화면 전에 재생
+//  0.0~2.0  폭풍의 밤바다: 비가 쏟아지고 번개가 치며, 화염에 휩싸인 마지막 아군 구축함이 기울어 있음
+//  1.8~4.2  침몰: 함선이 천천히 고물부터 가라앉고, 깃대에 매달린 아군 깃발이 마지막까지 버티다 잠김
+//  4.0~5.6  잔해: 물 위에 찢어진 깃발과 구명조끼만 떠다니고, 수평선 너머로 적 함대 실루엣이 지나감
+//  5.0~7.0  'MISSION FAILED' + '아군 함대 전멸' → 페이드 아웃 → 결과 화면
+// - 탭하면 넘김 · 재시작하면 정리 · '동작 줄이기'면 재생 안 함
+// - 빗줄기 90개·물방울 40개는 처음에 만들어 재사용
+// =========================================================
+const LOSE_CUT_MS = 7000;
+const LoseCut = {
+  enabled: true, // 실제 게임은 항상 켜짐 (테스트 도구에서 기존 테스트용으로만 끔)
+  active: false,
+  played: 0,
+  t0: 0,
+  lastT: 0,
+  raf: 0,
+  canvas: null,
+  ctx: null,
+  bus: null,
+  rain: Array.from({ length: 90 }, (_, i) => ({ x: (i * 131) % 1400 - 120, y: (i * 277) % 2080, sp: 1500 + (i % 7) * 160, len: 40 + (i % 5) * 14 })),
+  drops: Array.from({ length: 40 }, () => ({ x: 0, y: 0, vx: 0, vy: 0, age: 9, life: 1 })),
+  nextDrop: 0,
+  bolts: [0.6, 2.9, 4.6],              // 번개 시각
+  enemy: [[-260, 0.32], [-40, 0.4], [200, 0.3]], // 수평선 적 함대 실루엣: x 간격, 크기
+
+  init() {
+    this.canvas = document.getElementById('cutCanvas'); // 다른 컷신과 같은 캔버스 (동시에 재생되지 않음)
+    this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+    this.frame = this.frame.bind(this);
+  },
+
+  async play(wait, beat) {
+    if (!this.enabled || !this.ctx || prefersReducedMotion()) return;
+    await beat('losecut', async () => {
+      this.start();
+      try { await wait(LOSE_CUT_MS); } finally { this.stop(); }
+    });
+  },
+
+  start() {
+    this.played++;
+    this.active = true;
+    this.t0 = performance.now();
+    this.lastT = 0;
+    this.drops.forEach(p => { p.age = 9; });
+    const dpr = FX.dpr || 1;
+    this.canvas.width = Math.round(1170 * dpr);
+    this.canvas.height = Math.round(2080 * dpr);
+    this.canvas.classList.add('on');
+    this.sound();
+    this.render(0);
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  stop() {
+    if (!this.active) return;
+    this.active = false;
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.canvas.classList.remove('on');
+    if (this.bus) {
+      try {
+        const now = Sound.ctx.currentTime;
+        if (this.bus.gain.cancelScheduledValues) this.bus.gain.cancelScheduledValues(now);
+        this.bus.gain.setValueAtTime(0, now);
+        this.bus.disconnect();
+      } catch (e) { /* 이미 정리됨 */ }
+      this.bus = null;
+    }
+  },
+
+  frame() {
+    if (!this.active) return;
+    this.render(Math.min((performance.now() - this.t0) / 1000, LOSE_CUT_MS / 1000));
+    this.raf = requestAnimationFrame(this.frame);
+  },
+
+  drop(x, y, vx, vy, life) {
+    const p = this.drops[this.nextDrop];
+    this.nextDrop = (this.nextDrop + 1) % this.drops.length;
+    p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.age = 0; p.life = life;
+  },
+
+  // 지금 번개가 얼마나 밝은지 (0~1)
+  flash(t) {
+    let f = 0;
+    this.bolts.forEach(at => {
+      const d = t - at;
+      if (d >= 0 && d < 0.35) f = Math.max(f, d < 0.06 ? 1 : d < 0.12 ? 0.3 : d < 0.18 ? 0.8 : 1 - d / 0.35);
+    });
+    return f;
+  },
+
+  render(t) {
+    const c = this.ctx, W = 1170, H = 2080, dpr = FX.dpr || 1;
+    const dt = Math.max(0, Math.min(0.05, t - this.lastT));
+    this.lastT = t;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, H);
+    c.save();
+    c.globalAlpha = cutSeg(t, 0, 0.4) * (1 - cutSeg(t, 6.5, 7.0));
+    this.scene(c, t, dt);
+    c.restore();
+    // 번개 섬광
+    const f = this.flash(t);
+    if (f > 0) { c.fillStyle = `rgba(210, 225, 255, ${0.55 * f})`; c.fillRect(0, 0, W, H); }
+    this.bars(c, t);
+  },
+
+  scene(c, t, dt) {
+    const W = 1170, H = 2080, horizon = 1160;
+    const f = this.flash(t);
+    // 폭풍 하늘 (번개 때 밝아짐)
+    const sky = c.createLinearGradient(0, horizon - 1100, 0, horizon);
+    sky.addColorStop(0, `rgb(${8 + f * 60}, ${10 + f * 70}, ${18 + f * 90})`);
+    sky.addColorStop(1, `rgb(${34 + f * 80}, ${40 + f * 90}, ${54 + f * 100})`);
+    c.fillStyle = sky; c.fillRect(0, 0, W, horizon);
+    // 낮게 깔린 먹구름
+    for (let i = 0; i < 7; i++) {
+      const x = ((i * 233 + t * (18 + i * 6)) % (W + 700)) - 350, y = horizon - 760 + i * 70;
+      c.fillStyle = `rgba(${14 + f * 50}, ${16 + f * 50}, ${24 + f * 60}, 0.75)`;
+      c.beginPath(); c.ellipse(x, y, 380, 70 + i * 6, 0, 0, TAU); c.fill();
+    }
+    // 번개 줄기
+    this.bolts.forEach((at, bi) => {
+      const d = t - at;
+      if (d < 0 || d > 0.18) return;
+      c.strokeStyle = 'rgba(235, 240, 255, 0.95)'; c.lineWidth = 6;
+      c.beginPath();
+      let x = 260 + bi * 330, y = horizon - 900;
+      c.moveTo(x, y);
+      for (let k = 0; k < 9; k++) { x += ((k * 37 + bi * 53) % 70) - 35; y += 95; c.lineTo(x, y); }
+      c.stroke();
+    });
+    // 바다 (거칠게 일렁임)
+    const sea = c.createLinearGradient(0, horizon, 0, H);
+    sea.addColorStop(0, `rgb(${30 + f * 50}, ${38 + f * 60}, ${50 + f * 70})`); sea.addColorStop(1, '#03050a');
+    c.fillStyle = sea; c.fillRect(0, horizon, W, H);
+    Cutscene.waves(c, horizon, t * 1.6, 260);
+    // 수평선의 적 함대 실루엣 (4초 이후, 천천히 지나감)
+    const pass = cutSeg(t, 3.8, 7.0);
+    if (pass > 0) {
+      this.enemy.forEach(([dx, s]) => {
+        const x = -300 + pass * 900 + dx, y = horizon + 2;
+        c.save();
+        c.globalAlpha *= Math.min(1, pass * 3) * 0.85;
+        c.translate(x, y);
+        c.scale(s, s);
+        c.fillStyle = '#05070b';
+        c.beginPath(); c.moveTo(-420, -40); c.lineTo(380, -50); c.lineTo(440, -20); c.lineTo(380, 20); c.lineTo(-400, 20); c.closePath(); c.fill();
+        c.fillRect(-220, -170, 220, 130); c.fillRect(-160, -250, 110, 80); c.fillRect(-110, -380, 10, 130);
+        c.restore();
+        if (Math.floor(t * 2 + dx) % 2 === 0) {
+          c.fillStyle = 'rgba(255, 60, 60, 0.9)';
+          c.beginPath(); c.arc(x - 50 * s, y - 165 * s, 5, 0, TAU); c.fill();
+        }
+      });
+    }
+    // 마지막 아군 구축함: 기울며 고물부터 가라앉음
+    const sink = cutEase.in(cutSeg(t, 1.8, 4.2));
+    const cx = 560, cy = horizon + 110;
+    const rock = Math.sin(t * 1.9) * 0.025;
+    const tilt = 0.08 + sink * 0.5;
+    if (sink < 1) {
+      c.save();
+      c.translate(cx, cy + sink * 520);
+      c.rotate(-tilt + rock);
+      c.scale(0.78, 0.78);
+      Cutscene.ship(c, 0.35, 0, '#8fa3b8'); // 포신이 힘없이 처짐
+      // 깃대 끝 아군 깃발 (찢어져 펄럭임)
+      c.fillStyle = '#3a86ff';
+      const wv = Math.sin(t * 7) * 10;
+      c.beginPath(); c.moveTo(-115, -470); c.lineTo(-40, -462 + wv); c.lineTo(-62, -452); c.lineTo(-30, -442 + wv); c.lineTo(-115, -436); c.closePath(); c.fill();
+      c.restore();
+      // 선체 위 화염
+      if (Math.floor(t * 20) !== Math.floor((t - dt) * 20)) {
+        this.drop(cx + (Math.random() - 0.5) * 300, cy - 90 + sink * 400, (Math.random() - 0.5) * 30, -90 - Math.random() * 60, 1.2);
+      }
+      const fireY = cy - 70 + sink * 420;
+      const g = c.createRadialGradient(cx - 80, fireY, 5, cx - 80, fireY, 150);
+      g.addColorStop(0, `rgba(255, 200, 110, ${0.85 * (1 - sink)})`); g.addColorStop(1, 'rgba(255, 70, 20, 0)');
+      c.fillStyle = g; c.beginPath(); c.arc(cx - 80, fireY, 150, 0, TAU); c.fill();
+    }
+    // 연기 입자
+    for (let i = 0; i < this.drops.length; i++) {
+      const p = this.drops[i];
+      if (p.age >= p.life) continue;
+      p.age += dt;
+      p.x += (p.vx - 60) * dt; p.y += p.vy * dt; // 바람에 왼쪽으로 쏠림
+      const q = p.age / p.life;
+      c.fillStyle = `rgba(30, 32, 38, ${0.6 * (1 - q)})`;
+      c.beginPath(); c.arc(p.x, p.y, 18 + q * 46, 0, TAU); c.fill();
+    }
+    // 수면 덮기 (가라앉는 느낌) + 물결
+    const water = c.createLinearGradient(0, cy, 0, cy + 500);
+    water.addColorStop(0, `rgba(${30 + f * 50}, ${38 + f * 60}, ${50 + f * 70}, 0.97)`); water.addColorStop(1, 'rgba(3, 5, 10, 1)');
+    c.fillStyle = water; c.fillRect(0, cy + 4, W, H);
+    Cutscene.waves(c, cy - 52, t * 1.6, 260);
+    // 잔해: 찢어진 깃발과 구명조끼가 떠다님
+    const debris = cutSeg(t, 3.8, 4.6);
+    if (debris > 0) {
+      const bob = Math.sin(t * 2.4) * 10;
+      c.save();
+      c.globalAlpha *= debris;
+      c.translate(cx - 40 + (t - 3.8) * 30, cy + 20 + bob);
+      c.rotate(Math.sin(t * 1.3) * 0.15);
+      c.fillStyle = '#3a86ff';
+      c.beginPath(); c.moveTo(-60, -14); c.lineTo(50, -20); c.lineTo(30, 0); c.lineTo(60, 14); c.lineTo(-60, 18); c.closePath(); c.fill();
+      c.restore();
+      [[120, 1.7], [-180, 2.3]].forEach(([dx, ph]) => {
+        c.fillStyle = `rgba(255, 120, 40, ${debris})`;
+        c.beginPath(); c.ellipse(cx + dx, cy + 26 + Math.sin(t * 2 + ph) * 8, 26, 11, 0, 0, TAU); c.fill();
+      });
+    }
+    // 빗줄기
+    c.strokeStyle = `rgba(190, 205, 230, ${0.32 + f * 0.3})`;
+    c.lineWidth = 2;
+    c.beginPath();
+    for (let i = 0; i < this.rain.length; i++) {
+      const r = this.rain[i];
+      const y = (r.y + t * r.sp) % 2200 - 120, x = r.x - (y * 0.18);
+      c.moveTo(x, y); c.lineTo(x - r.len * 0.18, y + r.len);
+    }
+    c.stroke();
+    // MISSION FAILED
+    const a = cutEase.out(cutSeg(t, 5.0, 5.6));
+    if (a > 0) {
+      c.save();
+      c.globalAlpha *= a;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.translate(585, 700 + (1 - a) * 40);
+      c.lineJoin = 'round';
+      c.font = "900 92px 'Press Start 2P', 'Courier New', monospace";
+      c.lineWidth = 14;
+      c.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+      c.strokeText('MISSION', 0, -70);
+      c.strokeText('FAILED', 0, 50);
+      c.shadowColor = '#d62828';
+      c.shadowBlur = 30;
+      c.fillStyle = '#ff6b6b';
+      c.fillText('MISSION', 0, -70);
+      c.fillText('FAILED', 0, 50);
+      c.shadowBlur = 0;
+      c.font = "900 60px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+      c.lineWidth = 10;
+      c.strokeText('아군 함대 전멸', 0, 180);
+      c.fillStyle = '#e6ecf5';
+      c.fillText('아군 함대 전멸', 0, 180);
+      c.restore();
+    }
+  },
+
+  bars(c, t) {
+    const W = 1170, H = 2080;
+    const h = 200 * cutEase.out(cutSeg(t, 0, 0.5)) * (1 - cutEase.in(cutSeg(t, 6.6, 7.0)));
+    if (h <= 0) return;
+    c.fillStyle = '#000';
+    c.fillRect(0, 0, W, h);
+    c.fillRect(0, H - h, W, h);
+    const a = cutSeg(t, 0.5, 0.9) * (1 - cutSeg(t, 6.3, 6.6));
+    if (a <= 0) return;
+    c.save();
+    c.globalAlpha = a;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillStyle = '#9fb4c8';
+    c.font = "26px 'Press Start 2P', 'Courier New', monospace";
+    c.fillText(t < 4.0 ? 'LAST SHIP GOING DOWN' : 'ALL SHIPS LOST', W / 2, h / 2);
+    c.fillStyle = '#ff8fa3';
+    c.font = "900 44px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+    c.fillText(t < 4.0 ? '마지막 함선 침몰 중' : '작전 지휘소 응답 없음', W / 2, H - h / 2);
+    c.restore();
+  },
+
+  // 음향: 빗소리·바람 → 천둥 3번 → 금속이 무너지는 소리·물에 잠기는 소리 → 느리게 내려가는 단조 화음 → 낮은 종소리
+  sound() {
+    const ctx = Sound.ctx;
+    if (!ctx || Sound.muted || ctx.state !== 'running' || !ctx.createBiquadFilter) return;
+    const now = ctx.currentTime;
+    const bus = ctx.createGain();
+    bus.gain.value = 0.85;
+    bus.connect(Sound.master);
+    this.bus = bus;
+    Sound.duck(now, 6.6);
+    if (BGM.song) BGM.stop(); // 결과 화면 음악과 겹치지 않게
+    if (!Cutscene.noise) {
+      const len = ctx.sampleRate * 2;
+      Cutscene.noise = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = Cutscene.noise.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const tone = (type, f0, f1, at, dur, vol, cutoff) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, now + at);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, now + at + dur);
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.linearRampToValueAtTime(vol, now + at + Math.min(0.4, dur * 0.25));
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
+      let out = o;
+      if (cutoff) { const fl = ctx.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = cutoff; o.connect(fl); out = fl; }
+      out.connect(g); g.connect(bus);
+      o.start(now + at); o.stop(now + at + dur + 0.05);
+    };
+    const noise = (at, dur, vol, type, f0, f1, loop) => {
+      const src = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain();
+      src.buffer = Cutscene.noise; src.loop = !!loop;
+      fl.type = type;
+      fl.frequency.setValueAtTime(f0, now + at);
+      fl.frequency.exponentialRampToValueAtTime(f1, now + at + dur);
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.linearRampToValueAtTime(vol, now + at + (loop ? 0.6 : 0.02));
+      g.gain.setValueAtTime(vol, now + at + dur * 0.8);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + dur);
+      src.connect(fl); fl.connect(g); g.connect(bus);
+      src.start(now + at); src.stop(now + at + dur + 0.05);
+    };
+    noise(0, 6.8, 0.16, 'highpass', 2500, 2200, true);             // 빗소리
+    noise(0, 6.8, 0.1, 'lowpass', 400, 250, true);                 // 바람
+    this.bolts.forEach(at => { noise(at + 0.05, 1.8, 0.6, 'lowpass', 900, 60); tone('sine', 55, 30, at + 0.05, 1.4, 0.5); }); // 천둥
+    noise(1.9, 1.2, 0.22, 'bandpass', 700, 180);                   // 금속이 무너지는 소리
+    noise(2.6, 2.0, 0.2, 'lowpass', 600, 90);                      // 물에 잠기는 소리
+    // 느리게 내려가는 단조 화음 (D 단조 → A 단조)
+    [[146.8, 110, 0.08], [174.6, 130.8, 0.06], [220, 164.8, 0.05]].forEach(([f0, f1, v]) => tone('triangle', f0, f1, 1.6, 4.6, v, 900));
+    tone('sawtooth', 73.4, 55, 1.6, 4.8, 0.08, 400);
+    // 낮은 종소리 2번 (MISSION FAILED와 함께)
+    [5.0, 5.9].forEach(at => { tone('sine', 98, 98, at, 1.8, 0.22); tone('sine', 247, 247, at, 1.2, 0.07); });
+  }
+};
+
 // 내 사격 후 턴 넘김 대기 (실제 게임은 항상 켜짐 · 테스트 도구에서 기존 테스트용으로만 끔)
 const TurnPause = { enabled: true };
 
@@ -4772,7 +6878,6 @@ function makeGlowSprite([r, g, b]) {
 const KBD_ROTATE = '<kbd>🔄 방향</kbd>';
 
 function updateGuide() {
-  const step = (id, cls) => { document.getElementById(id).className = `step-item ${cls}`; };
   const guide = document.getElementById('guideText');
   const startBtn = document.getElementById('startGameBtn');
   const pBoard = document.getElementById('playerBoardSection');
@@ -4786,9 +6891,6 @@ function updateGuide() {
   switch (game.state) {
     case GS.PLACEMENT: {
       const done = game.player.ships.length === SHIP_DEFS.length;
-      step('step1', done ? 'completed' : 'active');
-      step('step2', done ? 'active' : '');
-      step('step3', '');
       startBtn.classList.toggle('btn-glow', done);
       focus(!done, false);
       if (done) {
@@ -4801,7 +6903,6 @@ function updateGuide() {
       break;
     }
     case GS.PLAYER_TURN: {
-      step('step1', 'completed'); step('step2', 'completed'); step('step3', 'active');
       focus(false, true);
       const text = {
         normal: `🎯 <b>아군 공격 턴</b>: <b>🎯 적군 해역</b>에서 타격할 좌표를 ${act}하세요. (상단 특수무기 선택 가능)`,
@@ -5178,9 +7279,14 @@ function onCpuCellClick(r, c) {
   updateWeaponButtons();
 
   Seq.run(async ({ wait, beat }) => {
+    await Cutscene.play(weapon, { r, c }, wait, beat); // 발사 컷신: 특수무기 5초 / 일반 포격 2초 (탭하면 넘김)
     const result = await performAttack({ byPlayer: true, weapon, r, c, horizontal });
     Score.onPlayerShot(result);
-    if (allSunk(game.cpu)) return endGame(true);
+    if (result.sunk.length) await SinkCut.play(result.sunk, true, wait, beat); // 격침 컷신 (4초, 탭하면 넘김)
+    if (allSunk(game.cpu)) {
+      await WinCut.play(game.player.ships.filter(sh => !sh.sunk).length, wait, beat); // 승리 컷신 (7초, 탭하면 넘김)
+      return endGame(true);
+    }
 
     // 착탄 후 1.5초 동안 결과를 보여 준 뒤 적 턴으로 (폭발·침몰 연출 시간은 이 안에 포함, 탭하면 넘김)
     if (TurnPause.enabled) {
@@ -5224,9 +7330,13 @@ function onClickCapture(e) {
 async function cpuTurn({ wait, beat }) {
   const plan = cpuChooseAttack();
   if (!plan) return;
-  await performAttack({ byPlayer: false, ...plan });
+  const result = await performAttack({ byPlayer: false, ...plan });
+  if (result && result.sunk.length) await SinkCut.play(result.sunk, false, wait, beat); // 아군 함선 격침 컷신
   rebuildAiQueue();
-  if (allSunk(game.player)) return endGame(false);
+  if (allSunk(game.player)) {
+    await LoseCut.play(wait, beat); // 패배 컷신 (7초, 탭하면 넘김)
+    return endGame(false);
+  }
   setState(GS.PLAYER_TURN);
   await Banner.play('player', wait, beat); // 재시작하면 이 대기도 함께 취소됨
 }
@@ -5346,6 +7456,10 @@ function restartGame() {
   Banner.hide();
   Shake.stop();
   Callout.hide();
+  Cutscene.stop();
+  SinkCut.stop();
+  WinCut.stop();
+  LoseCut.stop();
   BGM.stop(); // 새 판 배치 곡은 상태가 PLACEMENT로 돌아갈 때 다시 시작
   FX.clear();   // 화면에 남은 이펙트 제거
   document.getElementById('gameOverModal').classList.remove('active');
@@ -5460,14 +7574,20 @@ Stage.init();
 buildGrid(true);
 buildGrid(false);
 FX.init();
+Cutscene.init();
+SinkCut.init();
+WinCut.init();
+LoseCut.init();
 Particles.init();
 renderAllCells();
 renderShipSelectors();
 renderFleetBadges();
 BoardView.sync();
 Briefing.init();
+BriefCut.init();
 Practice.init();
 Title.init();
+TitleBG.init();
 Score.init();
 updateGuide();
 </script>
