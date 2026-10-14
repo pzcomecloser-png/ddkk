@@ -248,6 +248,16 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 20. Reversi (NEW) -->
+    <a class="game-card" href="games/20/Reversi.html">
+      <div class="icon-frame"><canvas id="iconReversi" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">Reversi</div>
+        <div class="card-desc">뒤집어서 이기자!</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -740,6 +750,52 @@ function drawLadderIcon(id) {
   R(12, 17, 1, 2, '#e04a6a');
 }
 
+// 20. Reversi (검은 돌 + 흰 돌 캐릭터)
+function drawReversiIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+  const R = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
+
+  // 어두운 배경
+  R(0, 0, 24, 24, '#0e0e16');
+
+  // 돌 그리기: 원형 + 아래쪽 두께 + 하이라이트
+  function stone(cx, cy, r, body, edge, side, hi) {
+    for (let dy = -r; dy <= r + 1; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const d = dx * dx + dy * dy;
+        const ds = dx * dx + (dy - 1) * (dy - 1);
+        if (ds <= r * r && d > r * r) R(cx + dx, cy + dy, 1, 1, side);       // 아래 두께
+        if (d <= r * r) R(cx + dx, cy + dy, 1, 1, d > (r - 1) * (r - 1) ? edge : body);
+      }
+    }
+    R(cx - r + 3, cy - r + 2, 2, 1, hi); R(cx - r + 2, cy - r + 3, 1, 1, hi);
+  }
+
+  // 얼굴: 웃는 눈 + 볼터치 + 입
+  function face(cx, cy, eye, mouth) {
+    R(cx - 3, cy - 1, 1, 1, eye); R(cx - 2, cy - 2, 2, 1, eye); R(cx, cy - 1, 1, 1, eye);
+    R(cx + 2, cy - 1, 1, 1, eye); R(cx + 3, cy - 2, 2, 1, eye); R(cx + 5, cy - 1, 1, 1, eye);
+    R(cx - 4, cy + 1, 2, 1, '#e88aa0'); R(cx + 4, cy + 1, 2, 1, '#e88aa0');
+    R(cx - 1, cy + 2, 4, 1, mouth);
+    R(cx, cy + 3, 2, 1, mouth);
+    R(cx, cy + 2, 2, 1, '#ffffff');
+  }
+
+  // 검은 돌 (왼쪽 아래)
+  stone(8, 15, 7, '#2b2b3a', '#4a4a5e', '#14141c', '#6a6a82');
+  face(5, 14, '#ffffff', '#ffffff');
+  R(5, 17, 4, 1, '#14141c'); R(6, 18, 2, 1, '#e8506a');
+
+  // 흰 돌 (오른쪽 위)
+  stone(16, 8, 7, '#f4f0e4', '#d8d2c0', '#a8a290', '#ffffff');
+  face(13, 7, '#3a3a4a', '#3a3a4a');
+  R(13, 10, 4, 1, '#3a3a4a'); R(14, 11, 2, 1, '#e8506a');
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -751,6 +807,7 @@ draw3SecIcon('icon3Sec');
 drawVirusIcon('iconVirus');
 drawBreakoutIcon('iconBreakout');
 drawLadderIcon('iconLadder');
+drawReversiIcon('iconReversi');
 </script>
 </body>
 </html>
