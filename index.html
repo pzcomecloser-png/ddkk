@@ -348,6 +348,16 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 21. 사건록 (NEW) -->
+    <a class="game-card" href="games/21/case1.html">
+      <div class="icon-frame"><canvas id="iconCase" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">사건록</div>
+        <div class="card-desc">4대 기괴 밀실 파일</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -1197,6 +1207,53 @@ function drawReversiIcon(id) {
   R(13, 10, 4, 1, '#3a3a4a'); R(14, 11, 2, 1, '#e8506a');
 }
 
+// 21. 사건록 (조선시대 촛대)
+function drawCaseIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+  const R = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
+
+  // 어두운 밀실 배경 + 촛불 빛번짐
+  R(0, 0, 24, 24, '#120c0a');
+  R(7, 2, 10, 10, '#1e130c');
+  R(9, 3, 6, 7, '#2e1c0e');
+
+  // 불꽃 (바깥 주황 → 안쪽 노랑 → 심지)
+  R(11, 2, 2, 1, '#ff9a2e');
+  R(10, 3, 4, 1, '#ff9a2e');
+  R(10, 4, 4, 3, '#ffc83b');
+  R(11, 4, 2, 2, '#fff1a8');
+  R(11, 7, 2, 1, '#ffc83b');
+  R(11, 8, 2, 1, '#2a1a10');
+
+  // 초 (한지색)
+  R(9, 9, 6, 5, '#efe3c8');
+  R(9, 9, 1, 5, '#d6c6a4');
+  R(14, 9, 1, 5, '#cbb990');
+  R(10, 9, 1, 2, '#fff7e0');
+
+  // 촛대 접시 (놋쇠)
+  R(7, 14, 10, 1, '#c9973a');
+  R(6, 15, 12, 1, '#a87a28');
+  R(8, 16, 8, 1, '#7a561c');
+
+  // 기둥 (목) + 마디 장식
+  R(11, 17, 2, 2, '#a87a28');
+  R(10, 19, 4, 1, '#c9973a');
+  R(11, 20, 2, 1, '#a87a28');
+
+  // 받침 (넓은 굽)
+  R(8, 21, 8, 1, '#c9973a');
+  R(7, 22, 10, 1, '#a87a28');
+  R(6, 23, 12, 1, '#5a3e14');
+
+  // 붉은 단청 포인트 (양옆 장식)
+  R(4, 15, 2, 1, '#b8202a'); R(18, 15, 2, 1, '#b8202a');
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -1219,6 +1276,7 @@ drawVirusIcon('iconVirus');
 drawBreakoutIcon('iconBreakout');
 drawLadderIcon('iconLadder');
 drawReversiIcon('iconReversi');
+drawCaseIcon('iconCase');
 </script>
 </body>
 </html>
