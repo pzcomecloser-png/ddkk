@@ -1,0 +1,1805 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>사건록: 4대 기괴 밀실 파일 (추리 어드벤처)</title>
+  <style>
+    :root {
+      --safe-top: env(safe-area-inset-top, 20px);
+      --safe-bottom: env(safe-area-inset-bottom, 20px);
+      --primary: #c93b3b;
+      --gold: #dfb15b;
+      --ink: #16151a;
+      --paper: #f4efe2;
+      --dark-card: #181b24;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background-color: #08090d;
+      color: #333;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* iPhone Frame wrapper for desktop preview */
+    #phone-container {
+      width: 100vw;
+      height: 100vh;
+      max-width: 430px;
+      max-height: 932px;
+      position: relative;
+      background: #0f1118;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 50px rgba(0,0,0,0.85);
+    }
+
+    @media (min-width: 500px) {
+      #phone-container {
+        height: 844px;
+        width: 390px;
+        border-radius: 48px;
+        border: 10px solid #282c37;
+      }
+    }
+
+    /* Dynamic Island notch styling */
+    .notch {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 110px;
+      height: 28px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 999;
+      pointer-events: none;
+    }
+
+    /* =========================================================
+       TITLE & CASE SELECT SCREENS
+       ========================================================= */
+    #title-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0a0c12 url('title_bg.png') center center / cover no-repeat;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: calc(var(--safe-top) + 40px) 24px calc(var(--safe-bottom) + 36px) 24px;
+      text-align: center;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+
+    .title-logo-area {
+      margin-top: 30px;
+    }
+
+    .badge-sub {
+      display: inline-block;
+      background: rgba(223, 177, 91, 0.18);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 20px;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+    }
+
+    .main-game-title {
+      color: #fff;
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      line-height: 1.3;
+      text-shadow: 0 4px 16px rgba(0,0,0,0.8);
+    }
+
+    .main-game-title span {
+      color: var(--gold);
+    }
+
+    .title-tagline {
+      color: #a4a8b8;
+      font-size: 13px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    .title-actions {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .start-btn {
+      width: 100%;
+      max-width: 280px;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #d9a044 0%, #aa7222 100%);
+      color: #111;
+      font-size: 16px;
+      font-weight: 800;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      box-shadow: 0 8px 25px rgba(217, 160, 68, 0.4);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      transition: transform 0.15s ease;
+    }
+
+    .start-btn:active {
+      transform: scale(0.96);
+    }
+
+    .sound-toggle-btn {
+      background: rgba(18, 20, 28, 0.7);
+      border: 1px solid rgba(223, 177, 91, 0.35);
+      color: #dfb15b;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Scenario Select Modal / Screen */
+    #scenario-modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(8, 10, 16, 0.94);
+      backdrop-filter: blur(12px);
+      z-index: 250;
+      display: none;
+      flex-direction: column;
+      padding: calc(var(--safe-top) + 36px) 16px calc(var(--safe-bottom) + 16px) 16px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    #scenario-modal.show {
+      display: flex;
+      opacity: 1;
+    }
+
+    .scenario-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(223, 177, 91, 0.25);
+    }
+
+    .scenario-header h3 {
+      color: var(--gold);
+      font-size: 18px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .scenario-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-right: 4px;
+    }
+
+    .scenario-card {
+      background: #191c26;
+      border: 1px solid rgba(223, 177, 91, 0.3);
+      border-radius: 16px;
+      padding: 14px;
+      display: flex;
+      gap: 12px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+
+    .scenario-card:active {
+      transform: scale(0.97);
+      border-color: var(--gold);
+      background: #242938;
+    }
+
+    .scenario-thumb {
+      width: 72px;
+      height: 96px;
+      border-radius: 10px;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .scenario-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .scenario-tag {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 0.5px;
+    }
+
+    .scenario-title {
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      margin: 3px 0;
+      line-height: 1.3;
+    }
+
+    .scenario-desc {
+      color: #9498a8;
+      font-size: 11px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .scenario-difficulty {
+      font-size: 10px;
+      color: #e09b35;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    /* =========================================================
+       MAIN IN-GAME HEADERS & STAGE
+       ========================================================= */
+    header {
+      padding-top: calc(var(--safe-top) + 36px);
+      padding-bottom: 12px;
+      padding-left: 14px;
+      padding-right: 14px;
+      background: linear-gradient(180deg, rgba(16,18,24,0.98) 0%, rgba(16,18,24,0.85) 100%);
+      border-bottom: 1px solid rgba(223, 177, 91, 0.3);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 20;
+    }
+
+    .case-title {
+      color: var(--gold);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .clue-progress {
+      background: rgba(223,177,91,0.15);
+      border: 1px solid var(--gold);
+      color: #fff;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .icon-btn-header {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(223,177,91,0.25);
+      color: var(--gold);
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    /* Main Visual Stage */
+    #stage {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      background: #0a0b10 url('scene_user.png') center center / cover no-repeat;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    #sceneCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      pointer-events: none;
+    }
+
+    /* Detective Touch Ripple (Hidden Object Inspection) */
+    .inspect-ripple {
+      position: absolute;
+      width: 48px;
+      height: 48px;
+      transform: translate(-50%, -50%);
+      border: 2px solid var(--gold);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(223, 177, 91, 0.35) 0%, rgba(223, 177, 91, 0) 70%);
+      pointer-events: none;
+      animation: inspectPulse 0.45s ease-out forwards;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+    }
+
+    @keyframes inspectPulse {
+      0% { transform: translate(-50%, -50%) scale(0.3); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
+    }
+
+    /* Character Display Overlay (for Interrogation mode) */
+    #suspect-stage {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      background: radial-gradient(circle at 50% 30%, rgba(20, 24, 35, 0.45) 0%, rgba(8, 10, 16, 0.88) 100%);
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .suspect-avatar-container {
+      width: 320px;
+      height: 380px;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      filter: drop-shadow(0 15px 35px rgba(0,0,0,0.95));
+      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .suspect-img-portrait {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      display: block;
+      border-radius: 24px 24px 0 0;
+      border: 2px solid rgba(223, 177, 91, 0.4);
+      border-bottom: none;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.7);
+    }
+
+    .sweat-drop {
+      position: absolute;
+      top: 40px;
+      right: 50px;
+      font-size: 24px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    /* Dialogue & Narrative Box */
+    #dialogue-area {
+      background: linear-gradient(180deg, #181920 0%, #101116 100%);
+      border-top: 2px solid #332d20;
+      padding: 14px 16px;
+      min-height: 145px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      z-index: 25;
+      box-shadow: 0 -8px 24px rgba(0,0,0,0.5);
+    }
+
+    .speaker-tag {
+      display: inline-block;
+      align-self: flex-start;
+      padding: 3px 10px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 4px;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 6px rgba(201, 59, 59, 0.4);
+    }
+
+    .dialogue-text {
+      color: #e5e5ea;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 48px;
+      font-weight: 400;
+      word-break: keep-all;
+    }
+
+    .dialogue-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    /* Bottom Action Tab Bar (iPhone Touch Friendly) */
+    nav#bottom-nav {
+      background: #0f1015;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr) 1.2fr;
+      padding: 6px 8px calc(var(--safe-bottom) + 6px) 8px;
+      gap: 6px;
+      z-index: 30;
+    }
+
+    .nav-btn {
+      background: #1c1d26;
+      border: 1px solid rgba(223, 177, 91, 0.2);
+      border-radius: 12px;
+      color: #a0a0b0;
+      padding: 8px 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      touch-action: manipulation;
+    }
+
+    .nav-btn .icon {
+      font-size: 18px;
+    }
+
+    .nav-btn.active {
+      background: rgba(223, 177, 91, 0.18);
+      border-color: var(--gold);
+      color: var(--gold);
+      transform: translateY(-1px);
+    }
+
+    .nav-btn:active {
+      transform: scale(0.94);
+    }
+
+    .nav-btn.accuse-btn {
+      background: linear-gradient(135deg, #c93b3b 0%, #871c1c 100%);
+      border: 1px solid #ff6363;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    /* Evidence Notebook Modal (Bottom Sheet) */
+    #clue-modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px);
+      z-index: 50;
+      display: none;
+      flex-direction: column;
+      justify-content: flex-end;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    #clue-modal.show {
+      display: flex;
+      opacity: 1;
+    }
+
+    .sheet-card {
+      background: #1a1c24;
+      border-top: 2px solid var(--gold);
+      border-radius: 24px 24px 0 0;
+      max-height: 75%;
+      overflow-y: auto;
+      padding: 20px 18px calc(var(--safe-bottom) + 20px) 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transform: translateY(100%);
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    #clue-modal.show .sheet-card {
+      transform: translateY(0);
+    }
+
+    .sheet-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .sheet-title {
+      color: var(--gold);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .close-btn {
+      background: rgba(255,255,255,0.1);
+      border: none;
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .clue-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .clue-item {
+      background: #242733;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .clue-item.selected {
+      border-color: var(--gold);
+      background: rgba(223, 177, 91, 0.15);
+    }
+
+    .clue-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      background: #151720;
+      border: 1px solid rgba(223, 177, 91, 0.4);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .clue-info h4 {
+      color: #fff;
+      font-size: 14px;
+      margin-bottom: 3px;
+    }
+
+    .clue-info p {
+      color: #9ea0b2;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .present-clue-btn {
+      margin-top: 10px;
+      padding: 13px;
+      background: linear-gradient(135deg, var(--gold) 0%, #b88628 100%);
+      color: #111;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(223, 177, 91, 0.3);
+    }
+
+    /* Dramatic Cut-in / OBJECTION Banner */
+    #cutin-banner {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 100%;
+      transform: translateY(-50%) scale(0.7);
+      background: linear-gradient(90deg, transparent 0%, rgba(201,59,59,0.95) 20%, rgba(201,59,59,0.95) 80%, transparent 100%);
+      padding: 18px 0;
+      text-align: center;
+      color: #fff;
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      text-shadow: 0 4px 12px rgba(0,0,0,0.8);
+      z-index: 100;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    #cutin-banner.active {
+      opacity: 1;
+      transform: translateY(-50%) scale(1);
+    }
+
+    /* Screen Shake effect */
+    .shake {
+      animation: shake 0.4s ease-in-out;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translate(0, 0); }
+      20% { transform: translate(-8px, 6px); }
+      40% { transform: translate(8px, -6px); }
+      60% { transform: translate(-6px, -4px); }
+      80% { transform: translate(4px, 4px); }
+    }
+
+    /* Suspect Select Modal for Accusation */
+    #accuse-modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.88);
+      z-index: 60;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      gap: 16px;
+    }
+
+    .suspect-card-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .suspect-pick-card {
+      background: #1f222e;
+      border: 1px solid rgba(223,177,91,0.3);
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      color: #fff;
+    }
+
+    .suspect-pick-card:active {
+      border-color: var(--primary);
+      background: rgba(201,59,59,0.2);
+    }
+
+    /* Ending Overlay */
+    #ending-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #0d0f14;
+      z-index: 120;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 30px;
+      text-align: center;
+      color: #fff;
+      animation: fadeIn 0.8s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="phone-container">
+  <div class="notch"></div>
+
+  <!-- =========================================================
+       1. MAIN TITLE SCREEN
+       ========================================================= -->
+  <div id="title-screen">
+    <div class="title-logo-area">
+      <div class="badge-sub">SECRET CASE FILES</div>
+      <h1 class="main-game-title">사건록<br><span>4대 기괴 밀실 파일</span></h1>
+      <p class="title-tagline">진실은 오직 예리한 관찰과<br>증언 속 모순에 숨겨져 있다.</p>
+    </div>
+
+    <div class="title-actions">
+      <button class="start-btn" onclick="openScenarioModal()">
+        <span>📜</span>
+        <span>사건 일지 (시나리오 선택)</span>
+      </button>
+      <button class="sound-toggle-btn" id="titleBgmBtn" onclick="toggleBgm()">
+        🎵 국악 풍류 BGM
+      </button>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       2. SCENARIO SELECTION MODAL
+       ========================================================= -->
+  <div id="scenario-modal">
+    <div class="scenario-header">
+      <h3><span>📂</span> 사건 파일 선택</h3>
+      <button class="close-btn" onclick="closeScenarioModal()">✕</button>
+    </div>
+
+    <div class="scenario-list" id="scenarioListContainer">
+      <!-- Generated dynamically in JS -->
+    </div>
+  </div>
+
+  <!-- =========================================================
+       3. IN-GAME HEADER & ACTIONS
+       ========================================================= -->
+  <header>
+    <div class="case-title">
+      <button class="icon-btn-header" onclick="returnToTitle()">🏠</button>
+      <span id="headerCaseName">사건 1: 월영루의 독살</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button id="bgmToggleBtn" onclick="toggleBgm()" style="background:rgba(223,177,91,0.2); border:1px solid var(--gold); color:var(--gold); border-radius:12px; padding:3px 8px; font-size:11px; cursor:pointer; font-weight:700;">🎵 풍류</button>
+      <div class="clue-progress" id="clueCounter">단서 0 / 4</div>
+    </div>
+  </header>
+
+  <!-- =========================================================
+       4. INTERACTIVE VISUAL STAGE
+       ========================================================= -->
+  <div id="stage">
+    <canvas id="sceneCanvas"></canvas>
+
+    <!-- Suspect Visual Presentation for Interrogation -->
+    <div id="suspect-stage">
+      <div class="suspect-avatar-container" id="suspectAvatar">
+        <div id="avatarSvg"></div>
+        <div class="sweat-drop" id="sweatDrop">💧</div>
+      </div>
+    </div>
+
+    <!-- Cut-in Banner (이의 제기!) -->
+    <div id="cutin-banner">그 말엔 모순이 있소!</div>
+  </div>
+
+  <!-- Dialogue Box -->
+  <div id="dialogue-area">
+    <div>
+      <div class="speaker-tag" id="speakerName">암행어사</div>
+      <div class="dialogue-text" id="dialogueBody">
+        현장을 주의 깊게 수색하여 진실을 밝혀내야 한다.
+      </div>
+    </div>
+    <div class="dialogue-actions" id="dialogueActions">
+      <!-- Dynamic contextual buttons -->
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <nav id="bottom-nav">
+    <button class="nav-btn active" id="btn-scene" onclick="switchMode('investigate')">
+      <span class="icon">🔍</span>
+      <span>현장 조사</span>
+    </button>
+    <button class="nav-btn" id="btn-suspects" onclick="switchMode('interrogate')">
+      <span class="icon">👥</span>
+      <span>용의자 심문</span>
+    </button>
+    <button class="nav-btn" id="btn-clues" onclick="openClueModal()">
+      <span class="icon">📜</span>
+      <span>단서 수첩</span>
+    </button>
+    <button class="nav-btn accuse-btn" onclick="openAccuseModal()">
+      <span class="icon">⚡</span>
+      <span>진범 지목</span>
+    </button>
+  </nav>
+
+  <!-- Clue Notebook Bottom Sheet -->
+  <div id="clue-modal">
+    <div class="sheet-card">
+      <div class="sheet-header">
+        <div class="sheet-title" id="clueSheetTitle">📜 단서 수첩 (증거 목록)</div>
+        <button class="close-btn" onclick="closeClueModal()">✕</button>
+      </div>
+      <div class="clue-list" id="clueList">
+        <!-- Dynamically filled -->
+      </div>
+      <button class="present-clue-btn" id="presentBtn" style="display: none;" onclick="presentSelectedClue()">
+        👉 이 증거로 모순을 반박한다!
+      </button>
+    </div>
+  </div>
+
+  <!-- Accusation Modal -->
+  <div id="accuse-modal">
+    <h3 style="color: var(--gold); font-size: 20px;">⚡ 진범은 누구인가?</h3>
+    <p style="color: #aaa; font-size: 13px; text-align: center;">명확한 증거 없이 지목하면 파직당하거나 패소합니다.</p>
+    <div class="suspect-card-grid" id="accuseCardGrid">
+      <!-- Dynamically filled with current suspects -->
+    </div>
+    <button class="close-btn" style="width: 100px; border-radius: 8px; margin-top: 10px;" onclick="closeAccuseModal()">취소</button>
+  </div>
+
+  <!-- Ending Screen -->
+  <div id="ending-overlay">
+    <div id="endingBadge" style="font-size: 48px; margin-bottom: 12px;">🏆</div>
+    <h2 id="endingTitle" style="color: var(--gold); font-size: 22px; margin-bottom: 10px;">사건 해결</h2>
+    <p id="endingDesc" style="color: #ccc; font-size: 13px; line-height: 1.6; margin-bottom: 24px; max-width: 310px;"></p>
+    <div style="display:flex; gap:10px;">
+      <button class="present-clue-btn" style="width: 140px;" onclick="restartCase()">다시 수사</button>
+      <button class="present-clue-btn" style="width: 140px; background:#444; color:#fff;" onclick="returnToTitle()">사건 선택</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  /* =========================================================
+     AUDIO SYNTHESIZER (Korean Traditional & Mystery SFX)
+     ========================================================= */
+  const AudioEngine = {
+    ctx: null,
+    bgmTimer: null,
+    bgmRunning: false,
+    
+    init() {
+      if (!this.ctx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioContext();
+      }
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+    },
+    playHeavyBuk(volume = 0.4, decay = 0.6) {
+      this.init();
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(85, now);
+      osc.frequency.exponentialRampToValueAtTime(32, now + decay);
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + decay);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + decay);
+    },
+    playGayageum(freq = 330, volume = 0.22, decay = 1.2) {
+      this.init();
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.linearRampToValueAtTime(freq * 1.015, now + decay * 0.4);
+      osc.frequency.linearRampToValueAtTime(freq, now + decay);
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + decay);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + decay);
+    },
+    playJing(volume = 0.25) {
+      this.init();
+      const now = this.ctx.currentTime;
+      [140, 210, 280].forEach(f => {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f, now);
+        gain.gain.setValueAtTime(volume * 0.33, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 1.8);
+      });
+    },
+    playObjection() {
+      this.init();
+      this.playHeavyBuk(0.5, 0.4);
+      setTimeout(() => this.playHeavyBuk(0.65, 0.5), 180);
+      setTimeout(() => {
+        this.playHeavyBuk(0.9, 0.9);
+        this.playJing(0.35);
+      }, 380);
+    },
+    playEvidenceFound() {
+      this.init();
+      const notes = [293.66, 329.63, 392.00, 440.00, 523.25];
+      notes.forEach((freq, idx) => {
+        setTimeout(() => this.playGayageum(freq, 0.2, 0.9), idx * 110);
+      });
+      setTimeout(() => this.playHeavyBuk(0.35, 0.5), notes.length * 110);
+    },
+    playError() {
+      this.init();
+      this.playHeavyBuk(0.4, 0.25);
+    },
+    startBgm() {
+      this.init();
+      if (this.bgmRunning) return;
+      this.bgmRunning = true;
+      const scale = [196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25];
+      let step = 0;
+      const bgmTick = () => {
+        if (!this.bgmRunning) return;
+        const noteIdx = Math.floor(Math.sin(step * 0.7) * 3 + 4) % scale.length;
+        this.playGayageum(scale[noteIdx], 0.12, 1.4);
+        if (step % 4 === 0) this.playHeavyBuk(0.18, 0.8);
+        step++;
+        const nextTime = 650 + (step % 3) * 120;
+        this.bgmTimer = setTimeout(bgmTick, nextTime);
+      };
+      bgmTick();
+    },
+    stopBgm() {
+      this.bgmRunning = false;
+      if (this.bgmTimer) {
+        clearTimeout(this.bgmTimer);
+        this.bgmTimer = null;
+      }
+    },
+    toggleBgm() {
+      if (this.bgmRunning) {
+        this.stopBgm();
+        return false;
+      } else {
+        this.startBgm();
+        return true;
+      }
+    }
+  };
+
+  function toggleBgm() {
+    const isPlaying = AudioEngine.toggleBgm();
+    const btn = document.getElementById('bgmToggleBtn');
+    const titleBtn = document.getElementById('titleBgmBtn');
+    const label = isPlaying ? '🔊 풍류 ON' : '🔇 풍류 OFF';
+    if (btn) btn.innerText = isPlaying ? '🔊 풍류' : '🔇 풍류';
+    if (titleBtn) titleBtn.innerText = label;
+  }
+
+  /* =========================================================
+     4 CASES SCENARIO DATABASE (Omnibus Mystery Engine)
+     ========================================================= */
+  const casesDB = {
+    case1: {
+      id: 'case1',
+      title: '월영루: 달 그림자 궁중 독살',
+      badge: '사건 1 [조선 궁중]',
+      difficulty: '★★★☆☆',
+      bgImage: 'scene_user.png',
+      briefing: '달빛이 붉은 밤, 월영루에서 참판 대감이 피를 토하고 절명했다. 찻잔에 독이 검출되지 않은 완전 밀실의 진실을 밝혀라.',
+      detectiveName: '암행어사',
+      clues: {
+        tea: {
+          id: 'tea',
+          name: '변색 없는 은수저와 찻잔',
+          icon: '🍵',
+          desc: '참판이 마시던 차. 은수저를 담가도 색이 변하지 않아 비소나 일반 독극물은 검출되지 않았다.',
+          discovered: false
+        },
+        fan: {
+          id: 'fan',
+          name: '어의의 서화 부채',
+          icon: '🪭',
+          desc: '참판의 손 옆에 떨어진 부채. 부채살 끝부분에 흰 미세 가루와 박하향이 스며있다. 어의 백도경이 선물한 것.',
+          discovered: false
+        },
+        candle: {
+          id: 'candle',
+          name: '붉은 밀랍 촛대',
+          icon: '🕯️',
+          desc: '월영루 탁자에 켜진 양초. 타오르면서 미세하고 독특한 비린 기름 향을 뿜어낸다.',
+          discovered: false
+        },
+        symptom: {
+          id: 'symptom',
+          name: '검시 결과: 지연 합성독',
+          icon: '📜',
+          desc: '사체 부검 기록: 단독으로는 무해하지만 박하 성분의 분말과 밀랍 연기가 결합하면 폐를 마비시키는 맹독이 된다.',
+          discovered: false
+        }
+      },
+      suspects: {
+        doctor: {
+          id: 'doctor',
+          name: '어의 백도경',
+          tag: '주치의 (용의자)',
+          img: 'doctor_char.png',
+          quote: '소인은 그저 참판 대감의 흉통을 덜고자 지병 처방만 내렸을 뿐입니다. 월영루 찻자리엔 참석조차 하지 않았습니다!',
+          questions: [
+            { q: '대감께 내린 지병 처방은 무엇이었소?', a: '속의 화기를 가라앉히는 감초 탕약과 함께, 더위를 식히시라고 서화 부채를 올렸을 뿐입니다.' },
+            { q: '월영루에 오지 않았다고 맹세할 수 있소?', a: '물론입니다! 찻자리에 신은 얼굴도 비치지 않았습니다. 밖에서 무슨 독을 썼다는 겁니까?' }
+          ],
+          contradictionClues: ['fan', 'symptom'],
+          isCulprit: true,
+          cracked: false
+        },
+        courtLady: {
+          id: 'courtLady',
+          name: '최 상궁',
+          tag: '수라간 상궁',
+          img: 'lady_char.png',
+          quote: '제가 올린 차는 감초와 대추를 다린 순수한 약차입니다. 은수저도 말짱하지 않았습니까? 저는 억울합니다!',
+          questions: [
+            { q: '찻잔에 독이 묻었을 가능성은 없소?', a: '수라간 은쟁반에 담아 제가 직접 은수저로 검시했습니다. 차 자체엔 단 한 방울의 독도 없었습니다!' },
+            { q: '정자 안의 촛불은 누가 켰소?', a: '어제 낮에 어의 백도경 나으리께서 "대감의 심신 안정을 돕는 특제 밀랍초"라며 가져다 둔 것을 켰을 뿐입니다!' }
+          ],
+          contradictionClues: [],
+          isCulprit: false,
+          cracked: false
+        },
+        guard: {
+          id: 'guard',
+          name: '호위무관 서진우',
+          tag: '금군 무관',
+          img: 'guard_char.png',
+          quote: '소인은 참판 대감의 명으로 정자 돌계단 아래서만 불침번을 섰습니다. 정자 안으로 들어간 자는 아무도 없었습니다.',
+          questions: [
+            { q: '수상한 자를 보지 못했소?', a: '오직 최 상궁만이 찻상을 들고 들어갔다 나왔을 뿐입니다. 다만 정자 주변에서 기이한 박하향이 맴돌았습니다.' },
+            { q: '대감이 쓰러지실 때의 모습은?', a: '더위를 타시며 어의가 준 부채로 부채질을 세차게 하셨습니다. 그 직후 갑자기 목을 쥐고 피를 토하셨습니다!' }
+          ],
+          contradictionClues: [],
+          isCulprit: false,
+          cracked: false
+        }
+      },
+      checkHit(xPct, yPct) {
+        if (xPct >= 44 && xPct <= 63 && yPct >= 46 && yPct <= 58) return { type: 'clue', key: 'tea' };
+        if (xPct >= 64 && xPct <= 85 && yPct >= 50 && yPct <= 66) return { type: 'clue', key: 'fan' };
+        if (xPct >= 5 && xPct <= 35 && yPct >= 45 && yPct <= 85) return { type: 'clue', key: 'candle' };
+        if (xPct >= 86 && xPct <= 100 && yPct >= 45 && yPct <= 60) return { type: 'obs', text: '최 상궁이 차를 끓여온 흑유 다기 주전자다. 남은 차에선 독 반응이 없다.' };
+        if (xPct >= 46 && xPct <= 72 && yPct >= 8 && yPct <= 25) return { type: 'obs', text: '붉은 초승달이 불길한 핏빛을 띠며 밤하늘에 걸려 있다.' };
+        return { type: 'obs', text: '정자 안 탁자 위의 찻잔과 부채, 또는 촛대를 더 자세히 살펴보자.' };
+      }
+    },
+
+    case2: {
+      id: 'case2',
+      title: '안개산장의 밀실 살인',
+      badge: '사건 2 [현대 밀실]',
+      difficulty: '★★★★☆',
+      bgImage: 'scene_case2_user.png',
+      briefing: '폭설로 고립된 외딴 산장. 잠긴 서재 안에서 수집가 강태석이 흉기에 찔려 피살되었다. 창문과 문은 안쪽에서 잠겨 있었다.',
+      detectiveName: '탐정',
+      clues: {
+        clock: {
+          id: 'clock',
+          name: '멈춘 탁상시계 (00:15)',
+          icon: '⏰',
+          desc: '벽난로 선반 위 12시 15분에 멈춘 시계. 피해자의 사망 추정 시각을 속이기 위해 의도적으로 조작되었다.',
+          discovered: false
+        },
+        will: {
+          id: 'will',
+          name: '불타버린 유언장 초안',
+          icon: '📄',
+          desc: '책상 위 그을린 서류. "모든 재산을 사회에 환원..."이라는 문구가 남아 있다.',
+          discovered: false
+        },
+        wine: {
+          id: 'wine',
+          name: '수면제 성분의 와인잔',
+          icon: '🍷',
+          desc: '책상 위 와인잔 바닥에 녹지 않은 미세한 수면제 가루가 가라앉아 있다.',
+          discovered: false
+        },
+        trick: {
+          id: 'trick',
+          name: '얼음추와 낚싯줄 흔적',
+          icon: '🪢',
+          desc: '창틀과 문손잡이 사이에 낚싯줄 마찰 흔적과 녹아내린 얼음 물방울이 남아 있다. 원격 자동 잠금 트릭의 물증!',
+          discovered: false
+        }
+      },
+      suspects: {
+        secretary: {
+          id: 'secretary',
+          name: '비서 박도현',
+          tag: '개인 비서 (용의자)',
+          img: 'char_secretary.png',
+          quote: '저는 자정부터 1시까지 1층 로비 벽난로 앞에서 결산 서류를 정리했습니다. 12시 20분 쿵 소리를 듣고 뛰어올라갔습니다!',
+          questions: [
+            { q: '당신의 손목시계는 몇 시에 멈춰 있소?', a: '제, 제 시계는 문을 부수려고 두드리다가 12시 20분에 충격으로 깨졌을 뿐입니다!' },
+            { q: '피해자의 횡령 감사 서류를 보았소?', a: '그건 사실이 아닙니다! 회장님은 저를 가장 신뢰하셨습니다.' }
+          ],
+          contradictionClues: ['clock', 'trick'],
+          isCulprit: true,
+          cracked: false
+        },
+        doctor: {
+          id: 'doctor',
+          name: '조카 윤세린',
+          tag: '유산 상속인',
+          img: 'lady_char.png',
+          quote: '저는 밤 11시에 두통약을 먹고 제 방에서 아침까지 잤어요. 삼촌이 유언장을 바꾸려 하셨다는 건 몰랐습니다.',
+          questions: [
+            { q: '방 쓰레기통의 뜯지 않은 약은?', a: '그냥 먹기 싫어서 버렸을 뿐이에요! 제가 삼촌을 죽일 이유가 없잖아요.' },
+            { q: '비서 박도현을 의심하지 않나요?', a: '박 비서가 최근 공금을 빼돌렸다는 소문이 돌긴 했어요...' }
+          ],
+          contradictionClues: [],
+          isCulprit: false,
+          cracked: false
+        },
+        guard: {
+          id: 'guard',
+          name: '요리사 최진혁',
+          tag: '전속 요리사',
+          img: 'guard_char.png',
+          quote: '자정 무렵 주방에서 내일 아침 육수를 끓이고 있었습니다. 손가락의 상처는 칼로 고기를 썰다 베인 것입니다.',
+          questions: [
+            { q: '피해자에게 거액의 빚이 있었소?', a: '도자기를 깬 변상금 3억을 독촉받긴 했지만... 살인이라니 당치도 않습니다!' },
+            { q: '주방 환풍구의 흉기를 아시오?', a: '제 생선 칼이 왜 환풍구에 있었는지는 저도 전혀 모릅니다!' }
+          ],
+          contradictionClues: [],
+          isCulprit: false,
+          cracked: false
+        }
+      },
+      checkHit(xPct, yPct) {
+        // 1. [단서 1] 벽난로 위 선반 - 멈춘 탁상시계 (x: 78%~98%, y: 32%~45%)
+        if (xPct >= 78 && xPct <= 98 && yPct >= 32 && yPct <= 45) return { type: 'clue', key: 'clock' };
+        // 2. [단서 2] 책상 위 - 불타버린 유언장 초안 (x: 18%~45%, y: 60%~72%)
+        if (xPct >= 18 && xPct <= 45 && yPct >= 60 && yPct <= 72) return { type: 'clue', key: 'will' };
+        // 3. [단서 3] 책상 위 좌측 - 수면제 와인잔 (x: 6%~22%, y: 56%~72%)
+        if (xPct >= 6 && xPct <= 22 && yPct >= 56 && yPct <= 72) return { type: 'clue', key: 'wine' };
+        // [현장 관찰 1] 타오르는 벽난로 불길 (x: 75%~100%, y: 46%~70%)
+        if (xPct >= 75 && xPct <= 100 && yPct >= 46 && yPct <= 70) return { type: 'obs', text: '벽난로 안에서 붉은 장작불이 타오르고 있다. 불길 속에 유언장을 태우려던 흔적이 역력하다.' };
+        // [현장 관찰 2] 초록색 안락의자 & 걸쳐진 코트 (x: 18%~65%, y: 44%~66%)
+        if (xPct >= 18 && xPct <= 65 && yPct >= 44 && yPct <= 66) return { type: 'obs', text: '서재의 초록색 가죽 안락의자다. 누군가 급히 벗어두고 간 겉옷이 놓여 있다.' };
+        // [현장 관찰 3] 눈보라 창문 틈새 얼음 낚싯줄 흔적 (x: 20%~65%, y: 18%~44%)
+        if (xPct >= 20 && xPct <= 65 && yPct >= 18 && yPct <= 44) return { type: 'obs', text: '창틀 틈새에 녹아내린 얼음 물방울과 낚싯줄 마찰 흔적이 남아 있다! 원격 잠금 트릭의 단서를 발견했다!' };
+        // [현장 관찰 4] 벽면 위스키 디캔터 (x: 8%~24%, y: 32%~52%)
+        if (xPct >= 8 && xPct <= 24 && yPct >= 32 && yPct <= 52) return { type: 'obs', text: '벽면 거치대의 위스키 디캔터다. 피해자와 박 비서가 사건 전 마신 흔적이 있다.' };
+        return { type: 'obs', text: '서재 책상 위의 와인잔과 유언장, 벽난로 위의 시계를 자세히 살펴보자.' };
+      }
+    },
+
+    case3: {
+      id: 'case3',
+      title: '경성 특급열차의 사라진 보석',
+      badge: '사건 3 [근대 경성]',
+      difficulty: '★★★☆☆',
+      bgImage: 'scene_case3_user.png',
+      briefing: '야간 경성행 특급열차가 터널을 지나는 순간 1등칸이 암전되었다. 불이 켜지자 국보급 보석이 사라지고 무역상이 쓰러져 있었다.',
+      detectiveName: '사설탐정',
+      clues: {
+        jewel: {
+          id: 'jewel',
+          name: '비어있는 보석 벨벳 상자',
+          icon: '💎',
+          desc: '테이블 위 열려 있는 붉은 벨벳함. 억지로 뜯은 흔적이 아니라 열쇠로 정갈하게 열려 있다.',
+          discovered: false
+        },
+        ticket: {
+          id: 'ticket',
+          name: '어긋난 검표 기록 차표',
+          icon: '🎫',
+          desc: '테이블 위 차표. 찍힌 시각은 정전 직전이며, 1등칸이 아니라 3등칸 검표가 찍혀 있다.',
+          discovered: false
+        },
+        coat: {
+          id: 'coat',
+          name: '비에 젖은 트렌치 코트',
+          icon: '🧥',
+          desc: '초록색 벨벳 좌석에 걸쳐진 외투. 열차 내부인데도 비바람에 흠뻑 젖어 있어 지붕 환승의 물증이다!',
+          discovered: false
+        },
+        fake: {
+          id: 'fake',
+          name: '깨진 모조 유리 보석 파편',
+          icon: '🔍',
+          desc: '좌석 틈새에서 발견된 모조 보석 파편. 도난당한 보석은 애초에 가짜였다는 자작극의 단서!',
+          discovered: false
+        }
+      },
+      suspects: {
+        countess: {
+          id: 'countess',
+          name: '귀족 부인 송씨',
+          tag: '보석 원주인 (용의자)',
+          img: 'char_countess.png',
+          quote: '제 가문의 가보인 다이아몬드가 눈앞에서 사라졌어요! 정전이 되자마자 누군가 제 목덜미를 낚아챘다고요!',
+          questions: [
+            { q: '최근 거액의 보험에 가입하셨더군요?', a: '가보를 지키기 위해 당연한 조치였을 뿐이에요! 저를 의심하는 건가요?' },
+            { q: '보석함이 열쇠로 정갈하게 열려 있소.', a: '그, 그건 도둑이 열쇠 구멍을 교묘하게 딴 것이겠지요!' }
+          ],
+          contradictionClues: ['fake', 'jewel'],
+          isCulprit: true,
+          cracked: false
+        },
+        secretary: {
+          id: 'secretary',
+          name: '화가 한정우',
+          tag: '신여성 화가',
+          img: 'char_secretary.png',
+          quote: '저는 정전 동안 옆 칸 복도에서 야경 스케치를 하고 있었습니다. 불이 꺼져 아무것도 보이지 않았습니다.',
+          questions: [
+            { q: '피해자와 채무 관계가 있었소?', a: '그 일본인 무역상에게 그림 값을 떼인 적은 있지만 살인이나 도둑질은 모릅니다.' },
+            { q: '당신의 외투가 젖어 있소.', a: '그건 열차 탑승 전에 비를 맞았던 것뿐입니다!' }
+          ],
+          contradictionClues: [],
+          isCulprit: false,
+          cracked: false
+        },
+        guard: {
+          id: 'guard',
+          name: '열차 차장 이기택',
+          tag: '특급열차 차장',
+          img: 'guard_char.png',
+          quote: '터널 진입 직전 배전반 퓨즈가 타버려 급히 복구 작업을 하느라 정신이 없었습니다.',
+          questions: [
+            { q: '차표 검표 시간이 왜 맞지 않소?', a: '승객들이 워낙 붐벼서 검표 시간을 제때 맞추지 못했습니다.' },
+            { q: '배전반 근처에서 수상한 자를 보았소?', a: '검은 외투를 입은 그림자가 열차 후미로 뛰어가는 것을 얼핏 보았습니다.' }
+          ],
+          contradictionClues: [],
+          isCulprit: false,
+          cracked: false
+        }
+      },
+      checkHit(xPct, yPct) {
+        // 1. [단서 1] 붉은 벨벳 보석함 (x: 29%~55%, y: 48%~62%)
+        if (xPct >= 29 && xPct <= 55 && yPct >= 48 && yPct <= 62) return { type: 'clue', key: 'jewel' };
+        // 2. [단서 2] 테이블 위 차표 (x: 46%~70%, y: 58%~66%)
+        if (xPct >= 46 && xPct <= 70 && yPct >= 58 && yPct <= 66) return { type: 'clue', key: 'ticket' };
+        // 3. [단서 3] 좌석 위 젖은 트렌치 코트 (x: 62%~99%, y: 49%~77%)
+        if (xPct >= 62 && xPct <= 99 && yPct >= 49 && yPct <= 77) return { type: 'clue', key: 'coat' };
+        // [현장 관찰 1] 벽면 위스키 디캔터 (x: 14%~29%, y: 34%~51%)
+        if (xPct >= 14 && xPct <= 29 && yPct >= 34 && yPct <= 51) return { type: 'obs', text: '벽면 거치대의 위스키 디캔터다. 정전 전 피해자와 피의자가 함께 술을 마신 흔적이 있다.' };
+        // [현장 관찰 2] 아르데코 벽등 (x: 15%~30%, y: 14%~31%)
+        if (xPct >= 15 && xPct <= 30 && yPct >= 14 && yPct <= 31) return { type: 'obs', text: '황동 아르데코 벽걸이 램프다. 터널 진입 순간 퓨즈가 타며 일시적으로 꺼졌었다.' };
+        // [현장 관찰 3] 비 내리는 차창 (x: 30%~78%, y: 15%~50%)
+        if (xPct >= 30 && xPct <= 78 && yPct >= 15 && yPct <= 50) return { type: 'obs', text: '비 내리는 차창 밖으로 빗줄기가 세차게 흩날린다. 정전 동안 누군가 지붕 위를 달린 흔적이 보인다.' };
+        return { type: 'obs', text: '열차 객실 소파 틈새에서 깨진 가짜 보석 파편을 발견했다!' };
+      }
+    },
+
+    case4: {
+      id: 'case4',
+      title: '청운문: 천년 영약 도난 사건',
+      badge: '사건 4 [선협 판타지]',
+      difficulty: '★★★★★',
+      bgImage: 'case4_bg_hd.png',
+      briefing: '청운문의 금지구역 연단실. 9重 결계로 보호되던 천년 영약 구전청심단이 감쪽같이 도난당했다. 결계를 해제할 수 있는 자는 셋뿐이다.',
+      detectiveName: '형벌장로',
+      clues: {
+        pillbox: {
+          id: 'pillbox',
+          name: '비취 옥함 (억지 개봉 흔적)',
+          icon: '🏺',
+          desc: '제단 위 옥함. 외부 암호 진법을 풀지 않고 내부에서 문파 비전 심법으로 강제 개봉되었다.',
+          discovered: false
+        },
+        talisman: {
+          id: 'talisman',
+          name: '극빙 한기 부적 파편',
+          icon: '📜',
+          desc: '연단실의 화염 결계를 소리 없이 얼려 무력화시킨 특이한 북해 극빙 종파의 부적 파편.',
+          discovered: false
+        },
+        incense: {
+          id: 'incense',
+          name: '마교의 은신 연향 가루',
+          icon: '🪔',
+          desc: '바닥에 은밀히 떨어진 자줏빛 향로 재. 결계 감시경을 피하기 위한 마교의 비전 분말이다.',
+          discovered: false
+        },
+        ashes: {
+          id: 'ashes',
+          name: '연단로 바닥의 약찌꺼기',
+          icon: '🔥',
+          desc: '도난당한 것은 진짜 영약이 아니며, 이미 이틀 전 연단실 안에서 다른 약으로 바꿔치기되었다는 증거!',
+          discovered: false
+        }
+      },
+      suspects: {
+        disciple: {
+          id: 'disciple',
+          name: '수제자 백운혁',
+          tag: '장문인 수제자 (용의자)',
+          img: 'char_disciple.png',
+          quote: '제자는 어젯밤 장문인의 명을 받들어 검총에서 비검을 단련하고 있었습니다. 연단실의 결계엔 다가간 적도 없습니다!',
+          questions: [
+            { q: '소매 속에 묻은 자줏빛 가루는 무엇인가?', a: '그건... 수련 중 산에서 채취한 영초 가루일 뿐입니다!' },
+            { q: '다음 달 마교 토벌전에 급히 돌파가 필요했지?', a: '제가 왜 부정한 수단으로 돌파하겠습니까! 제 실력을 모욕하지 마십시오.' }
+          ],
+          contradictionClues: ['pillbox', 'incense'],
+          isCulprit: true,
+          cracked: false
+        },
+        secretary: {
+          id: 'secretary',
+          name: '단약 장로 풍청화',
+          tag: '연단실 총책임자',
+          img: 'doctor_char.png',
+          quote: '영약이 완성되던 순간까지 내가 직접 지켰소. 결계의 봉인을 풀 수 있는 문파의 비전 열쇠는 오직 나와 장문인뿐인데...',
+          questions: [
+            { q: '최근 연단로의 화력이 약해졌던 이유는?', a: '영약의 효능을 안정시키기 위해 서서히 온도를 내렸을 뿐이오.' },
+            { q: '백운혁이 연단실을 출입한 적이 있는가?', a: '사흘 전 장문인의 서신을 전하러 잠깐 들어온 적은 있었소.' }
+          ],
+          contradictionClues: [],
+          isCulprit: false,
+          cracked: false
+        },
+        guard: {
+          id: 'guard',
+          name: '호법 무사 뇌진',
+          tag: '금지구역 결계 수호자',
+          img: 'guard_char.png',
+          quote: '연단실 입구를 홀로 지켰으나 결계가 찢어지는 파동은 없었습니다. 침입자가 있었다면 제 뇌전 검기를 피할 수 없었을 것입니다.',
+          questions: [
+            { q: '어젯밤 이상한 한기를 느끼지 못했는가?', a: '새벽녘에 문풍지 사이로 기이할 만큼 서늘한 냉기가 스쳤던 기억이 납니다.' },
+            { q: '자리를 비운 적이 있는가?', a: '단 한 뼘도 자리를 뜨지 않았습니다. 맹세코 문파에 불충을 저지른 적 없습니다!' }
+          ],
+          contradictionClues: [],
+          isCulprit: false,
+          cracked: false
+        }
+      },
+      checkHit(xPct, yPct) {
+        // 1. [단서 1] 우측 옥좌대 위 - 열린 비취 옥함 (x: 68%~84%, y: 45%~62%)
+        if (xPct >= 68 && xPct <= 84 && yPct >= 45 && yPct <= 62) return { type: 'clue', key: 'pillbox' };
+        // 2. [단서 2] 허공에 일렁이는 - 극빙 한기 부적 영기 (x: 42%~58%, y: 26%~45%)
+        if (xPct >= 42 && xPct <= 58 && yPct >= 26 && yPct <= 45) return { type: 'clue', key: 'talisman' };
+        // 3. [단서 3] 좌측 협탁 위 - 붉은 촛대와 마교 은신 연향 (x: 14%~28%, y: 32%~60%)
+        if (xPct >= 14 && xPct <= 28 && yPct >= 32 && yPct <= 60) return { type: 'clue', key: 'incense' };
+        // 4. [단서 4] 중앙 거대 청동 연단로 - 바닥의 바꿔치기된 약찌꺼기 (x: 42%~58%, y: 46%~64%)
+        if (xPct >= 42 && xPct <= 58 && yPct >= 46 && yPct <= 64) return { type: 'clue', key: 'ashes' };
+        // [현장 관찰 1] 밤하늘의 붉은 달
+        if (xPct >= 48 && xPct <= 62 && yPct >= 10 && yPct <= 23) return { type: 'obs', text: '선산 위에 떠 있는 불길한 붉은 초승달이다. 마도(魔道)의 기운이 은밀히 감돈다.' };
+        // [현장 관찰 2] 연단실 바닥 팔괘 마법진 (y: 65% 이상)
+        if (yPct >= 65) return { type: 'obs', text: '금지구역의 팔괘 결계 마법진이다. 외부 침입 흔적은 없으며 내부자 소행임이 확실하다.' };
+        return { type: 'obs', text: '우측 옥좌대 위의 옥함과 중앙의 연단로, 좌측 협탁의 향로를 자세히 살펴보자.' };
+      }
+    }
+  };
+
+  /* =========================================================
+     GLOBAL GAME STATE & CONTROLLER
+     ========================================================= */
+  let currentCase = casesDB.case1;
+  let gameState = {
+    mode: 'investigate',
+    currentSuspectId: 'doctor',
+    selectedClueId: null,
+    totalCluesFound: 0
+  };
+
+  function initScenarioList() {
+    const container = document.getElementById('scenarioListContainer');
+    container.innerHTML = '';
+    Object.values(casesDB).forEach(c => {
+      const card = document.createElement('div');
+      card.className = 'scenario-card';
+      card.onclick = () => selectCase(c.id);
+      card.innerHTML = `
+        <img src="${c.bgImage}" class="scenario-thumb" alt="${c.title}">
+        <div class="scenario-info">
+          <div>
+            <div class="scenario-tag">${c.badge}</div>
+            <div class="scenario-title">${c.title}</div>
+            <div class="scenario-desc">${c.briefing}</div>
+          </div>
+          <div class="scenario-difficulty">난이도: ${c.difficulty}</div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function openScenarioModal() {
+    AudioEngine.playGayageum(440, 0.2, 0.8);
+    initScenarioList();
+    document.getElementById('scenario-modal').classList.add('show');
+  }
+
+  function closeScenarioModal() {
+    document.getElementById('scenario-modal').classList.remove('show');
+  }
+
+  function selectCase(caseId) {
+    AudioEngine.playEvidenceFound();
+    currentCase = casesDB[caseId];
+    closeScenarioModal();
+    document.getElementById('title-screen').style.display = 'none';
+
+    // Reset state for new case
+    gameState.mode = 'investigate';
+    gameState.selectedClueId = null;
+    gameState.totalCluesFound = 0;
+    Object.values(currentCase.clues).forEach(c => c.discovered = false);
+    Object.values(currentCase.suspects).forEach(s => s.cracked = false);
+
+    // Pick first suspect
+    gameState.currentSuspectId = Object.keys(currentCase.suspects)[0];
+
+    // Update UI
+    document.getElementById('headerCaseName').innerText = currentCase.title;
+    document.getElementById('stage').style.backgroundImage = `url('${currentCase.bgImage}?t=${Date.now()}')`;
+    document.getElementById('speakerName').innerText = `${currentCase.detectiveName} (현장 수색)`;
+    document.getElementById('dialogueBody').innerText = currentCase.briefing;
+    document.getElementById('ending-overlay').style.display = 'none';
+
+    updateClueProgress();
+    switchMode('investigate');
+  }
+
+  function returnToTitle() {
+    AudioEngine.playGayageum(293.66, 0.2, 0.8);
+    document.getElementById('ending-overlay').style.display = 'none';
+    document.getElementById('title-screen').style.display = 'flex';
+  }
+
+  function restartCase() {
+    selectCase(currentCase.id);
+  }
+
+  /* =========================================================
+     IN-GAME ACTIONS & INTERROGATION
+     ========================================================= */
+  function switchMode(newMode) {
+    gameState.mode = newMode;
+    const isInvestigate = (newMode === 'investigate');
+
+    document.getElementById('btn-scene').classList.toggle('active', isInvestigate);
+    document.getElementById('btn-suspects').classList.toggle('active', !isInvestigate);
+    document.getElementById('suspect-stage').style.display = isInvestigate ? 'none' : 'flex';
+
+    if (isInvestigate) {
+      document.getElementById('speakerName').innerText = `${currentCase.detectiveName} (현장 수색)`;
+      document.getElementById('dialogueBody').innerText = '현장을 직접 살펴보고, 의심스러운 물건이나 흔적을 터치하여 조사해보자.';
+      document.getElementById('dialogueActions').innerHTML = '';
+    } else {
+      loadSuspect(gameState.currentSuspectId);
+    }
+  }
+
+  function loadSuspect(suspectId) {
+    gameState.currentSuspectId = suspectId;
+    const suspect = currentCase.suspects[suspectId];
+    
+    // Avatar image
+    document.getElementById('avatarSvg').innerHTML = `<img src="${suspect.img}" alt="${suspect.name}" class="suspect-img-portrait" />`;
+    document.getElementById('sweatDrop').style.opacity = suspect.cracked ? '1' : '0';
+
+    document.getElementById('speakerName').innerText = `${suspect.name} (${suspect.tag})`;
+
+    let questionsHtml = '<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">';
+    suspect.questions.forEach((item, idx) => {
+      questionsHtml += `<button onclick="askQuestion(${idx})" style="background:#262a36; border:1px solid rgba(223,177,91,0.3); color:#dfb15b; font-size:12px; padding:6px 10px; border-radius:8px; text-align:left; cursor:pointer;">❓ "${item.q}"</button>`;
+    });
+    questionsHtml += '</div>';
+
+    document.getElementById('dialogueBody').innerHTML = `"${suspect.quote}"${questionsHtml}`;
+
+    const actionsContainer = document.getElementById('dialogueActions');
+    actionsContainer.innerHTML = `
+      <button class="nav-btn" style="padding: 6px 10px; flex-direction:row; color:#fff;" onclick="cycleSuspect()">
+        <span>다른 인물 🔄</span>
+      </button>
+      <button class="nav-btn" style="padding: 6px 12px; flex-direction:row; background: var(--primary); color:#fff; border-color:#ff6666;" onclick="startPresentClue()">
+        <span>모순 지적 💥</span>
+      </button>
+    `;
+  }
+
+  function cycleSuspect() {
+    AudioEngine.playHeavyBuk(0.28, 0.4);
+    const keys = Object.keys(currentCase.suspects);
+    let nextIdx = (keys.indexOf(gameState.currentSuspectId) + 1) % keys.length;
+    loadSuspect(keys[nextIdx]);
+  }
+
+  function askQuestion(qIdx) {
+    AudioEngine.playGayageum(392.00, 0.18, 0.8);
+    const suspect = currentCase.suspects[gameState.currentSuspectId];
+    const item = suspect.questions[qIdx];
+    document.getElementById('dialogueBody').innerHTML = `
+      <span style="color:#dfb15b; font-size:13px; font-weight:700;">[질문] "${item.q}"</span><br><br>
+      <span style="color:#fff;">"${item.a}"</span>
+    `;
+  }
+
+  /* =========================================================
+     TOUCH INVESTIGATION HIT DETECTION
+     ========================================================= */
+  const stageEl = document.getElementById('stage');
+  stageEl.addEventListener('pointerdown', handleStageClick);
+
+  function handleStageClick(e) {
+    if (gameState.mode !== 'investigate') return;
+    if (e.target.closest('#cutin-banner') || e.target.closest('button')) return;
+
+    const rect = stageEl.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const xPct = (x / rect.width) * 100;
+    const yPct = (y / rect.height) * 100;
+
+    createInspectRipple(x, y);
+
+    const hit = currentCase.checkHit(xPct, yPct);
+    if (hit.type === 'clue') {
+      investigate(hit.key);
+    } else {
+      AudioEngine.playGayageum(220.00, 0.15, 0.6);
+      document.getElementById('speakerName').innerText = `${currentCase.detectiveName} (현장 관찰)`;
+      document.getElementById('dialogueBody').innerHTML = hit.text;
+    }
+  }
+
+  function createInspectRipple(x, y) {
+    const ripple = document.createElement('div');
+    ripple.className = 'inspect-ripple';
+    ripple.style.left = x + 'px';
+    ripple.style.top = y + 'px';
+    ripple.innerHTML = '🔍';
+    stageEl.appendChild(ripple);
+    setTimeout(() => {
+      if (ripple.parentNode) ripple.parentNode.removeChild(ripple);
+    }, 450);
+  }
+
+  function investigate(clueKey) {
+    AudioEngine.playEvidenceFound();
+    const clue = currentCase.clues[clueKey];
+    if (clue && !clue.discovered) {
+      clue.discovered = true;
+      gameState.totalCluesFound++;
+      updateClueProgress();
+    }
+
+    document.getElementById('speakerName').innerText = `단서 발견: ${clue.name}`;
+    document.getElementById('dialogueBody').innerHTML = `<strong>${clue.desc}</strong><br><span style="color:var(--gold); font-size:12px;">(수첩에 증거로 기록되었습니다.)</span>`;
+
+    // Case 1 specific combo
+    if (currentCase.id === 'case1' && currentCase.clues.fan.discovered && currentCase.clues.candle.discovered && !currentCase.clues.symptom.discovered) {
+      currentCase.clues.symptom.discovered = true;
+      gameState.totalCluesFound++;
+      updateClueProgress();
+      setTimeout(() => {
+        document.getElementById('dialogueBody').innerHTML += `<br><br><span style="color:#ff8888; font-weight:700;">⚡ [새로운 추론] 부채의 백색 가루와 촛대 기름이 만나면 치명적인 독으로 합성됨을 밝혀냈습니다!</span>`;
+      }, 1000);
+    }
+  }
+
+  function updateClueProgress() {
+    const total = Object.keys(currentCase.clues).length;
+    document.getElementById('clueCounter').innerText = `단서 ${gameState.totalCluesFound} / ${total}`;
+  }
+
+  /* =========================================================
+     CLUE NOTEBOOK & OBJECTION SYSTEM
+     ========================================================= */
+  function openClueModal(forPresenting = false) {
+    AudioEngine.playGayageum(440.00, 0.22, 1.0);
+    const modal = document.getElementById('clue-modal');
+    const list = document.getElementById('clueList');
+    list.innerHTML = '';
+
+    const discoveredClues = Object.values(currentCase.clues).filter(c => c.discovered);
+
+    if (discoveredClues.length === 0) {
+      list.innerHTML = `<div style="color:#888; text-align:center; padding: 24px;">아직 발견된 단서가 없습니다.<br>현장의 물건들을 터치해 수색하세요!</div>`;
+    } else {
+      discoveredClues.forEach(clue => {
+        const item = document.createElement('div');
+        item.className = `clue-item ${gameState.selectedClueId === clue.id ? 'selected' : ''}`;
+        item.onclick = () => selectClue(clue.id);
+        item.innerHTML = `
+          <div class="clue-thumb">${clue.icon}</div>
+          <div class="clue-info">
+            <h4>${clue.name}</h4>
+            <p>${clue.desc}</p>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    document.getElementById('presentBtn').style.display = forPresenting ? 'block' : 'none';
+    modal.classList.add('show');
+  }
+
+  function closeClueModal() {
+    document.getElementById('clue-modal').classList.remove('show');
+  }
+
+  function selectClue(clueId) {
+    AudioEngine.playGayageum(523.25, 0.2, 0.6);
+    gameState.selectedClueId = clueId;
+    document.querySelectorAll('.clue-item').forEach(el => el.classList.remove('selected'));
+    event.currentTarget.classList.add('selected');
+  }
+
+  function startPresentClue() {
+    openClueModal(true);
+  }
+
+  function presentSelectedClue() {
+    if (!gameState.selectedClueId) {
+      alert('먼저 반박에 제시할 단서를 선택해주세요!');
+      return;
+    }
+
+    closeClueModal();
+    const suspect = currentCase.suspects[gameState.currentSuspectId];
+
+    if (suspect.isCulprit && suspect.contradictionClues.includes(gameState.selectedClueId)) {
+      triggerCutIn(() => {
+        suspect.cracked = true;
+        document.getElementById('sweatDrop').style.opacity = '1';
+        document.getElementById('suspectAvatar').classList.add('shake');
+        document.getElementById('speakerName').innerText = `${suspect.name} (당황)`;
+        document.getElementById('dialogueBody').innerHTML = `
+          <span style="color:#ff6666; font-weight:700;">"그, 그것은... 거짓말이 아닙니다! 어찌 그 증거가 저와 관련이 있다는 말이오?!"</span>
+          <br><br>용의자가 사색이 되어 말을 더듬기 시작했다. 진범의 결정적 모순이 드러났다!
+        `;
+      });
+    } else {
+      AudioEngine.playError();
+      document.getElementById('speakerName').innerText = `${suspect.name}`;
+      document.getElementById('dialogueBody').innerText = `"그 증거가 저의 진술과 무슨 상관이 있다는 말씀입니까? 억측을 거두어 주십시오!"`;
+    }
+  }
+
+  function triggerCutIn(callback) {
+    AudioEngine.playObjection();
+    const banner = document.getElementById('cutin-banner');
+    document.getElementById('phone-container').classList.add('shake');
+    banner.classList.add('active');
+
+    setTimeout(() => {
+      banner.classList.remove('active');
+      document.getElementById('phone-container').classList.remove('shake');
+      if (callback) callback();
+    }, 1100);
+  }
+
+  /* =========================================================
+     ACCUSATION & ENDING EVALUATION
+     ========================================================= */
+  function openAccuseModal() {
+    AudioEngine.playHeavyBuk(0.45, 0.7);
+    const grid = document.getElementById('accuseCardGrid');
+    grid.innerHTML = '';
+    Object.values(currentCase.suspects).forEach(s => {
+      const card = document.createElement('div');
+      card.className = 'suspect-pick-card';
+      card.onclick = () => finalAccuse(s.id);
+      card.innerHTML = `
+        <img src="${s.img}" style="width:48px; height:48px; border-radius:50%; object-fit:cover;" alt="${s.name}" />
+        <div>
+          <div style="font-weight: 700;">${s.name}</div>
+          <div style="font-size: 11px; color: #888;">${s.tag}</div>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+    document.getElementById('accuse-modal').style.display = 'flex';
+  }
+
+  function closeAccuseModal() {
+    document.getElementById('accuse-modal').style.display = 'none';
+  }
+
+  function finalAccuse(targetSuspectId) {
+    closeAccuseModal();
+    const overlay = document.getElementById('ending-overlay');
+    const badge = document.getElementById('endingBadge');
+    const title = document.getElementById('endingTitle');
+    const desc = document.getElementById('endingDesc');
+    const suspect = currentCase.suspects[targetSuspectId];
+
+    if (suspect.isCulprit && suspect.cracked) {
+      AudioEngine.playEvidenceFound();
+      badge.innerText = '🌟';
+      title.innerText = '진범 검거: 사건 종결 [등급 S]';
+      desc.innerHTML = `
+        <div style="background:rgba(223,177,91,0.15); border:1px solid #dfb15b; border-radius:10px; padding:10px; margin-bottom:12px;">
+          <span style="color:#dfb15b; font-weight:700;">[사건 해결] ${suspect.name} 자백 확보</span>
+        </div>
+        명확한 물증과 결정적 모순을 들이밀자 <strong>${suspect.name}</strong>이 모든 범행을 자백했습니다.<br><br>
+        그대의 치밀한 수사와 예리한 추리로 미궁에 빠질 뻔한 사건의 진실을 완벽히 밝혀냈습니다!
+      `;
+    } else if (suspect.isCulprit && !suspect.cracked) {
+      AudioEngine.playError();
+      badge.innerText = '⚖️';
+      title.innerText = '증거 불충분: 수사 실패 [등급 B]';
+      desc.innerHTML = `
+        진범인 <strong>${suspect.name}</strong>을 지목했으나, 그의 거짓말과 모순을 확실한 증거로 입증하지 못했습니다.<br><br>
+        용의자는 법망을 유유히 빠져나갔고 사건은 미제로 남았습니다.
+      `;
+    } else {
+      AudioEngine.playError();
+      badge.innerText = '❌';
+      title.innerText = '오인 체포: 수사 파탄 [등급 F]';
+      desc.innerHTML = `
+        무고한 <strong>${suspect.name}</strong>을 범인으로 지목하여 수사에 치명적인 오점을 남겼습니다.<br><br>
+        진범은 어둠 속에서 조소하며 현장을 유유히 벗어났습니다.
+      `;
+    }
+
+    overlay.style.display = 'flex';
+  }
+
+  /* =========================================================
+     INIT BOOTSTRAP
+     ========================================================= */
+  window.addEventListener('DOMContentLoaded', () => {
+    initScenarioList();
+  });
+</script>
+
+</body>
+</html>
