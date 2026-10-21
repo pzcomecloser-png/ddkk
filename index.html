@@ -358,6 +358,16 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 22. 통통~ 사목 (NEW) -->
+    <a class="game-card" href="games/22/Tongtong.html">
+      <div class="icon-frame"><canvas id="iconTongtong" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">통통~ 사목</div>
+        <div class="card-desc">온 가족 사목 한판!</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -1254,6 +1264,49 @@ function drawCaseIcon(id) {
   R(4, 15, 2, 1, '#b8202a'); R(18, 15, 2, 1, '#b8202a');
 }
 
+// 22. 통통~ 사목 (위에서 통통 떨어져 쌓이는 사목 동전)
+function drawTongtongIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+  const R = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
+
+  R(0, 0, 24, 24, '#0c1020');
+
+  // 사목 세로 틀 (파란 가이드 기둥 + 바닥)
+  R(1, 3, 1, 20, '#1e3a6e'); R(22, 3, 1, 20, '#1e3a6e');
+  R(1, 22, 22, 2, '#1e3a6e'); R(2, 22, 20, 1, '#3b6fd4');
+
+  // 작은 동전 (5x5) - 바닥에 쌓인 사목 줄
+  function mini(x, y, body, edge) {
+    R(x + 1, y, 3, 5, edge); R(x, y + 1, 5, 3, edge);
+    R(x + 1, y + 1, 3, 3, body);
+  }
+  mini(3, 17, '#ee5a6a', '#a82030');  // 빨강
+  mini(9, 17, '#f6d04d', '#b88614');  // 노랑
+  mini(15, 17, '#ee5a6a', '#a82030'); // 빨강
+  mini(3, 12, '#f6d04d', '#b88614');  // 왼쪽 2단 노랑
+
+  // 떨어지는 속도선 + 통통 튀는 표시
+  R(12, 1, 1, 2, '#7fe4ff'); R(16, 0, 1, 2, '#7fe4ff');
+  R(9, 4, 1, 1, '#fff0a0'); R(21, 5, 1, 1, '#fff0a0');
+
+  // 위에서 통통 떨어지는 큰 노란 동전 캐릭터 (중심 15,8 반지름 5)
+  for (let dy = -5; dy <= 5; dy++) {
+    for (let dx = -5; dx <= 5; dx++) {
+      const d = dx * dx + dy * dy;
+      if (d <= 25) R(15 + dx, 8 + dy, 1, 1, d > 16 ? '#c99a1e' : '#f6d04d');
+    }
+  }
+  R(13, 4, 2, 1, '#fff6b0'); // 하이라이트
+  // 웃는 눈 + 볼 + 입
+  R(12, 7, 2, 1, '#4a2a10'); R(17, 7, 2, 1, '#4a2a10');
+  R(11, 9, 1, 1, '#ff8aa0'); R(19, 9, 1, 1, '#ff8aa0');
+  R(14, 9, 3, 1, '#4a2a10'); R(15, 10, 1, 1, '#e8506a');
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -1277,6 +1330,7 @@ drawBreakoutIcon('iconBreakout');
 drawLadderIcon('iconLadder');
 drawReversiIcon('iconReversi');
 drawCaseIcon('iconCase');
+drawTongtongIcon('iconTongtong');
 </script>
 </body>
 </html>
