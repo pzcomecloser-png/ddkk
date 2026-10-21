@@ -1,0 +1,1752 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>통통~ 사목</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;touch-action:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+body{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+canvas{display:block;background:#0d0f14;touch-action:none}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+'use strict';
+// ===== 화면 구조 (세균전·리버시와 동일) =====
+// 실제 캔버스: 1170×2080
+// 세로모드: 논리 화면 1170×2080, 회전 없음 (기본) / 가로모드: 논리 화면 2080×1170, 오른쪽 90° 회전
+const CW = 1170, CH = 2080;
+let orient = 'port';
+let LW = CW, LH = CH;
+
+// ===== 판 =====
+const COLS = 7, ROWS = 6, CELL = 150, CR = 58, HOLE = 63;   // 칸 크기 / 칩 반지름 / 구멍 반지름
+let BX = 0, BY = 0;
+const TAU = Math.PI * 2;
+const FONT = '-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+const CHIP = {
+  1: { body: '#ff4d5e', light: '#ffb3bb', dark: '#b3202f', rim: '#7a1420', line: '#111111', accent: '#ff6b7a', name: '1P', color: '빨강' },
+  2: { body: '#ffd23c', light: '#fff3b0', dark: '#c99a00', rim: '#7a5a00', line: '#111111', accent: '#ffd23c', name: '2P', color: '노랑' }
+};
+
+const canvas = document.getElementById('game');
+canvas.width = CW; canvas.height = CH;
+const ctx = canvas.getContext('2d');
+
+// ===== 레터박스 스케일링 =====
+function fit() {
+  const s = Math.min(window.innerWidth / CW, window.innerHeight / CH);
+  canvas.style.width = Math.floor(CW * s) + 'px';
+  canvas.style.height = Math.floor(CH * s) + 'px';
+}
+addEventListener('resize', fit);
+addEventListener('orientationchange', () => setTimeout(fit, 150));
+fit();
+
+// iOS 스크롤/확대 방지
+document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('dblclick', e => e.preventDefault());
+
+// ===== 룰 =====
+const EMPTY = 0, RED = 1, YEL = 2;
+const LINES4 = [[0, 1], [1, 0], [1, 1], [1, -1]];   // 가로, 세로, 대각선 ↘, 대각선 ↙
+const newBoard = () => Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
+
+// 그 열에 떨어졌을 때 쌓이는 행 (꽉 찼으면 -1)
+function dropRow(b, c) {
+  for (let r = ROWS - 1; r >= 0; r--) if (b[r][c] === EMPTY) return r;
+  return -1;
+}
+// (r,c)를 지나는 4개 이상 줄 목록 (없으면 null). 줄마다 방향과 칸 목록 → 5단계 승리 연출용
+function winLinesAt(b, r, c) {
+  const p = b[r][c];
+  if (!p) return null;
+  const out = [];
+  for (const [dr, dc] of LINES4) {
+    const cells = [[r, c]];
+    for (const s of [1, -1]) {
+      let rr = r + dr * s, cc = c + dc * s;
+      while (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && b[rr][cc] === p) { cells.push([rr, cc]); rr += dr * s; cc += dc * s; }
+    }
+    if (cells.length >= 4) out.push({ dir: [dr, dc], cells });
+  }
+  return out.length ? out : null;
+}
+const isFull = b => b[0].every(v => v !== EMPTY);
+// ===== 룰 끝 =====
+
+// ===== 상태 =====
+let board, turn, gameOver, endTime, winner, winLines, lastMove, drop, toast, toastTime;
+let pressing = false, aim = null, hoverCol = null;
+// 4단계 연출: 연출 잠금 시각 / 아래 칩 깜짝 / 만화 글자 / 막기 연출 / 두근두근(바로 이길 수 있는 3개)
+let fxUntil = 0, bumps = {}, pops = [], blockFx = null, threat = { 1: null, 2: null };
+let winFx = null;   // 5단계: 승리 컷씬 + 승리 모션 / 무승부 으쓱   // 누르는 중 / 노리는 열 / 마우스 올린 열
+let scene = 'title', mode = 'pvp', sceneTime = 0, cpuAt = 0, confirmQuit = false, confirmAt = 0;
+let wins = { 1: 0, 2: 0 };
+let aiWorker = null, cpuReq = 0, cpuResult = null;   // 아주 어려움: 백그라운드 계산   // 이긴 판 수 (다시하기는 이어서, 새로 시작하면 0부터)
+function go(sc) { scene = sc; sceneTime = performance.now(); confirmQuit = false; }
+const pname = p => (mode === 'cpu' && p === YEL) ? 'CPU' : CHIP[p].name;
+const isCpuTurn = () => scene === 'game' && mode === 'cpu' && turn === YEL && !gameOver && !drop && performance.now() >= fxUntil;
+const canPlay = () => scene === 'game' && !gameOver && !drop && !confirmQuit && !isCpuTurn() && performance.now() >= fxUntil;
+
+// ===== 설정 저장 (화면 방향 · 음량 · 난이도) =====
+const load = (k, ok) => { try { const v = localStorage.getItem('tongtong_' + k); return ok(v) ? v : null; } catch (e) { return null; } };
+const save = (k, v) => { try { localStorage.setItem('tongtong_' + k, v); } catch (e) {} };
+const DIFFS = { easy: ['쉬움', '#5aff96'], normal: ['보통', '#ffd23c'], hard: ['어려움', '#ff5a6e'], expert: ['아주 어려움', '#c49bff'] };
+let diff = load('diff', v => !!DIFFS[v]) || 'normal';
+orient = load('orient', v => v === 'land' || v === 'port') || orient;
+const savedVol = load('vol', v => v === '0' || v === '1' || v === '2');
+let vol = savedVol === null ? 2 : +savedVol;   // 0 끔 / 1 작게 / 2 크게 (효과음은 6단계)
+const colorLabel = p => (mode === 'cpu' && p === YEL) ? `${CHIP[p].color} · ${DIFFS[diff][0]}` : CHIP[p].color;
+const colorCol = p => (mode === 'cpu' && p === YEL) ? DIFFS[diff][1] : 'rgba(255,255,255,.6)';
+
+// ===== 버튼 (위치·글자 위치는 applyLayout에서 화면 방향별로 px 단위 지정) =====
+const btn = (id, label, extra = {}) => ({ id, label, x: 0, y: 0, w: 0, h: 0, iy: 0, ly: 0, sy: 0, ...extra });
+const MODE_BTNS = [btn('cpu', 'CPU전', { sub: '1P vs CPU' }), btn('pvp', '1P vs 2P', { sub: '둘이서 대전' })];
+const HOW_BTN = [btn('howto', '게임방법')];
+const DIFF_BTNS = [
+  btn('easy', '쉬움', { sub: '살살 해줄게~', stars: 1 }),
+  btn('normal', '보통', { sub: '한판 붙어보자!', stars: 2 }),
+  btn('hard', '어려움', { sub: '봐주는 거 없음', stars: 3 }),
+  btn('expert', '아주 어려움', { sub: '각오는 됐겠지?', stars: 4 })
+];
+const BACK_BTN = [btn('back', '◀ 뒤로')];
+const RESULT_BTNS = [btn('retry', '다시하기'), btn('title', '타이틀로')];
+const ORIENT_BTNS = [btn('land', '가로모드'), btn('port', '세로모드')];
+const QUIT_BTNS = [btn('yes', 'Yes'), btn('no', 'No')];
+const VOLB = { x: 0, y: 0, r: 36 }, HOMEB = { x: 0, y: 0, r: 36 };
+const hitBtn = (bs, x, y) => bs.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+const RESULT_DELAY = 900;   // (연출이 없을 때) 결과 표시까지
+const resultAt = () => winFx ? winFx.cut + winFx.dur : RESULT_DELAY;   // 컷씬 + 모션이 끝난 뒤 결과
+
+function reset() {
+  board = newBoard();
+  turn = RED;                 // 빨강 선공
+  gameOver = false; endTime = 0; winner = 0; winLines = null;
+  lastMove = null; drop = null; toast = ''; toastTime = 0;
+  pressing = false; aim = null; hoverCol = null; cpuAt = 0; confirmQuit = false;
+  cpuReq++; cpuResult = null;   // 이전 판의 계산 결과는 버림
+  fxUntil = 0; bumps = {}; pops = []; blockFx = null; winFx = null; threat = { 1: findThreat(board, 1), 2: findThreat(board, 2) };
+}
+function newMatch() { wins = { 1: 0, 2: 0 }; reset(); }   // 모드·난이도를 새로 골랐을 때
+function showToast(msg) { toast = msg; toastTime = performance.now(); }
+
+// ===== 좌표 =====
+const cellX = c => BX + c * CELL + CELL / 2;
+const cellY = r => BY + r * CELL + CELL / 2;
+const hoverY = () => BY - CELL * 0.62;
+const colAt = x => { const c = Math.floor((x - BX) / CELL); return c >= 0 && c < COLS ? c : null; };
+const inPlayX = x => x >= BX && x < BX + COLS * CELL;
+const inPlayArea = (x, y) => inPlayX(x) && y >= BY - CELL * 1.3 && y <= BY + ROWS * CELL + 30;
+
+// ===== 칩 떨어뜨리기: 대기(들썩) → 슝~ 낙하 → 통! 통! 두 번 튀며 착지 =====
+const G = 9000;                          // 중력 (px/s²)
+const BNC = [[200, 0.17], [125, 0.05]];   // 튀기 [시간 ms, 높이(칸 비율)]
+const BNC_MS = BNC.reduce((a, b) => a + b[0], 0);
+const BLOCK_MS = 750;                    // '막았다!' 연출 동안 입력 잠금
+function startDrop(c, pre = 110) {        // pre: 떨어지기 전 열 위에서 대기 (CPU는 길게 → 어디 두는지 보임)
+  const r = dropRow(board, c);
+  if (r < 0) { showToast('가득 찼어요!'); SFX.full(); return; }
+  const y0 = hoverY(), y1 = cellY(r), tFall = Math.sqrt(2 * (y1 - y0) / G) * 1000;
+  drop = { c, r, p: turn, y0, y1, t0: performance.now(), pre, tFall, dur: pre + tFall + BNC_MS, hits: 0 };
+  SFX.whoosh(tFall, pre / 1000);
+}
+function dropPos(d, now) {
+  const e = now - d.t0 - d.pre;
+  if (e < 0) {   // 대기: 살짝 들썩하며 몸을 늘임
+    const k = Math.sin(clamp01((e + d.pre) / d.pre) * Math.PI);
+    return { y: d.y0 - k * 14, sq: -0.12 * k, ph: 'wait', e };
+  }
+  if (e < d.tFall) { const s = e / 1000; return { y: d.y0 + 0.5 * G * s * s, sq: -0.06, ph: 'fall', e }; }
+  let b = e - d.tFall;
+  for (const [ms, h] of BNC) {
+    if (b < ms) {
+      const k = b / ms, sq = k < 0.3 ? Math.sin(k / 0.3 * Math.PI) * (h > 0.1 ? 0.24 : 0.12) : 0;
+      return { y: d.y1 - Math.sin(k * Math.PI) * CELL * h, sq, ph: 'bounce', e };
+    }
+    b -= ms;
+  }
+  return { y: d.y1, sq: 0, ph: 'done', e };
+}
+function addPop(txt, x, y, size = 54, col = '#ffffff', hold = 600, rot = -0.08) { pops.push({ txt, x, y, size, col, hold, rot, at: performance.now() }); }
+
+function updateDrop(now) {
+  if (!drop) return;
+  const d = drop, e = now - d.t0 - d.pre;
+  // 바닥(또는 아래 칩)에 닿는 순간: '통!' + 아래 칩 깜짝
+  const contacts = [d.tFall, d.tFall + BNC[0][0]];
+  while (d.hits < contacts.length && e >= contacts[d.hits]) {
+    const first = d.hits === 0;
+    if (first && d.r < ROWS - 1) bumps[(d.r + 1) * COLS + d.c] = now;
+    SFX.tong(first, first && d.r < ROWS - 1);
+    addPop('통!', cellX(d.c) + (first ? 70 : -70), d.y1 - CR * (first ? 0.9 : 0.6), first ? 56 : 42, '#ffffff', first ? 420 : 320, first ? -0.12 : 0.12);
+    d.hits++;
+  }
+  if (now - d.t0 < d.dur) return;
+  drop = null;
+  board[d.r][d.c] = 3 - d.p;                        // 상대가 여기 뒀으면 이겼는지 → '막았다!'
+  const blocked = winLinesAt(board, d.r, d.c);
+  board[d.r][d.c] = d.p;
+  lastMove = { r: d.r, c: d.c };
+  const w = winLinesAt(board, d.r, d.c);
+  if (w) { gameOver = true; winner = d.p; winLines = w; endTime = now; wins[d.p]++; threat = { 1: null, 2: null }; winFx = makeWinFx(d.p, w, now); winSound(winFx); return; }
+  const prev = threat[d.p];
+  threat = { 1: findThreat(board, 1), 2: findThreat(board, 2) };
+  if (blocked) {
+    const cells = [];
+    for (const L of blocked) for (const [rr, cc] of L.cells) if (rr !== d.r || cc !== d.c) cells.push(rr * COLS + cc);
+    blockFx = { r: d.r, c: d.c, p: d.p, at: now, cells };
+    fxUntil = now + BLOCK_MS;
+    SFX.block();
+    addPop('막았다!', cellX(d.c), cellY(d.r) - CELL * 0.85, 68, '#7fd4ff', BLOCK_MS, -0.06);
+  }
+  const mine = threat[d.p];   // 이번 수로 바로 이길 수 있는 자리가 새로 생기면 '두근두근!'
+  if (mine && (!prev || mine.spots.some(s => !prev.spots.includes(s)))) {
+    SFX.heart();
+    addPop('두근두근!', cellX(d.c), cellY(d.r) - CELL * (blocked ? 1.45 : 0.85), 54, '#ff7ad9', 800, 0.06);
+  }
+  if (isFull(board)) { gameOver = true; winner = 0; endTime = now; winFx = { type: 'draw', at: now, cut: 0, dur: WMO.draw }; winSound(winFx); return; }
+  turn = 3 - turn;
+}
+
+// 바로 이길 수 있는 3개: 같은 색 3개 + 지금 바로 둘 수 있는 빈칸 1개인 4칸 줄 → { cells: 칩 3개 칸, spots: 승리 자리 칸 }
+function findThreat(b, p) {
+  const cells = new Set(), spots = [];
+  for (const w of WINDOWS) {
+    let m = 0, empty = -1;
+    for (const i of w) { const v = b[i / COLS | 0][i % COLS]; if (v === p) m++; else if (!v) empty = empty < 0 ? i : -2; else { m = -9; break; } }
+    if (m !== 3 || empty < 0) continue;
+    const er = empty / COLS | 0, ec = empty % COLS;
+    if (dropRow(b, ec) !== er) continue;   // 아래가 비어 있으면 아직 못 둠
+    for (const i of w) if (i !== empty) cells.add(i);
+    if (!spots.includes(empty)) spots.push(empty);
+  }
+  return spots.length ? { cells, spots } : null;
+}
+
+// ===== 화면 방향별 레이아웃 =====
+const PANEL = { a: 0, b: 0 };
+// setBtn(버튼, x, y, w, h, 아이콘 y, 제목 y, 부제 y) — 글자 위치는 버튼 위쪽 기준 px
+function setBtn(b, x, y, w, h, iy = 0, ly = h / 2 + 4, sy = 0) { Object.assign(b, { x, y, w, h, iy, ly, sy }); }
+function applyLayout() {
+  const oW = LW, oH = LH;
+  [LW, LH] = orient === 'port' ? [CW, CH] : [CH, CW];
+  BX = (LW - COLS * CELL) / 2;
+  BY = (LH - ROWS * CELL) / 2 + CELL * 0.45;   // 위쪽에 칩이 뜨는 자리
+  for (const g of BG) { g.x *= LW / oW; g.y *= LH / oH; }
+  if (orient === 'port') { PANEL.a = (hoverY() - CR) / 2; PANEL.b = (BY + ROWS * CELL + LH) / 2; }   // 위 2P, 아래 1P
+  else { PANEL.a = BX / 2; PANEL.b = LW - BX / 2; }                                                    // 왼쪽 1P, 오른쪽 2P
+  VOLB.x = LW - 50; VOLB.y = LH - 44;
+  HOMEB.x = VOLB.x - 110; HOMEB.y = VOLB.y;
+  const [m1, m2] = MODE_BTNS, [r1, r2] = RESULT_BTNS, [o1, o2] = ORIENT_BTNS;
+  setBtn(QUIT_BTNS[0], LW / 2 - 330, LH / 2 + 70, 300, 140); setBtn(QUIT_BTNS[1], LW / 2 + 30, LH / 2 + 70, 300, 140);
+  if (orient === 'port') {
+    setBtn(m1, 245, 480, 680, 480, 150, 320, 415);
+    setBtn(m2, 245, 1060, 680, 480, 150, 320, 415);
+    setBtn(HOW_BTN[0], 245, 1640, 680, 150);
+    DIFF_BTNS.forEach((b, i) => setBtn(b, 245, 420 + i * 325, 680, 300, 64, 165, 255));
+    setBtn(BACK_BTN[0], 345, 1760, 480, 130);
+    setBtn(r1, 345, 1300, 480, 150); setBtn(r2, 345, 1490, 480, 150);
+    setBtn(o1, 810, 1350, 310, 140); setBtn(o2, 810, 1530, 310, 140);
+  } else {
+    setBtn(m1, 280, 330, 680, 480, 150, 320, 415);
+    setBtn(m2, 1120, 330, 680, 480, 150, 320, 415);
+    setBtn(HOW_BTN[0], 700, 900, 680, 130);
+    DIFF_BTNS.forEach((b, i) => setBtn(b, 115 + i * 470, 330, 440, 420, 120, 270, 370));
+    setBtn(BACK_BTN[0], 800, 880, 480, 130);
+    setBtn(r1, 520, 800, 480, 150); setBtn(r2, 1080, 800, 480, 150);
+    setBtn(o1, 1720, 395, 310, 140); setBtn(o2, 1720, 575, 310, 140);
+  }
+}
+
+// ===== 사운드 (Web Audio 합성, 리버시·세균전과 같은 방식) =====
+const VOLS = [0, 0.4, 0.85];   // 끔 / 작게 / 크게
+let AC = null, master = null, NOISE = null;
+function initAudio() {
+  if (AC) { if (AC.state !== 'running') AC.resume(); return; }
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!C) return;
+  AC = new C();
+  const comp = AC.createDynamicsCompressor(); comp.connect(AC.destination);
+  master = AC.createGain(); master.gain.value = VOLS[vol]; master.connect(comp);
+  NOISE = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+  const d = NOISE.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const s = AC.createBufferSource();   // iOS: 첫 터치에서 무음 재생으로 잠금 해제
+  s.buffer = AC.createBuffer(1, 1, 22050); s.connect(AC.destination); s.start(0);
+  AC.resume();
+}
+['touchend', 'click'].forEach(ev => document.addEventListener(ev, initAudio, { passive: true }));
+document.addEventListener('visibilitychange', () => { if (AC) document.hidden ? AC.suspend() : AC.resume(); });
+const live = () => AC && vol > 0;
+function cutSounds() {   // 예약된 효과음 모두 끊기 (타이틀로 나갈 때)
+  if (!AC) return;
+  const comp = AC.createDynamicsCompressor(); comp.connect(AC.destination);
+  const m = AC.createGain(); m.gain.value = VOLS[vol]; m.connect(comp);
+  master.disconnect(); master = m;
+}
+function env(g, t0, d, v, sus) {
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(v, t0 + 0.005);
+  if (sus) { g.gain.setValueAtTime(v, t0 + Math.max(0.01, d - 0.08)); g.gain.linearRampToValueAtTime(0.0001, t0 + d); }
+  else g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+}
+// tone(주파수, 길이, 파형, 음량, 끝주파수, 지연(초), 유지)
+function tone(f, d, type, v, f2 = 0, at = 0, sus = false) {
+  if (!live()) return;
+  const t0 = AC.currentTime + at, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t0);
+  if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + d);
+  env(g, t0, d, v, sus);
+  o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + d + 0.05);
+}
+// noise(길이, 음량, 필터, 필터주파수, 끝주파수, 지연(초), Q, 유지)
+function noise(d, v, ft, f, f2 = 0, at = 0, q = 1, sus = false) {
+  if (!live()) return;
+  const t0 = AC.currentTime + at, src = AC.createBufferSource(), fl = AC.createBiquadFilter(), g = AC.createGain();
+  src.buffer = NOISE; src.loop = true;
+  fl.type = ft; fl.Q.value = q; fl.frequency.setValueAtTime(f, t0);
+  if (f2) fl.frequency.exponentialRampToValueAtTime(f2, t0 + d);
+  env(g, t0, d, v, sus);
+  src.connect(fl); fl.connect(g); g.connect(master);
+  src.start(t0, Math.random() * 0.5); src.stop(t0 + d + 0.05);
+}
+const notes = (fs, step, d, type, v, at = 0) => fs.forEach((f, i) => tone(f, d, type, v, 0, at + i * step));
+
+const SFX = {
+  click:  () => tone(1200, 0.05, 'square', 0.12),
+  select: () => tone(880, 0.07, 'square', 0.12, 1320),
+  cancel: () => tone(660, 0.07, 'square', 0.1, 440),
+  start:  () => notes([523, 659, 784, 1047], 0.08, 0.14, 'square', 0.14),
+  full:   () => { tone(300, 0.1, 'square', 0.12, 200); tone(220, 0.14, 'square', 0.12, 150, 0.1); },
+  pick:   () => tone(620, 0.06, 'sine', 0.12, 900),
+  aim:    () => tone(980, 0.03, 'triangle', 0.07),
+  // 슝~ (높을수록 길게 떨어짐 → 내려가는 휘파람)
+  whoosh: (ms, at) => { tone(1500, ms / 1000, 'sine', 0.1, 420, at); noise(ms / 1000, 0.12, 'bandpass', 2600, 700, at, 2); },
+  // 통! (첫 번째는 크게, 두 번째는 작게)
+  tong:   (big, below, at = 0) => {
+    tone(big ? 210 : 260, 0.16, 'sine', big ? 0.55 : 0.28, big ? 90 : 130, at);
+    noise(0.04, big ? 0.35 : 0.18, 'bandpass', 1800, 0, at, 3);
+    if (big && below) tone(380, 0.09, 'triangle', 0.12, 260, at + 0.02);   // 아래 칩 '앗'
+  },
+  heart:  () => { tone(110, 0.1, 'sine', 0.4, 70); tone(110, 0.1, 'sine', 0.3, 70, 0.16); notes([880, 1175], 0.08, 0.12, 'triangle', 0.08, 0.05); },   // 두근두근
+  block:  () => { tone(1250, 0.4, 'triangle', 0.16, 0); tone(1873, 0.3, 'triangle', 0.08); noise(0.06, 0.3, 'highpass', 3500); notes([523, 784], 0.08, 0.12, 'square', 0.1, 0.1); },   // 챙! 막았다
+  win:    () => { notes([523, 659, 784, 1047, 784, 1047], 0.11, 0.16, 'square', 0.15); [523, 659, 784, 1047].forEach(f => tone(f, 0.9, 'triangle', 0.12, 0, 0.7, true)); },
+  lose:   () => { notes([494, 466, 440], 0.3, 0.3, 'square', 0.14); tone(415, 1.0, 'square', 0.14, 300, 0.9); },
+  draw:   () => notes([659, 523, 659, 523], 0.14, 0.14, 'triangle', 0.18),
+  pop:    () => tone(880, 0.07, 'sine', 0.12, 1320)   // 말풍선 '뾱'
+};
+// 승리 컷씬 + 모션 효과음: 연출 시작 때 타이밍대로 미리 예약
+function cutSfx(o) {
+  noise(0.12, 0.35, 'highpass', 2500, 0, o); noise(0.25, 0.3, 'bandpass', 400, 3000, o, 2);
+  tone(2400, 0.15, 'triangle', 0.12, 0, o + WC.GLINT / 1000);
+  tone(260, 0.38, 'sawtooth', 0.16, 520, o + WC.ROAR / 1000); tone(390, 0.38, 'square', 0.08, 780, o + WC.ROAR / 1000);
+  const s = o + WC.STAMP / 1000;
+  tone(110, 0.4, 'sine', 0.6, 40, s); noise(0.15, 0.5, 'lowpass', 2000, 0, s);
+  notes([784, 1047, 1319], 0.05, 0.2, 'square', 0.1, s + 0.05);
+}
+const WIN_SFX = {
+  h(f, o) {   // 응원 파도: 으쌰 3번 → 만세
+    for (let k = 0; k < 3; k++) f.lines[0].cells.forEach((_, i) => tone(523 * Math.pow(2, (i * 2 + k * 2) / 12), 0.1, 'square', 0.08, 0, o + (k * 430 + i * 80) / 1000));
+    notes([784, 988, 1175, 1568], 0.07, 0.25, 'triangle', 0.12, o + 1.3);
+  },
+  v(f, o) {   // 로켓: 끙차 4번 → 발사 → 쿵
+    for (let i = 0; i < 4; i++) tone(180 + i * 40, 0.14, 'square', 0.1, 120, o + i * 0.12);
+    noise(0.8, 0.3, 'bandpass', 300, 1800, o + 0.7, 1.5, true); tone(120, 0.8, 'sawtooth', 0.1, 600, o + 0.7);
+    tone(900, 0.5, 'sine', 0.1, 250, o + 1.5);
+    tone(90, 0.4, 'sine', 0.6, 40, o + 2.0); noise(0.2, 0.45, 'lowpass', 1500, 0, o + 2.0);
+  },
+  d(f, o) {   // 미끄럼 별: 별 쓩~ + 칩마다 빙글 → 짝짝짝
+    tone(1800, 0.9, 'sine', 0.07, 700, o);
+    const n = f.lines[0].cells.length;
+    for (let i = 0; i < n; i++) { tone(1047 + i * 200, 0.12, 'triangle', 0.1, 0, o + i * 0.9 / (n - 1)); noise(0.03, 0.3, 'highpass', 3000, 0, o + 1 + (n - 1 - i) * 0.13); }
+    notes([1047, 1319, 1568], 0.08, 0.18, 'triangle', 0.1, o + 1.6);
+  },
+  multi(f, o) {   // 축제: 줄마다 파도 → 불꽃 펑펑 + 팡파르
+    f.lines.forEach((L, li) => L.cells.forEach((_, i) => tone(659 * Math.pow(2, (li * 4 + i) / 12), 0.1, 'square', 0.08, 0, o + (li * 450 + i * 70) / 1000)));
+    for (let j = 0; j < 8; j++) { const a = o + 1.2 + j * 0.28; tone(95, 0.3, 'sine', 0.35, 40, a); for (let k = 0; k < 3; k++) noise(0.025, 0.15, 'highpass', 4000, 0, a + 0.1 + k * 0.05); }
+    notes([523, 659, 784, 1047, 1319, 1568], 0.09, 0.3, 'square', 0.12, o + 1.2);
+    [523, 659, 784, 1047].forEach(fr => tone(fr, 1.2, 'triangle', 0.08, 0, o + 1.8, true));
+  }
+};
+function resultJingle() {   // 연출을 건너뛰면 결과 음악만 바로
+  if (!live() || !gameOver) return;
+  if (!winner) notes([659, 523, 659, 523], 0.14, 0.14, 'triangle', 0.15);
+  else if (mode === 'cpu' && winner === YEL) SFX.lose();
+  else SFX.win();
+}
+function winSound(f) {
+  if (!live()) return;
+  if (f.type === 'draw') {   // 으쓱 두 번 → 무승부
+    for (const a of [0.15, 0.85]) { tone(400, 0.12, 'sine', 0.12, 600, a); tone(600, 0.14, 'sine', 0.12, 380, a + 0.14); }
+    SFX.draw && notes([659, 523, 659, 523], 0.14, 0.14, 'triangle', 0.15, 1.1);
+    return;
+  }
+  cutSfx(0);
+  WIN_SFX[f.type](f, f.cut / 1000);
+  const r = (f.cut + f.dur) / 1000;   // 결과 화면이 뜰 때 승리/패배 음악
+  if (mode === 'cpu' && f.p === YEL) { notes([494, 466, 440], 0.3, 0.3, 'square', 0.12, r); tone(415, 1.0, 'square', 0.12, 300, r + 0.9); }
+  else { notes([523, 659, 784, 1047, 784, 1047], 0.11, 0.16, 'square', 0.13, r); [523, 659, 784, 1047].forEach(fr => tone(fr, 0.9, 'triangle', 0.1, 0, r + 0.7, true)); }
+}
+
+// ===== 입력: 탭하면 바로 떨어짐 + 끌면 칩이 따라오다가 손을 떼면 떨어짐 =====
+function toLogical(e) {
+  const rect = canvas.getBoundingClientRect();
+  const px = (e.clientX - rect.left) * (CW / rect.width);
+  const py = (e.clientY - rect.top) * (CH / rect.height);
+  return orient === 'land' ? [py, CW - px] : [px, py];   // 실제 (px,py) → 논리 (x,y)
+}
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  initAudio();
+  onDown(...toLogical(e));
+});
+canvas.addEventListener('pointermove', e => onMove(...toLogical(e), e.pointerType));
+canvas.addEventListener('pointerup', e => onUp(...toLogical(e)));
+canvas.addEventListener('pointercancel', () => { pressing = false; aim = null; });
+
+function setVol(v) { vol = v; save('vol', v); if (master) master.gain.setValueAtTime(VOLS[v], AC.currentTime); }
+function onDown(x, y) {
+  const now = performance.now();
+  if (Math.hypot(x - VOLB.x, y - VOLB.y) < 55) { setVol((vol + 2) % 3); SFX.click(); return; }
+  if (scene === 'howto') { howTap(now); return; }   // 크게→작게→끔
+  if (confirmQuit) {   // 게임 포기 확인창: Yes / No 만 받음
+    if (now - confirmAt < 250) return;
+    const b = hitBtn(QUIT_BTNS, x, y);
+    if (b && b.id === 'yes') { cutSounds(); drop = null; SFX.click(); go('title'); }
+    else if (b) { confirmQuit = false; SFX.cancel(); }
+    return;
+  }
+  if (scene !== 'title' && Math.hypot(x - HOMEB.x, y - HOMEB.y) < 55) {   // 홈: 게임 중이면 확인창, 그 외에는 바로 타이틀
+    SFX.click();
+    if (scene === 'game' && !gameOver) { confirmQuit = true; confirmAt = now; pressing = false; aim = null; }
+    else { cutSounds(); go('title'); }
+    return;
+  }
+  if (scene === 'title') {
+    const ob = hitBtn(ORIENT_BTNS, x, y);
+    if (ob) { if (orient !== ob.id) { orient = ob.id; applyLayout(); save('orient', orient); SFX.select(); } return; }
+    if (now - sceneTime > 300) { SFX.click(); go('mode'); }
+    return;
+  }
+  if (now - sceneTime < 300) return;   // 화면 전환 직후 오터치 방지
+  if (scene === 'mode') {
+    if (hitBtn(HOW_BTN, x, y)) { SFX.click(); startHow(now); return; }
+    const b = hitBtn(MODE_BTNS, x, y);
+    if (b && b.id === 'cpu') { SFX.click(); go('diff'); }
+    else if (b) { mode = 'pvp'; newMatch(); go('game'); SFX.start(); }
+    return;
+  }
+  if (scene === 'diff') {
+    if (hitBtn(BACK_BTN, x, y)) { SFX.cancel(); go('mode'); return; }
+    const b = hitBtn(DIFF_BTNS, x, y);
+    if (b) { diff = b.id; save('diff', diff); mode = 'cpu'; newMatch(); go('game'); SFX.start(); }
+    return;
+  }
+  if (gameOver) {
+    const ra = endTime + resultAt();
+    if (now < ra) { if (now - endTime > 400) { endTime = now - resultAt(); cutSounds(); resultJingle(); } return; }   // 연출 중 탭 → 바로 결과
+    if (now - ra < 300) return;
+    const b = hitBtn(RESULT_BTNS, x, y);
+    if (b && b.id === 'retry') { reset(); SFX.start(); }
+    else if (b && b.id === 'title') { go('title'); SFX.click(); }
+    return;
+  }
+  if (!canPlay() || !inPlayArea(x, y)) return;   // 연출 중 · CPU 차례에는 입력 잠금
+  pressing = true; aim = colAt(x); SFX.pick();
+}
+function onMove(x, y, type) {
+  if (pressing) { const a = inPlayX(x) ? colAt(x) : null; if (a !== aim && a != null) SFX.aim(); aim = a; return; }   // 판 옆으로 벗어나면 취소
+  hoverCol = type === 'mouse' && canPlay() && inPlayArea(x, y) ? colAt(x) : null;   // Mac: 마우스만 올려도 미리 보기
+}
+function onUp(x, y) {
+  if (!pressing) return;
+  pressing = false;
+  const c = aim; aim = null;
+  if (c == null || !canPlay()) return;
+  startDrop(c);
+}
+
+// ===== 그리기 =====
+function rrect(x, y, w, h, rad) {
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rad);
+  ctx.arcTo(x + w, y + h, x, y + h, rad);
+  ctx.arcTo(x, y + h, x, y, rad);
+  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.closePath();
+}
+
+// 눈 달린 칩 캐릭터 (정면에서 본 원판). face: 'normal' | 'happy' | 'scared'
+function drawChip(cx, cy, R, p, t, ph, face = 'normal') {
+  const k = CHIP[p], sq = Math.sin(t * 2.4 + ph) * 0.025;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1 + sq, 1 - sq);
+  const g = ctx.createRadialGradient(-R * 0.35, -R * 0.4, R * 0.1, 0, 0, R * 1.05);
+  g.addColorStop(0, k.light); g.addColorStop(0.6, k.body); g.addColorStop(1, k.dark);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+  ctx.lineWidth = 4; ctx.strokeStyle = k.rim; ctx.stroke();
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.14)';
+  ctx.beginPath(); ctx.arc(0, 0, R * 0.8, 0, TAU); ctx.stroke();   // 안쪽 홈
+  drawFace(R, k, face, t, ph);
+  ctx.restore();
+}
+
+function drawFace(R, k, fc, t, ph) {
+  if (fc === 'fierce' || fc === 'roar') return drawFierce(R, k, fc === 'roar', t);
+  const ex = R * 0.33, ey = -R * 0.12, er = R * 0.2;
+  ctx.lineCap = 'round';
+  const blink = fc === 'normal' && ((t + ph) % 4.1) < 0.13;
+  for (const s of [-1, 1]) {
+    const x = s * ex;
+    if (fc === 'happy' || blink) {
+      ctx.strokeStyle = k.line; ctx.lineWidth = R * 0.09;
+      ctx.beginPath();
+      if (fc === 'happy') ctx.arc(x, ey + er * 0.3, er * 0.8, Math.PI * 1.15, Math.PI * 1.85);   // ^^
+      else { ctx.moveTo(x - er, ey); ctx.lineTo(x + er, ey); }
+      ctx.stroke();
+    } else {
+      const big = fc === 'scared' ? 1.18 : 1;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.ellipse(x, ey, er * big, er * 1.15 * big, 0, 0, TAU); ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = '#111'; ctx.stroke();
+      ctx.fillStyle = '#111';
+      if (fc === 'scared') { ctx.beginPath(); ctx.arc(x + Math.sin(t * 60 + s) * er * 0.12, ey, er * 0.26, 0, TAU); ctx.fill(); }
+      else {
+        const lx = Math.sin(t * 0.8 + ph) * er * 0.35;
+        ctx.beginPath(); ctx.arc(x + lx, ey + er * 0.15, er * 0.52, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(x + lx - er * 0.18, ey - er * 0.1, er * 0.17, 0, TAU); ctx.fill();
+      }
+    }
+  }
+  ctx.fillStyle = 'rgba(255,120,150,.5)';   // 볼터치
+  for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * R * 0.58, R * 0.2, R * 0.14, R * 0.09, 0, 0, TAU); ctx.fill(); }
+  ctx.strokeStyle = k.line; ctx.lineWidth = R * 0.07;
+  if (fc === 'happy') {
+    ctx.fillStyle = '#d2475e';
+    ctx.beginPath(); ctx.arc(0, R * 0.2, R * 0.2, 0, Math.PI); ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.arc(0, R * 0.22, R * 0.16, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  }
+}
+
+function chipAt(x, y, R, p, t, ph, face, sx = 1, sy = 1) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(sx, sy); drawChip(0, 0, R, p, t, ph, face); ctx.restore();
+}
+// 두근: 0.9초에 두 번 '두-근' 하고 뛰는 박자 (0~1)
+function heartBeat(t) {
+  const k = (t % 0.9) / 0.9;
+  if (k < 0.12) return Math.sin(k / 0.12 * Math.PI);
+  if (k > 0.2 && k < 0.32) return 0.6 * Math.sin((k - 0.2) / 0.12 * Math.PI);
+  return 0;
+}
+function popText(txt, x, y, age, hold, size, col, rot = -0.08) {
+  if (age < 0 || age > hold) return;
+  const sc = age < 140 ? easeOut(age / 140) * 1.25 : 1.25 - 0.25 * clamp01((age - 140) / 120);
+  ctx.save();
+  ctx.globalAlpha = clamp01((hold - age) / 150);
+  ctx.font = `900 ${size}px ${FONT}`;
+  const hw = ctx.measureText(txt).width / 2 + size * 0.3;
+  ctx.translate(Math.max(hw, Math.min(LW - hw, x)), Math.max(size, y));
+  ctx.rotate(rot); ctx.scale(sc, sc);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.lineWidth = size * 0.2; ctx.strokeStyle = '#000'; ctx.strokeText(txt, 0, 0);
+  ctx.fillStyle = col; ctx.fillText(txt, 0, 0);
+  ctx.restore();
+}
+function drawShield(x, y, s) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.beginPath(); ctx.moveTo(0, -46); ctx.quadraticCurveTo(26, -38, 40, -40); ctx.quadraticCurveTo(42, 18, 0, 50);
+  ctx.quadraticCurveTo(-42, 18, -40, -40); ctx.quadraticCurveTo(-26, -38, 0, -46); ctx.closePath();
+  ctx.fillStyle = '#4aa3ff'; ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  ctx.beginPath(); ctx.moveTo(-8, -20); ctx.lineTo(8, -20); ctx.lineTo(4, 24); ctx.lineTo(-4, 24); ctx.closePath(); ctx.fill();   // 가운데 무늬
+  ctx.restore();
+}
+function drawHeart(x, y, s, col) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  ctx.beginPath(); ctx.moveTo(0, 10);
+  ctx.bezierCurveTo(-16, -2, -12, -16, 0, -8); ctx.bezierCurveTo(12, -16, 16, -2, 0, 10);
+  ctx.fillStyle = col; ctx.fill(); ctx.restore();
+}
+
+// 기합 얼굴: 매서운 눈매 + 성난 눈썹 + 💢, 'fierce'는 이 악물기 / 'roar'는 입을 크게 벌려 외침
+function drawFierce(R, k, roar, t) {
+  const ex = R * 0.33, ey = -R * 0.1, er = R * 0.21;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const s of [-1, 1]) {
+    const x = s * ex;
+    ctx.save();   // 눈 위쪽을 비스듬히 잘라 매서운 눈매 (안쪽이 낮음)
+    ctx.beginPath();
+    ctx.moveTo(x + s * er * 1.4, ey - er * 1.0); ctx.lineTo(x - s * er * 1.4, ey - er * 0.25);
+    ctx.lineTo(x - s * er * 1.4, ey + er * 2); ctx.lineTo(x + s * er * 1.4, ey + er * 2);
+    ctx.closePath(); ctx.clip();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.ellipse(x, ey, er * 1.1, er * 1.15, 0, 0, TAU); ctx.fill();
+    ctx.lineWidth = R * 0.035; ctx.strokeStyle = '#111'; ctx.stroke();
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(x - s * er * 0.15, ey + er * 0.2, er * 0.55, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(x - s * er * 0.32, ey + er * 0.02, er * 0.18, 0, TAU); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#111'; ctx.lineWidth = R * 0.05;   // 눈꺼풀
+    ctx.beginPath(); ctx.moveTo(x + s * er * 1.1, ey - er * 0.92); ctx.lineTo(x - s * er * 1.1, ey - er * 0.33); ctx.stroke();
+    ctx.strokeStyle = k.line; ctx.lineWidth = R * 0.12;   // 성난 눈썹
+    ctx.beginPath(); ctx.moveTo(x + s * er * 1.3, ey - er * 1.6); ctx.lineTo(x - s * er * 1.2, ey - er * 0.8); ctx.stroke();
+  }
+  // 💢
+  const vp = 1 + 0.12 * Math.sin(t * 18);
+  ctx.save(); ctx.translate(R * 0.6, -R * 0.62); ctx.scale(vp, vp);
+  ctx.strokeStyle = '#ff3b3b'; ctx.lineWidth = R * 0.05;
+  for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.beginPath(); ctx.arc(R * 0.09, R * 0.09, R * 0.07, Math.PI, Math.PI * 1.5); ctx.stroke(); }
+  ctx.restore();
+  if (roar) {
+    const mouth = () => {
+      ctx.beginPath(); ctx.moveTo(-R * 0.34, R * 0.2);
+      ctx.quadraticCurveTo(0, R * 0.12, R * 0.34, R * 0.2);
+      ctx.quadraticCurveTo(R * 0.24, R * 0.72, 0, R * 0.74);
+      ctx.quadraticCurveTo(-R * 0.24, R * 0.72, -R * 0.34, R * 0.2);
+      ctx.closePath();
+    };
+    ctx.fillStyle = '#3a0d14'; mouth(); ctx.fill();
+    ctx.save(); mouth(); ctx.clip();
+    ctx.fillStyle = '#fff'; ctx.fillRect(-R * 0.4, R * 0.08, R * 0.8, R * 0.15);   // 윗니
+    ctx.fillStyle = '#e0566c'; ctx.beginPath(); ctx.ellipse(0, R * 0.7, R * 0.2, R * 0.13, 0, 0, TAU); ctx.fill();   // 혀
+    ctx.restore();
+    ctx.strokeStyle = '#111'; ctx.lineWidth = R * 0.04; mouth(); ctx.stroke();
+  } else {   // 이 악물기
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111'; ctx.lineWidth = R * 0.035;
+    rrect(-R * 0.24, R * 0.2, R * 0.48, R * 0.16, R * 0.05); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-R * 0.24, R * 0.28); ctx.lineTo(R * 0.24, R * 0.28);
+    for (let i = 1; i < 4; i++) { ctx.moveTo(-R * 0.24 + i * R * 0.12, R * 0.2); ctx.lineTo(-R * 0.24 + i * R * 0.12, R * 0.36); }
+    ctx.stroke();
+  }
+}
+
+// 지금 미리 보여 줄 열: 누르는 중이면 노리는 열, 아니면 마우스 올린 열
+const showCol = () => !canPlay() ? null : (pressing ? aim : hoverCol);
+const winSet = () => { const s = new Set(); for (const L of winLines || []) for (const [r, c] of L.cells) s.add(r * COLS + c); return s; };
+
+function drawBoard(t, now) {
+  const W = COLS * CELL, H = ROWS * CELL, sc = showCol();
+  ctx.fillStyle = '#0a1a3d'; rrect(BX - 22, BY - 22, W + 44, H + 44, 36); ctx.fill();   // 판 뒤판
+  if (sc != null) {   // 노리는 열 강조
+    ctx.fillStyle = 'rgba(120,180,255,.16)';
+    ctx.fillRect(BX + sc * CELL, BY - 10, CELL, H + 20);
+  }
+  // 놓인 칩 → 떨어지는 칩 (판 앞면보다 뒤에 그림: 구멍으로 보임)
+  const ws = winSet(), hb = heartBeat(t), bk = blockFx && now - blockFx.at < BLOCK_MS + 200 ? blockFx : null;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const p = board[r][c];
+    if (!p) continue;
+    const i = r * COLS + c, x = cellX(c), y = cellY(r);
+    if (ws.has(i)) continue;   // 이긴 칩은 판 앞에서 모션으로 그림 (drawWinChips)
+    if (gameOver && winner) { chipAt(x, y, CR, p, t, i * 1.7, p === winner ? 'happy' : 'scared'); continue; }
+    if (gameOver && winFx && winFx.type === 'draw') {   // 무승부: 다 같이 두 번 으쓱
+      const de = now - winFx.at; let k = 0;
+      for (const s0 of [150, 850]) { const s1 = de - s0 - (i % 7) * 12; if (s1 >= 0 && s1 < 450) k = Math.sin(s1 / 450 * Math.PI); }
+      chipAt(x, y - 14 * k, CR, p, t, i * 1.7, k > 0.3 ? 'scared' : 'normal', 1 - 0.06 * k, 1 + 0.08 * k);
+      continue;
+    }
+    const be = bumps[i] != null ? now - bumps[i] : 1e9;
+    if (be < 380) {   // 위에서 칩이 떨어져 깜짝! 찌그러짐
+      const k = Math.sin(clamp01(be / 380) * Math.PI);
+      chipAt(x + Math.sin(be * 0.09) * 3 * k, y + CR * 0.12 * k, CR, p, t, i * 1.7, 'scared', 1 + 0.16 * k, 1 - 0.2 * k);
+      continue;
+    }
+    if (bk && bk.cells.includes(i)) {   // 막혀서 '앗!'
+      const k = 1 - clamp01((now - bk.at - BLOCK_MS + 200) / 200);
+      chipAt(x + Math.sin(now * 0.07 + i) * 4 * k, y, CR, p, t, i * 1.7, 'scared');
+      continue;
+    }
+    const th = threat[p];
+    if (th && th.cells.has(i)) { const s = 1 + 0.07 * hb; chipAt(x, y, CR, p, t, i * 1.7, 'happy', s, s); continue; }   // 두근두근
+    chipAt(x, y, CR, p, t, i * 1.7, 'normal');
+  }
+  if (drop) {
+    const { y, sq, ph, e } = dropPos(drop, now), x = cellX(drop.c);
+    if (ph === 'fall') {   // 슝~ 속도선
+      ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+      for (const dx of [-32, 0, 32]) { ctx.beginPath(); ctx.moveTo(x + dx, y - CR - 12); ctx.lineTo(x + dx, y - CR - 40 - Math.min(120, e * 0.4)); ctx.stroke(); }
+    }
+    chipAt(x, y, CR, drop.p, t, 0, ph === 'fall' ? 'scared' : ph === 'wait' ? 'normal' : 'happy', 1 + sq, 1 - sq);
+  }
+  // 판 앞면 (구멍 뚫린 파란 틀)
+  ctx.beginPath();
+  rrect(BX - 22, BY - 22, W + 44, H + 44, 36);
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    ctx.moveTo(cellX(c) + HOLE, cellY(r)); ctx.arc(cellX(c), cellY(r), HOLE, 0, TAU);
+  }
+  const fg = ctx.createLinearGradient(0, BY - 22, 0, BY + H + 22);
+  fg.addColorStop(0, '#3f7cf0'); fg.addColorStop(1, '#1f4fbf');
+  ctx.fillStyle = fg; ctx.fill('evenodd');
+  ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 5;   // 구멍 테두리
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { ctx.beginPath(); ctx.arc(cellX(c), cellY(r), HOLE, 0, TAU); ctx.stroke(); }
+  ctx.strokeStyle = '#8fb6ff'; ctx.lineWidth = 4; rrect(BX - 22, BY - 22, W + 44, H + 44, 36); ctx.stroke();
+  // 마지막 수
+  if (lastMove && !gameOver) {
+    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(cellX(lastMove.c), cellY(lastMove.r), HOLE + 2, 0, TAU); ctx.stroke();
+  }
+  // 바로 이길 수 있는 자리: 그 색으로 두근두근 점선 원 (아이도 막을 곳을 알 수 있게)
+  if (!gameOver) for (const p of [RED, YEL]) {
+    const th = threat[p];
+    if (!th) continue;
+    for (const i of th.spots) {
+      const x = cellX(i % COLS), y = cellY(i / COLS | 0), s = 1 + 0.12 * hb;
+      ctx.strokeStyle = CHIP[p].accent; ctx.lineWidth = 6; ctx.setLineDash([10, 10]); ctx.lineDashOffset = -t * 30;
+      ctx.beginPath(); ctx.arc(x, y, (CR - 8) * s, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+      drawHeart(x, y, 1.6 * s, CHIP[p].accent);
+    }
+  }
+  if (bk) {   // 막았다! 방패
+    const e = now - bk.at, k = e < 160 ? easeOut(e / 160) * 1.2 : 1.2 - 0.2 * clamp01((e - 160) / 140);
+    ctx.globalAlpha = 1 - clamp01((e - BLOCK_MS) / 200);
+    drawShield(cellX(bk.c) + CR * 0.85, cellY(bk.r) - CR * 0.2, 0.9 * k);
+    ctx.globalAlpha = 1;
+  }
+  pops = pops.filter(q => now - q.at < q.hold);
+  for (const q of pops) popText(q.txt, q.x, q.y, now - q.at, q.hold, q.size, q.col, q.rot);
+  if (drop) { const e = now - drop.t0 - drop.pre; popText('슝~', cellX(drop.c) + 85, drop.y0 + 10, e, 380, 44, '#ffffff', 0.1); }
+  // 이긴 줄
+  if (winLines) {
+    const pulse = 0.5 + 0.5 * Math.sin(t * 8);
+    for (const L of winLines) {
+      const a = L.cells.reduce((m, q) => (q[0] * COLS + q[1] < m[0] * COLS + m[1] ? q : m));
+      const b = L.cells.reduce((m, q) => (q[0] * COLS + q[1] > m[0] * COLS + m[1] ? q : m));
+      ctx.strokeStyle = `rgba(255,255,255,${0.55 + 0.35 * pulse})`; ctx.lineWidth = 16; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(cellX(a[1]), cellY(a[0])); ctx.lineTo(cellX(b[1]), cellY(b[0])); ctx.stroke();
+      for (const [r, c] of L.cells) {
+        ctx.strokeStyle = `rgba(255,240,150,${0.6 + 0.4 * pulse})`; ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.arc(cellX(c), cellY(r), HOLE + 4 + pulse * 4, 0, TAU); ctx.stroke();
+      }
+    }
+  }
+  if (winFx) { if (winFx.type === 'draw') drawDrawFx(now - winFx.at, t); else drawWinChips(winFx, now - winFx.at - winFx.cut, t); }
+  // 떨어질 자리 미리 보기 + 열 위에 뜬 칩
+  if (sc != null) {
+    const r = dropRow(board, sc), x = cellX(sc);
+    if (r >= 0) {
+      ctx.strokeStyle = CHIP[turn].accent; ctx.lineWidth = 6; ctx.setLineDash([14, 12]);
+      ctx.beginPath(); ctx.arc(x, cellY(r), CR - 6, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+      drawChip(x, hoverY() + Math.sin(t * 6) * 6, CR, turn, t, 0, 'happy');
+    } else {
+      ctx.globalAlpha = 0.45; drawChip(x, hoverY(), CR, turn, t, 0, 'scared'); ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#ff5a6e'; ctx.lineWidth = 10; ctx.lineCap = 'round';
+      const d = 26, y = hoverY();
+      ctx.beginPath(); ctx.moveTo(x - d, y - d); ctx.lineTo(x + d, y + d); ctx.moveTo(x + d, y - d); ctx.lineTo(x - d, y + d); ctx.stroke();
+    }
+  } else if (canPlay()) {   // 아무것도 안 누를 때: 둘 수 있는 열 위에 작은 화살표
+    ctx.fillStyle = CHIP[turn].accent;
+    ctx.globalAlpha = 0.45 + 0.25 * Math.sin(t * 4);
+    for (let c = 0; c < COLS; c++) {
+      if (dropRow(board, c) < 0) continue;
+      const x = cellX(c), y = BY - 46 + Math.sin(t * 4 + c * 0.6) * 5;
+      ctx.beginPath(); ctx.moveTo(x - 18, y - 12); ctx.lineTo(x + 18, y - 12); ctx.lineTo(x, y + 10); ctx.closePath(); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function turnLabel(p, t) {
+  if (gameOver) return winner === p ? '승리!' : winner ? '아쉬워요' : '무승부';
+  if (turn !== p) return '대기 중';
+  return (mode === 'cpu' && p === YEL) ? '생각 중' + '.'.repeat(1 + Math.floor(t * 3) % 3) : '내 차례!';
+}
+const winText = p => `🏆 ${wins[p]}승`;
+
+// 가로모드 패널 (세로로 긴 형태)
+function drawPanelV(p, cx, t) {
+  const k = CHIP[p], active = !gameOver && turn === p;
+  const x = cx - 220, y = BY - CELL * 0.7, w = 440, h = ROWS * CELL + CELL * 0.7 - 90;
+  ctx.fillStyle = active ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.03)';
+  rrect(x, y, w, h, 32); ctx.fill();
+  if (active) {
+    ctx.strokeStyle = k.accent; ctx.lineWidth = 6;
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 4); rrect(x, y, w, h, 32); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = k.accent; ctx.font = `900 96px ${FONT}`; ctx.fillText(pname(p), cx, y + 95);
+  ctx.fillStyle = colorCol(p); ctx.font = `700 ${fitSize(colorLabel(p), 46, w - 40)}px ${FONT}`; ctx.fillText(colorLabel(p), cx, y + 175);
+  drawChip(cx, y + 400, 110, p, t, p * 2, active || winner === p ? 'happy' : 'normal');
+  ctx.font = `700 60px ${FONT}`; ctx.fillStyle = active || winner === p ? '#fff' : 'rgba(255,255,255,.35)';
+  ctx.fillText(turnLabel(p, t), cx, y + 650);
+  ctx.fillStyle = '#ffd23c'; ctx.font = `800 54px ${FONT}`; ctx.fillText(winText(p), cx, y + 770);
+}
+
+// 세로모드 패널 (가로로 긴 형태)
+function drawPanelH(p, cy, t) {
+  const k = CHIP[p], active = !gameOver && turn === p;
+  const x = BX - 22, w = COLS * CELL + 44, y = cy - 160, h = 320;
+  ctx.fillStyle = active ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.03)';
+  rrect(x, y, w, h, 32); ctx.fill();
+  if (active) {
+    ctx.strokeStyle = k.accent; ctx.lineWidth = 6;
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 4); rrect(x, y, w, h, 32); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  drawChip(x + 170, cy, 100, p, t, p * 2, active || winner === p ? 'happy' : 'normal');
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = k.accent; ctx.font = `900 96px ${FONT}`; ctx.fillText(pname(p), x + 480, cy - 45);
+  ctx.fillStyle = colorCol(p); ctx.font = `700 ${fitSize(colorLabel(p), 46, 330)}px ${FONT}`; ctx.fillText(colorLabel(p), x + 480, cy + 55);
+  ctx.font = `800 64px ${FONT}`; ctx.fillStyle = active || winner === p ? '#fff' : 'rgba(255,255,255,.35)';
+  ctx.fillText(turnLabel(p, t), x + 840, cy - 40);
+  ctx.fillStyle = '#ffd23c'; ctx.font = `800 54px ${FONT}`; ctx.fillText(winText(p), x + 840, cy + 60);
+}
+
+function drawToast(now, cy = BY - CELL * 1.25 + 60) {
+  if (!toast) return;
+  const dt = now - toastTime;
+  if (dt > 1300) { toast = ''; return; }
+  ctx.globalAlpha = dt > 1000 ? 1 - (dt - 1000) / 300 : 1;
+  ctx.fillStyle = 'rgba(0,0,0,.85)';
+  rrect(LW / 2 - 330, cy - 60, 660, 120, 30); ctx.fill();
+  ctx.fillStyle = '#ffd23c'; ctx.font = `800 58px ${FONT}`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(toast, LW / 2, cy + 2);
+  ctx.globalAlpha = 1;
+}
+
+function drawResult(t, now) {
+  if (!gameOver) return;
+  const k = clamp01((now - endTime - resultAt()) / 300);
+  if (k <= 0) return;
+  ctx.globalAlpha = k;
+  ctx.fillStyle = 'rgba(0,0,0,.66)'; ctx.fillRect(0, 0, LW, LH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const msg = winner ? pname(winner) + ' 승리!' : '무승부!', color = winner ? CHIP[winner].accent : '#fff';
+  ctx.fillStyle = color; ctx.font = `900 ${orient === 'port' ? 170 : 200}px ${FONT}`;
+  ctx.fillText(msg, LW / 2, LH / 2 - 150);
+  ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = `700 44px ${FONT}`;
+  ctx.fillText('이긴 판 수', LW / 2, LH / 2 - 10);
+  ctx.font = `900 100px ${FONT}`;
+  ctx.fillStyle = CHIP[RED].accent; ctx.textAlign = 'right'; ctx.fillText(wins[RED], LW / 2 - 70, LH / 2 + 80);
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(':', LW / 2, LH / 2 + 74);
+  ctx.fillStyle = CHIP[YEL].accent; ctx.textAlign = 'left'; ctx.fillText(wins[YEL], LW / 2 + 70, LH / 2 + 80);
+  ctx.textAlign = 'center';
+  ctx.globalAlpha = 1;
+  if (k >= 1) drawBtns(RESULT_BTNS);
+}
+
+// ===== 공통 =====
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const easeOut = v => 1 - Math.pow(1 - clamp01(v), 3);
+function fitSize(txt, size, maxW) {
+  ctx.font = `900 ${size}px ${FONT}`;
+  const w = ctx.measureText(txt).width * 1.1;
+  return w > maxW ? Math.floor(size * maxW / w) : size;
+}
+function drawBtns(bs) {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const b of bs) {
+    ctx.fillStyle = '#1b1f2a'; rrect(b.x, b.y, b.w, b.h, 36); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 6; rrect(b.x, b.y, b.w, b.h, 36); ctx.stroke();
+    const cx = b.x + b.w / 2;
+    ctx.fillStyle = '#fff';
+    if (b.sub) {
+      ctx.font = `900 ${fitSize(b.label, 110, b.w - 50)}px ${FONT}`; ctx.fillText(b.label, cx, b.y + b.ly);
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = `700 52px ${FONT}`; ctx.fillText(b.sub, cx, b.y + b.sy);
+    } else {
+      ctx.font = `800 70px ${FONT}`; ctx.fillText(b.label, cx, b.y + b.ly);
+    }
+  }
+}
+function drawStar(x, y, ro, ri, col) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? ri : ro;
+    i ? ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+}
+function heading(txt) {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff'; ctx.font = `900 110px ${FONT}`;
+  ctx.fillText(txt, LW / 2, orient === 'port' ? 300 : 190);
+}
+
+// ===== 배경: 하늘에서 통통 떨어지는 칩 =====
+const BG = Array.from({ length: 16 }, (_, i) => ({
+  x: Math.random() * LW, y: Math.random() * LH, v: 140 + Math.random() * 220,
+  R: 34 + Math.random() * 38, p: 1 + (i % 2), ph: Math.random() * 10, sw: Math.random() * TAU
+}));
+let lastNow = 0;
+function drawBg(t, now) {
+  const dt = Math.min(0.05, (now - lastNow) / 1000 || 0); lastNow = now;
+  for (const g of BG) {
+    g.y += g.v * dt;
+    if (g.y > LH + g.R * 2) { g.y = -g.R * 2; g.x = Math.random() * LW; }
+    drawChip(g.x + Math.sin(t * 1.5 + g.sw) * 22, g.y, g.R, g.p, t, g.ph, 'happy');
+  }
+  ctx.fillStyle = 'rgba(13,15,20,.55)'; ctx.fillRect(0, 0, LW, LH);
+}
+
+// ===== 타이틀 =====
+// 글자가 하나씩 위에서 떨어져 '통! 통!' 튀며 자리를 잡음 (몇 초마다 한 번씩 다시 통통)
+function bounceY(k, H) {
+  if (k < 0) return null;
+  const F = 0.32;
+  if (k < F) return -H * (1 - (k / F) ** 2);
+  let s = k - F;
+  for (const [d, h] of [[0.26, 0.22], [0.18, 0.09], [0.11, 0.03]]) { if (s < d) return -H * h * Math.sin(s / d * Math.PI); s -= d; }
+  return 0;
+}
+const LOGO = [['통', RED], ['통', YEL], ['~', 0], [' ', 0], ['사', RED], ['목', YEL]];
+function drawLogo(e, cx, cy, size) {
+  ctx.font = `900 ${size}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  const ws = LOGO.map(([ch]) => ch === ' ' ? size * 0.3 : ctx.measureText(ch).width + size * 0.04);
+  let x = cx - ws.reduce((a, b) => a + b, 0) / 2;
+  LOGO.forEach(([ch, p], i) => {
+    const k = e / 1000 - i * 0.13, w = ws[i];
+    let y = bounceY(k, size * 2.6);
+    if (y !== null && ch !== ' ') {
+      const land = k - 0.32, sq = land >= 0 && land < 0.09 ? Math.sin(land / 0.09 * Math.PI) * 0.22 : 0;
+      const hk = ((e / 1000) % 3.4) - 1.6 - i * 0.1;   // 가끔 다시 통통
+      if (k > 1.2 && hk > 0 && hk < 0.32) y -= Math.sin(hk / 0.32 * Math.PI) * size * 0.2;
+      ctx.save(); ctx.translate(x + w / 2, cy + y + size * 0.4); ctx.scale(1 + sq, 1 - sq); ctx.translate(0, -size * 0.4);
+      ctx.lineWidth = size * 0.16; ctx.strokeStyle = '#000'; ctx.strokeText(ch, 0, 0);
+      ctx.fillStyle = p ? CHIP[p].body : '#ffffff'; ctx.fillText(ch, 0, 0);
+      ctx.restore();
+    }
+    x += w;
+  });
+}
+
+function drawTitle(t, now) {
+  drawBg(t, now);
+  const port = orient === 'port', e = now - sceneTime;
+  drawLogo(e, LW / 2, LH / 2 - (port ? 170 : 150), port ? 180 : 230);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.globalAlpha = clamp01((e - 1100) / 300);
+  ctx.font = `800 ${port ? 62 : 70}px ${FONT}`; ctx.lineWidth = 12; ctx.strokeStyle = '#000';
+  ctx.strokeText('넷을 이으면 승리!', LW / 2, LH / 2 + 70); ctx.fillStyle = '#fff'; ctx.fillText('넷을 이으면 승리!', LW / 2, LH / 2 + 70);
+  ctx.globalAlpha = 1;
+  const dx = port ? 410 : 480, R = port ? 72 : 90;
+  drawChip(LW / 2 - dx, LH / 2 + 70 - Math.abs(Math.sin(t * 5)) * 30, R, RED, t, 0, 'happy');
+  drawChip(LW / 2 + dx, LH / 2 + 70 - Math.abs(Math.sin(t * 5 + 1.5)) * 30, R, YEL, t, 3, 'happy');
+  ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 4);
+  ctx.fillStyle = '#fff'; ctx.font = `700 64px ${FONT}`;
+  ctx.fillText('TAP TO START', LW / 2, LH - (port ? 190 : 150));
+  ctx.globalAlpha = 1;
+  for (const b of ORIENT_BTNS) {   // 화면 방향 버튼
+    const on = orient === b.id;
+    ctx.fillStyle = on ? '#ffd23c' : 'rgba(27,31,42,.9)'; rrect(b.x, b.y, b.w, b.h, 30); ctx.fill();
+    ctx.strokeStyle = on ? '#ffd23c' : 'rgba(255,255,255,.6)'; ctx.lineWidth = 5; rrect(b.x, b.y, b.w, b.h, 30); ctx.stroke();
+    ctx.fillStyle = on ? '#111' : '#fff'; ctx.font = `800 60px ${FONT}`;
+    ctx.fillText(b.label, b.x + b.w / 2, b.y + b.ly);
+  }
+}
+
+// ===== 모드 선택 =====
+function drawMode(t, now) {
+  drawBg(t, now);
+  heading('모드 선택');
+  drawBtns(MODE_BTNS);
+  drawBtns(HOW_BTN);
+  for (const b of MODE_BTNS) {
+    const cx = b.x + b.w / 2, cy = b.y + b.iy;
+    drawChip(cx - 150, cy, 64, RED, t, 1);
+    drawChip(cx + 150, cy, 64, YEL, t, 4);
+    ctx.fillStyle = '#ffd23c'; ctx.font = `900 64px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(b.id === 'cpu' ? 'VS' : '⚔', cx, cy);
+    if (b.id === 'cpu') { ctx.fillStyle = '#fff'; ctx.font = `800 34px ${FONT}`; ctx.fillText('CPU', cx + 150, cy + 92); }
+  }
+  drawToast(now, LH / 2);
+}
+
+// ===== CPU 난이도 =====
+function drawDiff(t, now) {
+  drawBg(t, now);
+  heading('CPU 난이도');
+  drawBtns(DIFF_BTNS);
+  for (const b of DIFF_BTNS) {
+    const col = DIFFS[b.id][1], cx = b.x + b.w / 2, cy = b.y + b.iy;
+    if (b.id === diff) { ctx.strokeStyle = col; ctx.lineWidth = 8; rrect(b.x - 8, b.y - 8, b.w + 16, b.h + 16, 42); ctx.stroke(); }   // 지난번 선택
+    for (let i = 0; i < 4; i++) {
+      const on = i < b.stars;
+      drawStar(cx + (i - 1.5) * 90, cy - (on ? Math.sin(t * 4 + i) * 5 : 0), 34, 14, on ? col : 'rgba(255,255,255,.18)');
+    }
+  }
+  drawBtns(BACK_BTN);
+}
+
+// ===== CPU AI =====
+// 판은 길이 42 배열(행 우선, 0행이 맨 위). 4칸짜리 줄(69개)을 미리 만들어 두고 평가에 씀
+const WIN = 100000;
+const ORDER = [3, 2, 4, 1, 5, 0, 6];   // 가운데 열부터 탐색
+const WINDOWS = [];
+for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) for (const [dr, dc] of LINES4) {
+  const r3 = r + dr * 3, c3 = c + dc * 3;
+  if (r3 >= 0 && r3 < ROWS && c3 >= 0 && c3 < COLS) WINDOWS.push([0, 1, 2, 3].map(k => (r + dr * k) * COLS + c + dc * k));
+}
+const CELLW = Array.from({ length: ROWS * COLS }, () => []);   // 칸마다 그 칸을 지나는 줄 번호
+WINDOWS.forEach((w, wi) => w.forEach(i => CELLW[i].push(wi)));
+
+const toFlat = b => Int8Array.from(b.flat());
+const topIdx = (h, c) => (ROWS - 1 - h[c]) * COLS + c;
+function heightsOf(b) { const h = new Int8Array(COLS); for (let i = 0; i < ROWS * COLS; i++) if (b[i]) h[i % COLS]++; return h; }
+function winAt(b, i, p) {
+  for (const wi of CELLW[i]) { const w = WINDOWS[wi]; if (b[w[0]] === p && b[w[1]] === p && b[w[2]] === p && b[w[3]] === p) return true; }
+  return false;
+}
+function winsIf(b, h, c, p) { if (h[c] >= ROWS) return false; const i = topIdx(h, c); b[i] = p; const w = winAt(b, i, p); b[i] = 0; return w; }
+// 평가: 상대 칩이 없는 줄에 내 칩 3개 +9, 2개 +3 (상대는 반대로) + 가운데 열 칩 +4
+function evalPos(b, p) {
+  const o = 3 - p; let s = 0;
+  for (const w of WINDOWS) {
+    let m = 0, n = 0;
+    for (let k = 0; k < 4; k++) { const v = b[w[k]]; if (v === p) m++; else if (v === o) n++; }
+    if (m && n) continue;
+    if (m === 3) s += 9; else if (m === 2) s += 3; else if (n === 3) s -= 9; else if (n === 2) s -= 3;
+  }
+  for (let r = 0; r < ROWS; r++) { const v = b[r * COLS + 3]; if (v === p) s += 4; else if (v === o) s -= 4; }
+  return s;
+}
+// 탐색: 1수, 2수… maxDepth까지 깊이를 늘려 가며 읽음 (budget ms가 지나면 그때까지의 최선)
+function aiSearch(b0, p, maxDepth, budget) {
+  const b = Int8Array.from(b0), h = new Int8Array(COLS);
+  let moves = 0;
+  for (let i = 0; i < ROWS * COLS; i++) if (b[i]) { h[i % COLS]++; moves++; }
+  const t0 = Date.now(), deadline = t0 + budget, TO = {};
+  let nodes = 0;
+  const top = c => (ROWS - 1 - h[c]) * COLS + c;
+  function nm(d, a, be, q, mv) {
+    if ((++nodes & 1023) === 0 && Date.now() > deadline) throw TO;
+    if (mv === ROWS * COLS) return 0;
+    for (const c of ORDER) if (h[c] < ROWS) { const i = top(c); b[i] = q; const w = winAt(b, i, q); b[i] = 0; if (w) return WIN - mv; }
+    if (d <= 0) return evalPos(b, q);
+    let best = -1e9;
+    for (const c of ORDER) {
+      if (h[c] >= ROWS) continue;
+      const i = top(c); b[i] = q; h[c]++;
+      const v = -nm(d - 1, -be, -a, 3 - q, mv + 1);
+      h[c]--; b[i] = 0;
+      if (v > best) best = v;
+      if (v > a) a = v;
+      if (a >= be) break;
+    }
+    return best;
+  }
+  let root = ORDER.filter(c => h[c] < ROWS);
+  for (const c of root) { const i = top(c); b[i] = p; const w = winAt(b, i, p); b[i] = 0; if (w) return { c, depth: 1, ms: 0 }; }
+  if (root.length === 1) return { c: root[0], depth: 0, ms: 0 };
+  const key = {};   // 가운데 우선 + 약간의 무작위 (매번 같은 수만 두지 않도록)
+  for (const c of root) key[c] = Math.abs(c - 3) + Math.random() * 1.5;
+  root.sort((x, y) => key[x] - key[y]);
+  let best = root[0], done = 0;
+  for (let d = 1; d <= Math.min(maxDepth, ROWS * COLS - moves); d++) {
+    try {
+      let a = -1e9, bm = null;
+      for (const c of [best, ...root.filter(x => x !== best)]) {
+        const i = top(c); b[i] = p; h[c]++;
+        const v = -nm(d - 1, -1e9, -a, 3 - p, moves + 1);
+        h[c]--; b[i] = 0;
+        if (v > a || bm === null) { a = v; bm = c; }
+      }
+      best = bm; done = d;
+      if (Math.abs(a) >= WIN - 64) break;   // 승패가 확정됨
+    } catch (e) { if (e !== TO) throw e; break; }
+  }
+  return { c: best, depth: done, ms: Date.now() - t0 };
+}
+
+// 쉬움: 이길 수 있는 수도 40%는 놓치고, 막는 수도 65%는 놓침 (아이가 이길 수 있게)
+function cpuEasy(b, p) {
+  const h = heightsOf(b), cols = ORDER.filter(c => h[c] < ROWS), o = 3 - p;
+  const win = cols.find(c => winsIf(b, h, c, p));
+  if (win != null && Math.random() < 0.6) return win;
+  const blk = cols.find(c => winsIf(b, h, c, o));
+  if (blk != null && Math.random() < 0.35) return blk;
+  const wt = [1, 2, 3, 4, 3, 2, 1];
+  let sum = 0; for (const c of cols) sum += wt[c];
+  let x = Math.random() * sum;
+  for (const c of cols) { x -= wt[c]; if (x < 0) return c; }
+  return cols[0];
+}
+// 보통: 이기는 수 → 막는 수 → 상대에게 승리 자리를 만들어 주지 않는 수 중 가운데·좋은 모양 (1수만 봄)
+function cpuNormal(b, p) {
+  const h = heightsOf(b), cols = ORDER.filter(c => h[c] < ROWS), o = 3 - p;
+  const win = cols.find(c => winsIf(b, h, c, p)); if (win != null) return win;
+  const blk = cols.find(c => winsIf(b, h, c, o)); if (blk != null) return blk;
+  let best = cols[0], bs = -Infinity;
+  for (const c of cols) {
+    const i = topIdx(h, c); b[i] = p; h[c]++;
+    let sc = (3 - Math.abs(c - 3)) * 2 + evalPos(b, p) * 0.3 + Math.random() * 3;
+    if (winsIf(b, h, c, o)) sc -= 100;   // 내 칩 바로 위가 상대 승리 자리
+    h[c]--; b[i] = 0;
+    if (sc > bs) { bs = sc; best = c; }
+  }
+  return best;
+}
+const EXPERT_MS = 750;   // 아주 어려움 생각 시간 (백그라운드)
+// 어려움: 6수 앞까지 / 아주 어려움: 제한 시간 안에서 최대한 깊이 (끝까지 읽히면 끝까지)
+function aiChoose(b, p, level, budget = 250) {
+  if (level === 'easy') return cpuEasy(b, p);
+  if (level === 'normal') return cpuNormal(b, p);
+  if (level === 'hard') return aiSearch(b, p, 6, Infinity).c;
+  return aiSearch(b, p, ROWS * COLS, budget).c;
+}
+// ===== CPU AI 끝 =====
+
+try {   // 아주 어려움 계산은 Web Worker에서 → 생각하는 동안에도 화면이 멈추지 않음
+  const src = [
+    `const COLS=${COLS},ROWS=${ROWS},WIN=${WIN},ORDER=${JSON.stringify(ORDER)},WINDOWS=${JSON.stringify(WINDOWS)},CELLW=${JSON.stringify(CELLW)};`,
+    ...[winAt, evalPos, aiSearch].map(f => f.toString()),
+    'onmessage=e=>postMessage({id:e.data.id,r:aiSearch(new Int8Array(e.data.b),e.data.p,ROWS*COLS,e.data.budget)});'
+  ].join('\n');
+  aiWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  aiWorker.onmessage = e => { if (e.data.id === cpuReq) cpuResult = e.data.r; };
+  aiWorker.onerror = () => { aiWorker = null; };   // 실패하면 직접 계산
+} catch (e) { aiWorker = null; }
+
+function updateCpu(now) {
+  if (!isCpuTurn() || confirmQuit) { if (confirmQuit && cpuAt) cpuAt = Math.max(cpuAt, now + 300); return; }
+  if (!cpuAt) {
+    cpuAt = now + 500 + Math.random() * 500;   // 0.5~1초 생각
+    if (diff === 'expert') {
+      cpuReq++; cpuResult = null;
+      if (aiWorker) aiWorker.postMessage({ id: cpuReq, b: Array.from(toFlat(board)), p: YEL, budget: EXPERT_MS });
+    }
+    return;
+  }
+  if (now < cpuAt) return;
+  let c;
+  if (diff === 'expert') {
+    if (aiWorker && !cpuResult) return;   // 아직 계산 중 (계속 '생각 중...')
+    c = cpuResult && dropRow(board, cpuResult.c) >= 0 ? cpuResult.c : aiSearch(toFlat(board), YEL, ROWS * COLS, 250).c;
+  } else c = aiChoose(toFlat(board), YEL, diff);
+  cpuAt = 0; cpuResult = null;
+  if (c != null && dropRow(board, c) >= 0) startDrop(c, 320);
+}
+
+// ===== 음량 / 타이틀로 버튼 =====
+function drawVol() {
+  const { x, y, r } = VOLB;
+  ctx.fillStyle = 'rgba(255,255,255,.12)';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - 20, y - 8); ctx.lineTo(x - 10, y - 8); ctx.lineTo(x + 2, y - 18);
+  ctx.lineTo(x + 2, y + 18); ctx.lineTo(x - 10, y + 8); ctx.lineTo(x - 20, y + 8);
+  ctx.closePath(); ctx.fill();
+  const ln = (a, b, c, d) => { ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(c, d); ctx.stroke(); };
+  if (!vol) { ln(x + 9, y - 8, x + 23, y + 8); ln(x + 23, y - 8, x + 9, y + 8); }
+  else for (let i = 0; i < vol; i++) { ctx.beginPath(); ctx.arc(x + 2, y, 10 + i * 9, -0.8, 0.8); ctx.stroke(); }
+}
+function drawHome() {   // 타이틀 화면에서는 숨김
+  if (scene === 'title') return;
+  const { x, y, r } = HOMEB;
+  ctx.fillStyle = 'rgba(255,255,255,.12)';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.moveTo(x, y - 19); ctx.lineTo(x + 19, y - 2); ctx.lineTo(x - 19, y - 2); ctx.closePath(); ctx.fill();   // 지붕
+  ctx.fillRect(x - 13, y - 3, 26, 19);                                                                                    // 벽
+  ctx.fillStyle = '#282c38'; ctx.fillRect(x - 4, y + 5, 8, 11);                                                          // 문
+}
+
+// ===== 게임 포기 확인창 =====
+function drawQuit(t, now) {
+  const k = easeOut((now - confirmAt) / 180), sc = 0.85 + 0.15 * k * (1 + 0.06 * Math.sin(clamp01((now - confirmAt) / 260) * Math.PI));
+  ctx.fillStyle = `rgba(0,0,0,${0.6 * k})`; ctx.fillRect(-80, -80, LW + 160, LH + 160);
+  const w = Math.min(LW - 80, 900), h = 560, cx = LW / 2, cy = LH / 2;
+  ctx.save(); ctx.globalAlpha = k;
+  ctx.translate(cx, cy); ctx.scale(sc, sc); ctx.translate(-cx, -cy);
+  ctx.fillStyle = '#1b1f2a'; rrect(cx - w / 2, cy - h / 2, w, h, 44); ctx.fill();
+  ctx.strokeStyle = '#ffd23c'; ctx.lineWidth = 6; rrect(cx - w / 2, cy - h / 2, w, h, 44); ctx.stroke();
+  drawChip(cx, cy - 175, 62, turn, t, 0, 'scared');   // 걱정하는 칩
+  const TXT = '게임을 포기하시겠습니까?';
+  ctx.fillStyle = '#fff'; ctx.font = `900 ${fitSize(TXT, 64, w - 80)}px ${FONT}`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(TXT, cx, cy - 30);
+  for (const b of QUIT_BTNS) {
+    const yes = b.id === 'yes';
+    ctx.fillStyle = yes ? '#ff5a6e' : '#2c3242'; rrect(b.x, b.y, b.w, b.h, 36); ctx.fill();
+    ctx.strokeStyle = yes ? '#ffc9d0' : 'rgba(255,255,255,.85)'; ctx.lineWidth = 6; rrect(b.x, b.y, b.w, b.h, 36); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = `900 76px ${FONT}`; ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 4);
+  }
+  ctx.restore();
+}
+
+// ===== 승리 연출: 컷씬(1.4초) → 방향별 승리 모션 → 결과 =====
+// 가로: 응원 파도 / 세로: 로켓 발사 / 대각선: 미끄럼 별 / 두 줄 이상: 축제 / 무승부: 다 같이 으쓱
+const WCUT = 1400;
+const WC = { IN: 160, FACE: 110, GLINT: 300, ROAR: 430, STAMP: 580, OUT: 1180 };   // 컷씬 타이밍 (ms)
+const WMO = { h: 2200, v: 2200, d: 2400, multi: 4000, draw: 1800 };               // 모션 길이 (ms)
+const WIN_WORDS = ['앗싸!!', '이얏호!!', '해냈다!!'];
+const BAND_COL = { 1: ['#5e0f18', '#ff4d5e'], 2: ['#6b4a00', '#ffc21c'] };
+const RAINBOW = ['#ffd23c', '#ff7ad9', '#7fd4ff', '#9dff7a', '#ffa14d', '#c49bff', '#ff5a6e', '#5affd8'];
+const easeIn = v => Math.pow(clamp01(v), 2);
+const frac = v => v - Math.floor(v);
+const hsh = n => frac(Math.sin(n * 12.9898) * 43758.5453);
+
+function makeWinFx(p, lines, now) {
+  const ls = lines.map(L => {   // 줄 방향 순서로 정렬 (가로: 왼→오, 세로·대각선: 위→아래)
+    const [dr, dc] = L.dir;
+    return { dir: L.dir, cells: L.cells.slice().sort((a, b) => (a[0] * dr + a[1] * dc) - (b[0] * dr + b[1] * dc)) };
+  });
+  const type = ls.length > 1 ? 'multi' : ls[0].dir[0] === 0 ? 'h' : ls[0].dir[1] === 0 ? 'v' : 'd';
+  const all = [], seen = new Set();
+  ls.forEach((L, li) => L.cells.forEach((q, qi) => { const k = q[0] * COLS + q[1]; if (!seen.has(k)) { seen.add(k); all.push({ r: q[0], c: q[1], li, qi }); } }));
+  return { type, p, lines: ls, all, at: now, cut: WCUT, dur: WMO[type], word: WIN_WORDS[Math.floor(Math.random() * WIN_WORDS.length)] };
+}
+
+function shout(txt, x, y, size, sc, fill, edge, rot, alpha) {
+  if (sc <= 0 || alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sc, sc);
+  ctx.font = `900 ${size}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.lineWidth = size * 0.3; ctx.strokeStyle = '#000'; ctx.strokeText(txt, 0, 0);
+  ctx.lineWidth = size * 0.14; ctx.strokeStyle = edge; ctx.strokeText(txt, 0, 0);
+  ctx.fillStyle = fill; ctx.fillText(txt, 0, 0);
+  ctx.restore();
+}
+function glint4(x, y, r) {
+  ctx.fillStyle = '#fff'; ctx.beginPath();
+  ctx.moveTo(x, y - r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.quadraticCurveTo(x, y, x, y + r);
+  ctx.quadraticCurveTo(x, y, x - r, y); ctx.quadraticCurveTo(x, y, x, y - r); ctx.fill();
+}
+// 얼굴 뒤 기운 (1P 빨간 불꽃 / 2P 노란 불꽃), 위쪽이 더 길게 타오름
+function drawAura(R, t, p, power) {
+  const cols = p === RED ? ['rgba(255,60,70,.9)', '#ff9aa3', '#ffffff'] : ['rgba(255,190,20,.9)', '#ffe27a', '#fffbe0'];
+  for (let ly = 0; ly < 3; ly++) {
+    ctx.fillStyle = cols[ly];
+    ctx.beginPath();
+    const n = 20;
+    for (let i = 0; i <= n * 2; i++) {
+      const a = i / (n * 2) * TAU;
+      let rr = R * 0.97, lift = 0;
+      if (i % 2 === 0) {
+        const up = Math.max(0, -Math.sin(a)), fl = Math.sin(t * 24 + i * 1.7 + ly * 2) * 0.1;
+        rr = R * (1 + (0.22 + 0.38 * up + fl) * power * (1 - ly * 0.32));
+        lift = R * 0.08 * power;
+      }
+      const x = Math.cos(a) * rr, y = Math.sin(a) * rr - lift;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+}
+
+
+// ----- 승리 컷씬: 번쩍 → 띠 쾅 → 얼굴 클로즈업 + 기운 → 눈빛 번쩍 → 기합! → '사목 완성!!' 도장 쾅 → 퇴장 -----
+function drawWinCut(f, ce, t) {
+  const port = orient === 'port', k = CHIP[f.p], bc = BAND_COL[f.p];
+  const kin = easeOut(ce / WC.IN), kout = easeIn((ce - WC.OUT) / (WCUT - WC.OUT));
+  ctx.fillStyle = `rgba(0,0,0,${0.6 * kin * (1 - kout)})`; ctx.fillRect(-80, -80, LW + 160, LH + 160);
+  if (ce < 100) { ctx.fillStyle = `rgba(255,255,255,${0.6 * (1 - ce / 100)})`; ctx.fillRect(-80, -80, LW + 160, LH + 160); }
+  const L = port
+    ? { bh: 640, fx: 0, fy: -130, R: 205, tx: 0, ty: 225, tw: LW - 120, ts: 130, nx: -LW / 2 + 140, ny: -250, wx: 330, wy: -230, ws: 80 }
+    : { bh: 400, fx: -LW / 2 + 360, fy: 0, R: 235, tx: 300, ty: 40, tw: LW - 840, ts: 150, nx: 300, ny: -155, wx: -LW / 2 + 630, wy: -150, ws: 92 };
+  ctx.save();
+  ctx.translate(LW / 2 + (kout - (1 - kin)) * LW * 1.4, LH / 2);
+  ctx.rotate(-0.08);
+  const bw = LW * 1.8, g = ctx.createLinearGradient(0, -L.bh / 2, 0, L.bh / 2);   // 띠
+  g.addColorStop(0, bc[1]); g.addColorStop(0.5, bc[0]); g.addColorStop(1, bc[1]);
+  ctx.fillStyle = g; ctx.fillRect(-bw / 2, -L.bh / 2, bw, L.bh);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(-bw / 2, -L.bh / 2 - 18, bw, 12); ctx.fillRect(-bw / 2, L.bh / 2 + 6, bw, 12);
+  ctx.fillStyle = '#3f7cf0'; ctx.fillRect(-bw / 2, -L.bh / 2 - 30, bw, 6); ctx.fillRect(-bw / 2, L.bh / 2 + 24, bw, 6);
+  ctx.save(); ctx.beginPath(); ctx.rect(-bw / 2, -L.bh / 2, bw, L.bh); ctx.clip();   // 집중선
+  const pw = ce >= WC.ROAR ? 1 : 0.5, seed = Math.floor(ce / 45);
+  ctx.strokeStyle = `rgba(255,255,255,${0.22 + 0.2 * pw})`; ctx.lineCap = 'round';
+  for (let i = 0; i < 48; i++) {
+    const fr = hsh(i + seed * 7.13), a = i / 48 * TAU + fr * 0.12, r0 = L.R * (1.25 + fr * 0.9), r1 = LW * 1.2;
+    ctx.lineWidth = 2 + fr * 7 * pw;
+    ctx.beginPath(); ctx.moveTo(L.fx + Math.cos(a) * r0, L.fy + Math.sin(a) * r0); ctx.lineTo(L.fx + Math.cos(a) * r1, L.fy + Math.sin(a) * r1); ctx.stroke();
+  }
+  ctx.restore();
+  const fe = ce - WC.FACE, roar = ce >= WC.ROAR;   // 얼굴 클로즈업
+  let pop = fe < 0 ? 0 : easeOut(fe / 200) * (1 + 0.12 * Math.sin(clamp01(fe / 320) * Math.PI));
+  if (roar) pop *= 1 + 0.1 * (1 - clamp01((ce - WC.ROAR) / 220));
+  pop *= 1 + kout * 0.4;
+  const vib = roar && ce < WC.ROAR + 520 ? 6 : 0;
+  if (pop > 0) {
+    ctx.save(); ctx.translate(L.fx + Math.sin(t * 95) * vib, L.fy + Math.cos(t * 83) * vib); ctx.scale(pop, pop);
+    drawAura(L.R, t, f.p, roar ? 1.25 : 0.7);
+    drawChip(0, 0, L.R, f.p, t, 0, roar ? 'roar' : 'fierce');
+    ctx.restore();
+    const gk = (ce - WC.GLINT) / 160;   // 눈빛 번쩍
+    if (gk > 0 && gk < 1) { const tw = Math.sin(gk * Math.PI); for (const sg of [-1, 1]) glint4(L.fx + sg * 0.28 * L.R * pop, L.fy - 0.14 * L.R * pop, L.R * 0.34 * tw); }
+  }
+  const na = clamp01((ce - 140) / 150);   // 이름표
+  if (na > 0) {
+    const nm = pname(f.p);
+    ctx.globalAlpha = na; ctx.font = `900 52px ${FONT}`;
+    const w = ctx.measureText(nm).width + 50;
+    ctx.fillStyle = '#ffffff'; rrect(L.nx - w / 2, L.ny - 38, w, 76, 38); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(nm, L.nx, L.ny + 2);
+    ctx.globalAlpha = 1;
+  }
+  const we = ce - WC.ROAR;   // 기합!
+  if (we >= 0) { const sc = we < 120 ? easeOut(we / 120) * 1.3 : 1.3 - 0.3 * clamp01((we - 120) / 150); shout(f.word, L.wx + Math.sin(t * 80) * 4, L.wy, L.ws, sc, '#ffffff', k.accent, 0.14, 1); }
+  const se = ce - WC.STAMP;   // '사목 완성!!' 도장 쾅
+  if (se >= 0) {
+    const TXT = '사목 완성!!', ts = fitSize(TXT, L.ts, L.tw);
+    const sc = se < 130 ? 2.4 - 1.5 * easeIn(se / 130) : 0.9 + 0.1 * easeOut((se - 130) / 140), al = clamp01(se / 60);
+    ctx.save(); ctx.translate(L.tx, L.ty); ctx.scale(sc, sc); ctx.globalAlpha = al;
+    ctx.font = `900 ${ts}px ${FONT}`;
+    const tw = ctx.measureText(TXT).width;
+    ctx.beginPath();
+    for (let i = 0; i < 28; i++) { const a = i / 28 * TAU, rr = i % 2 ? 0.78 : 1.0, x = Math.cos(a) * tw * 0.62 * rr, y = Math.sin(a) * ts * 0.8 * rr; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.closePath(); ctx.fillStyle = '#3f7cf0'; ctx.fill(); ctx.lineWidth = 8; ctx.strokeStyle = '#000'; ctx.stroke();
+    ctx.restore();
+    shout(TXT, L.tx, L.ty, ts, sc, '#ffffff', '#ff3b3b', -0.03, al);
+    if (se > 100 && se < 420) {
+      const rk = (se - 100) / 320;
+      ctx.strokeStyle = `rgba(255,255,255,${1 - rk})`; ctx.lineWidth = 10 * (1 - rk) + 2;
+      ctx.beginPath(); ctx.ellipse(L.tx, L.ty, tw * 0.62 * (0.9 + rk * 0.5), ts * 0.8 * (0.9 + rk * 0.5), 0, 0, TAU); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// ----- 소품 -----
+function drawArms(x, y, R, lift) {   // 만세 손 (흰 장갑)
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  for (const sg of [-1, 1]) {
+    const hx = x + sg * R * (1.0 + 0.1 * lift), hy = y - R * (0.35 + 0.55 * lift);
+    ctx.beginPath(); ctx.moveTo(x + sg * R * 0.85, y - R * 0.05); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(hx, hy, R * 0.22, 0, TAU); ctx.fill(); ctx.lineWidth = 3; ctx.stroke(); ctx.lineWidth = 6;
+  }
+}
+function drawFlame(x, y, s, a) {   // 로켓 불꽃 (아래로)
+  if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.scale(s, s);
+  for (const [w, h, col] of [[46, 120, '#ff4a1c'], [32, 86, '#ffae2e'], [16, 50, '#fff3b0']]) {
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(-w, 0); ctx.quadraticCurveTo(-w * 0.6, h * 0.6, 0, h); ctx.quadraticCurveTo(w * 0.6, h * 0.6, w, 0); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+const lineMid = cells => { let x = 0, y = 0; for (const [r, c] of cells) { x += cellX(c); y += cellY(r); } return [x / cells.length, y / cells.length]; };
+const lineTop = cells => Math.min(...cells.map(([r]) => cellY(r)));
+
+// ----- 모션 (e = 모션 시간 ms, 음수면 컷씬 중) -----
+function drawWinChips(f, e, t) {
+  if (e < 0) { for (const q of f.all) chipAt(cellX(q.c), cellY(q.r), CR, f.p, t, q.qi, 'happy'); return; }
+  ({ h: wcH, v: wcV, d: wcD, multi: wcM })[f.type](f, e, t);
+}
+// 가로: 응원 파도 — 왼쪽부터 차례로 펄쩍 (3번) → 다 같이 '만세~!'
+function wcH(f, e, t) {
+  const L = f.lines[0].cells, [mx] = lineMid(L), my = lineTop(L) - CELL * 1.05;
+  L.forEach(([r, c], i) => {
+    let h = 0, sq = 0, arms = 0;
+    if (e < 1300) {
+      for (let k = 0; k < 3; k++) { const s1 = e - k * 430 - i * 80; if (s1 >= 0 && s1 < 260) h = Math.sin(s1 / 260 * Math.PI) * CELL * 0.45; else if (s1 >= 260 && s1 < 340) sq = Math.sin((s1 - 260) / 80 * Math.PI) * 0.18; }
+      arms = clamp01(h / (CELL * 0.3));
+    } else {
+      const s1 = e - 1300; if (s1 < 900) h = Math.abs(Math.sin(s1 / 450 * Math.PI)) * CELL * 0.32; arms = 1;
+    }
+    const x = cellX(c), y = cellY(r) - h;
+    if (arms > 0) drawArms(x, y, CR, arms);
+    chipAt(x, y + sq * CR * 0.3, CR, f.p, t, i, 'happy', 1 + sq, 1 - sq);
+  });
+  popText('으쌰! 으쌰!', mx, my, e, 1250, 60, '#ffd23c', -0.05);
+  popText('만세~!', mx, my, e - 1300, 900, 84, '#ffffff', 0.05);
+}
+// 세로: 로켓 발사 — 아래부터 '끙차' 힘주기 → 불꽃 뿜으며 탑째 슝 → '쿵!' 착지
+function wcV(f, e, t) {
+  const L = f.lines[0].cells.slice().reverse(), bx = cellX(L[0][1]), H = CELL * 1.3;
+  let lift = 0, shake = 0, land = 0;
+  if (e >= 700 && e < 1500) { lift = easeIn((e - 700) / 800) * H; shake = Math.sin(e * 0.12) * 4; }
+  else if (e >= 1500 && e < 2000) { const k = (e - 1500) / 500; lift = H * (1 - k * k); }
+  else if (e >= 2000) land = Math.sin(clamp01((e - 2000) / 200) * Math.PI) * 0.16;
+  drawFlame(bx, cellY(L[0][0]) + CR * 0.8 - lift, 1 + 0.15 * Math.sin(t * 40), clamp01((e - 650) / 100) * (1 - clamp01((e - 1450) / 100)));
+  L.forEach(([r, c], i) => {
+    let sq = land;
+    if (e < 700) { const s1 = e - i * 120; if (s1 >= 0 && s1 < 240) sq = Math.sin(s1 / 240 * Math.PI) * 0.22; }
+    chipAt(bx + shake, cellY(r) - lift + sq * CR * 0.3, CR, f.p, t, i, 'happy', 1 + sq, 1 - sq);
+  });
+  const ty = cellY(L[L.length - 1][0]) - CELL * 0.9 - lift;
+  popText('끙차!', bx, ty, e, 650, 56, '#ffffff', -0.08);
+  popText('발사!!', bx, ty, e - 700, 750, 80, '#ff8a3c', 0.06);
+  popText('쿵!', bx + CR * 1.2, cellY(L[0][0]) + CR * 0.4, e - 2000, 450, 72, '#ffffff', 0);
+}
+// 대각선: 미끄럼 별 — 별이 위에서 아래로 미끄러지며 칩마다 빙글 → 아래부터 '짝!' 하이파이브
+function wcD(f, e, t) {
+  const L = f.lines[0].cells, n = L.length, ST = 900 / (n - 1), [mx] = lineMid(L);
+  if (e < 1000) {
+    const k = clamp01(e / 900) * (n - 1), i0 = Math.min(n - 2, Math.floor(k)), u = k - i0;
+    const [r0, c0] = L[i0], [r1, c1] = L[i0 + 1];
+    const sx = cellX(c0) + (cellX(c1) - cellX(c0)) * u, sy = cellY(r0) + (cellY(r1) - cellY(r0)) * u - CR * 1.15;
+    for (let j = 1; j <= 5; j++) { ctx.globalAlpha = 0.5 - j * 0.08; drawStar(sx - (cellX(c1) - cellX(c0)) * 0.06 * j, sy - (cellY(r1) - cellY(r0)) * 0.06 * j, 22 - j * 2, 9, '#ffd23c'); }
+    ctx.globalAlpha = 1; drawStar(sx, sy, 32, 13, '#ffd23c'); drawStar(sx, sy, 12, 5, '#ffffff');
+  }
+  L.forEach(([r, c], i) => {
+    let rot = 0, h = 0, sc = 1;
+    const s1 = e - i * ST;
+    if (s1 >= 0 && s1 < 350) { rot = s1 / 350 * TAU; h = Math.sin(s1 / 350 * Math.PI) * CELL * 0.3; }
+    const cs = e - 1000 - (n - 1 - i) * 130;
+    if (cs >= 0 && cs < 220) sc = 1 + Math.sin(cs / 220 * Math.PI) * 0.22;
+    if (e >= 1600) h = Math.abs(Math.sin((e - 1600) / 1000 * Math.PI * 3 + i)) * CELL * 0.12;
+    ctx.save(); ctx.translate(cellX(c), cellY(r) - h); ctx.rotate(rot); ctx.scale(sc, sc); drawChip(0, 0, CR, f.p, t, i, 'happy'); ctx.restore();
+    popText('짝!', cellX(c) + CR * 1.05, cellY(r) - CR * 0.6, cs, 320, 44, '#ffffff', 0.12);
+  });
+  popText('미끄럼~', cellX(L[0][1]), cellY(L[0][0]) - CELL * 1.0, e, 850, 58, '#ffd23c', -0.08);
+  popText('짝짝짝!', mx, lineTop(L) - CELL * 1.05, e - 1600, 800, 72, '#ffffff', 0);
+}
+// 두 줄 이상: 축제 — 줄마다 차례로 파도 → 불꽃놀이 + 꽃가루 + 다 같이 통통 → '더블 사목!!'
+function wcM(f, e, t) {
+  for (let j = 0; j < 8; j++) {   // 불꽃놀이 (칩 뒤)
+    const a = e - 1200 - j * 280;
+    if (a < 0 || a > 560) continue;
+    const cx = BX + (0.12 + 0.76 * hsh(j + 3)) * COLS * CELL, cy = BY + (0.08 + 0.6 * hsh(j + 9)) * ROWS * CELL, k = easeOut(a / 420), fade = 1 - clamp01((a - 260) / 300);
+    ctx.globalAlpha = fade; ctx.lineCap = 'round';
+    for (let i = 0; i < 16; i++) {
+      const an = i / 16 * TAU, r1 = CELL * 1.25 * k, col = RAINBOW[(i + j) % RAINBOW.length];
+      ctx.strokeStyle = col; ctx.lineWidth = 7 * (1 - k * 0.5) + 2;
+      ctx.beginPath(); ctx.moveTo(cx + Math.cos(an) * r1 * 0.5, cy + Math.sin(an) * r1 * 0.5); ctx.lineTo(cx + Math.cos(an) * r1, cy + Math.sin(an) * r1); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  f.all.forEach((q, i) => {
+    let h = 0, sq = 0;
+    const s1 = e - q.li * 450 - q.qi * 70;
+    if (e < 1200) { if (s1 >= 0 && s1 < 260) h = Math.sin(s1 / 260 * Math.PI) * CELL * 0.45; }
+    else if (e < 3400) h = Math.abs(Math.sin((e - 1200) / 380 * Math.PI + i * 0.7)) * CELL * 0.28;
+    else { const s2 = e - 3400; sq = s2 < 200 ? Math.sin(s2 / 200 * Math.PI) * 0.18 : 0; }
+    const x = cellX(q.c), y = cellY(q.r) - h;
+    if (e >= 1200 && e < 3400) drawArms(x, y, CR, 1);
+    chipAt(x, y + sq * CR * 0.3, CR, f.p, t, i, 'happy', 1 + sq, 1 - sq);
+  });
+  const ca = clamp01((e - 1200) / 200) * (1 - clamp01((e - 3500) / 400));   // 꽃가루
+  if (ca > 0) {
+    ctx.globalAlpha = ca;
+    for (let i = 0; i < 70; i++) {
+      const x = hsh(i) * LW + Math.sin(e * 0.003 + i) * 30, y = frac(hsh(i + 100) + (e - 1200) * 0.00028 * (0.7 + hsh(i + 200) * 0.6)) * (LH + 120) - 60;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(e * 0.005 + i); ctx.fillStyle = RAINBOW[i % RAINBOW.length]; ctx.fillRect(-9, -5, 18, 10); ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+  const TXT = f.lines.length >= 3 ? '트리플 사목!!' : '더블 사목!!';
+  const se = e - 1200;
+  if (se >= 0 && se < 2400) {
+    const ts = fitSize(TXT, 130, COLS * CELL), sc = se < 130 ? 2.4 - 1.5 * easeIn(se / 130) : 0.9 + 0.1 * easeOut((se - 130) / 140);
+    shout(TXT, BX + COLS * CELL / 2, BY - CELL * 0.45, ts, sc, '#ffd23c', '#ff3b3b', -0.05, clamp01(se / 60) * (1 - clamp01((se - 2100) / 300)));
+  }
+  popText('와아아~!', BX + COLS * CELL / 2, BY + ROWS * CELL * 0.5, e, 1100, 70, '#ffffff', 0);
+}
+// 무승부: 물음표 + '으쓱~' (칩 움직임은 drawBoard에서)
+function drawDrawFx(e, t) {
+  for (let j = 0; j < 6; j++) {
+    const i = Math.floor(hsh(j + 1) * ROWS * COLS), a = e - 150 - j * 90;
+    if (a < 0 || a > 1300) continue;
+    const x = cellX(i % COLS), y = cellY(i / COLS | 0) - CR * 1.1 - easeOut(a / 400) * 22;
+    ctx.globalAlpha = clamp01(a / 120) * (1 - clamp01((a - 1000) / 300));
+    ctx.font = `900 64px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 12; ctx.strokeStyle = '#000'; ctx.strokeText('?', x, y); ctx.fillStyle = '#ffffff'; ctx.fillText('?', x, y);
+    ctx.globalAlpha = 1;
+  }
+  const cx = BX + COLS * CELL / 2, cy = BY + ROWS * CELL / 2;
+  popText('으쓱~', cx, cy - CELL * 0.6, e - 150, 600, 70, '#ffffff', -0.08);
+  popText('으쓱~', cx, cy - CELL * 0.6, e - 850, 600, 70, '#ffffff', 0.08);
+  popText('무승부!', cx, cy + CELL * 0.4, e - 1100, 700, 110, '#ffd23c', 0);
+}
+// 화면 흔들림: 도장 쾅 / 로켓 착지 / 불꽃놀이
+function winShake(now) {
+  if (!winFx || winFx.type === 'draw') return [0, 0];
+  const ce = now - winFx.at, e = ce - winFx.cut;
+  let a = 0;
+  if (ce >= 0 && ce < WCUT) a = ce >= WC.STAMP ? 14 * (1 - clamp01((ce - WC.STAMP) / 320)) : ce >= WC.ROAR ? 4 : 0;
+  else if (winFx.type === 'v') a = e >= 700 && e < 1500 ? 3 : e >= 2000 ? 12 * (1 - clamp01((e - 2000) / 260)) : 0;
+  else if (winFx.type === 'multi' && e >= 1200 && e < 3400) a = 3;
+  return [Math.sin(now * 0.09) * a, Math.cos(now * 0.11) * a];
+}
+
+// ===== 게임방법 (애니메이션 약 21초, 말풍선 대사) =====
+// 장: 소개 / ① 톡 떨어뜨리기 / ② 넷을 이으면 승리 / ③ 막기 / 정리
+const HOW = [0, 2500, 7800, 13300, 18300];
+const R_ = RED, Y_ = YEL;
+const HOW_CH = [
+  null,
+  { head: '① 톡! 떨어뜨리기', lines: ['줄을 톡 누르면', '칩이 맨 아래까지 슝~ 떨어져요', ['누른 채 끌어서 고를 수도 있어요', '#7fd4ff']],
+    cells: [[4, 0, Y_], [4, 3, R_]], drops: [[2, R_, 1100], [2, Y_, 2700]], taps: [[2, 900], [2, 2500]],
+    says: [[4, 2, '어디 둘까~?', 300, 900, 'cell'], [4, 2, '통!', 1700, 500, 'cell'], [3, 2, '위에 쌓였네!', 3300, 1500, 'cell']] },
+  { head: '② 넷을 이으면 승리!', lines: ['가로·세로·대각선', '같은 색 4개를 먼저 이으면 이겨요', ['5개 이상이어도 승리!', '#ffd23c']],
+    cells: [[4, 0, R_], [4, 1, R_], [4, 2, R_], [3, 0, Y_], [3, 1, Y_], [3, 2, Y_]], drops: [[3, R_, 1300]], taps: [[3, 1100]],
+    win: [[4, 0], [4, 1], [4, 2], [4, 3]], winAt: 2050,
+    says: [[4, 1, '두근두근…', 300, 1000, 'cell'], [4, 1, '만세~!', 2400, 1600, 'cell']] },
+  { head: '③ 막아요!', lines: ['상대가 3개를 이으면', '남은 자리에 내 칩을 두어 막아요', ['하트가 뛰는 곳이 위험해요!', '#ff7ad9']],
+    cells: [[4, 1, Y_], [4, 2, Y_], [4, 3, Y_], [4, 4, R_], [3, 2, R_], [3, 3, Y_]], drops: [[0, R_, 1700]], taps: [[0, 1500]],
+    threat: [[4, 0]], threatUntil: 2400, block: [4, 0, 2450],
+    says: [[4, 2, '하나만 더~!', 300, 1200, 'cell'], [4, 0, '막았다!', 2500, 1500, 'cell'], [4, 3, '으앙~', 2700, 1500, 'cell']] },
+  null
+];
+const HOW_SUM = [
+  ['톡!', '#7fd4ff', '줄을 누르면 칩이 떨어져요'],
+  ['넷', '#ffd23c', '4개를 이으면 승리!'],
+  ['방향', '#9dff7a', '가로·세로·대각선 모두 OK'],
+  ['막기', '#ff7ad9', '상대 3개는 미리 막아요'],
+  ['무승부', '#c49bff', '판이 다 차면 무승부']
+];
+let howStart = 0, howFired = 0;
+const HOW_EV = [];
+HOW_CH.forEach((ch, i) => {
+  if (!ch) return;
+  const t0 = HOW[i];
+  for (const [, , at] of ch.drops) HOW_EV.push({ t: t0 + at, f: () => SFX.whoosh(300, 0) }, { t: t0 + at + 300, f: () => SFX.tong(true, false) });
+  for (const sy of ch.says) HOW_EV.push({ t: t0 + sy[3], f: () => SFX.pop() });
+  if (ch.winAt) HOW_EV.push({ t: t0 + ch.winAt, f: () => notes([784, 988, 1175, 1568], 0.07, 0.2, 'triangle', 0.12) });
+  if (ch.block) HOW_EV.push({ t: t0 + ch.block[2], f: () => SFX.block() });
+  if (ch.threat) HOW_EV.push({ t: t0 + 300, f: () => SFX.heart() });
+});
+HOW_EV.push({ t: 900, f: () => SFX.pop() }, { t: 1300, f: () => SFX.pop() }, { t: HOW[4], f: () => SFX.start() });
+HOW_EV.sort((a, b) => a.t - b.t);
+
+function startHow(now) { go('howto'); howStart = now; howFired = 0; }
+function howTap(now) {
+  if (now - sceneTime < 300) return;
+  const e = now - howStart, last = HOW.length - 1;
+  if (e >= HOW[last]) { if (e - HOW[last] > 600) { SFX.click(); go('mode'); } return; }
+  const next = HOW.find(v => v > e);   // 탭: 다음 장으로
+  howStart = now - next; howFired = HOW_EV.filter(v => v.t < next).length; SFX.click();
+}
+// 미니 판: 5열 × 5행 (게임 판과 같은 파란 판 · 구멍)
+function howGeo() {
+  return orient === 'port'
+    ? { x: LW / 2 - 2.5 * 170, y: 760, cs: 170, capX: LW / 2, capY: 270, bodyY: 1690 }
+    : { x: 560 - 2.5 * 150, y: 300, cs: 150, capX: 1480, capY: 330, bodyY: 560 };
+}
+const hX = (g, c) => g.x + c * g.cs + g.cs / 2, hY = (g, r) => g.y + r * g.cs + g.cs / 2;
+function drawMini(g, chips, e, t, extra) {
+  const W = 5 * g.cs, H = 5 * g.cs, R = g.cs * 0.39, HR = g.cs * 0.42;
+  ctx.fillStyle = '#0a1a3d'; rrect(g.x - 18, g.y - 18, W + 36, H + 36, 28); ctx.fill();
+  for (const ch of chips) chipAt(ch.x, ch.y, R, ch.p, t, ch.ph || 0, ch.face || 'normal', ch.sx || 1, ch.sy || 1);
+  ctx.beginPath(); rrect(g.x - 18, g.y - 18, W + 36, H + 36, 28);
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) { ctx.moveTo(hX(g, c) + HR, hY(g, r)); ctx.arc(hX(g, c), hY(g, r), HR, 0, TAU); }
+  const fg = ctx.createLinearGradient(0, g.y, 0, g.y + H); fg.addColorStop(0, '#3f7cf0'); fg.addColorStop(1, '#1f4fbf');
+  ctx.fillStyle = fg; ctx.fill('evenodd');
+  ctx.strokeStyle = '#8fb6ff'; ctx.lineWidth = 4; rrect(g.x - 18, g.y - 18, W + 36, H + 36, 28); ctx.stroke();
+  if (extra) extra();
+}
+function howCaption(g, e0, head, lines) {
+  const mw = orient === 'port' ? LW - 80 : 1060;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.globalAlpha = clamp01(e0 / 250);
+  ctx.font = `900 ${fitSize(head, 84, mw)}px ${FONT}`; ctx.lineWidth = 14; ctx.strokeStyle = '#000';
+  ctx.strokeText(head, g.capX, g.capY); ctx.fillStyle = '#ffd23c'; ctx.fillText(head, g.capX, g.capY);
+  lines.forEach((L, i) => {
+    const k = clamp01((e0 - 400 - i * 900) / 300);
+    if (k <= 0) return;
+    const [txt, col] = Array.isArray(L) ? L : [L, '#ffffff'];
+    ctx.globalAlpha = k; ctx.fillStyle = col; ctx.font = `700 ${fitSize(txt, 54, mw)}px ${FONT}`;
+    ctx.fillText(txt, g.capX, g.bodyY + i * 92 + (1 - k) * 20);
+  });
+  ctx.globalAlpha = 1;
+}
+// 말풍선: 톡 튀어나왔다가 사라짐
+function bubble(txt, x, y, age, hold, size = 40) {
+  if (age < 0 || age > hold) return;
+  const k = age < 180 ? easeOut(age / 180) * (1 + 0.18 * Math.sin(age / 180 * Math.PI)) : 1;
+  ctx.save(); ctx.globalAlpha = clamp01((hold - age) / 160);
+  ctx.font = `800 ${size}px ${FONT}`;
+  const w = ctx.measureText(txt).width + size * 1.1, h = size * 1.7, bx = Math.max(w / 2 + 12, Math.min(LW - w / 2 - 12, x));
+  ctx.translate(bx, y + Math.sin(age * 0.008) * 3); ctx.scale(k, k);
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+  rrect(-w / 2, -h / 2, w, h, h / 2); ctx.fill(); ctx.stroke();
+  const tx = Math.max(-w / 2 + h / 2, Math.min(w / 2 - h / 2, x - bx));
+  ctx.beginPath(); ctx.moveTo(tx - 13, h / 2 - 3); ctx.lineTo(tx, h / 2 + 20); ctx.lineTo(tx + 13, h / 2 - 3); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(tx - 13, h / 2); ctx.lineTo(tx, h / 2 + 20); ctx.lineTo(tx + 13, h / 2); ctx.stroke();
+  ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, 0, 2);
+  ctx.restore();
+}
+function drawFinger(x, y, age) {
+  if (age < 0 || age > 700) return;
+  const k = age / 700;
+  ctx.strokeStyle = `rgba(255,255,255,${1 - k})`; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.arc(x, y, 30 + 50 * k, 0, TAU); ctx.stroke();
+  ctx.font = `76px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('👆', x + 16, y + 56 - Math.sin(k * Math.PI) * 14);
+}
+
+function howChapter(g, ch, e, t) {
+  const R = g.cs * 0.39, chips = [], hb = heartBeat(t);
+  const winK = new Set((ch.win || []).map(([r, c]) => r * 5 + c));
+  const placed = new Map();
+  for (const [r, c, p] of ch.cells) placed.set(r * 5 + c, p);
+  let flying = null;
+  for (const [col, p, at] of ch.drops) {   // 떨어지는 칩: 맨 아래 빈칸까지 + 통통
+    let r = 4; while (r >= 0 && placed.has(r * 5 + col)) r--;
+    const y0 = g.y - g.cs * 0.6, y1 = hY(g, r), FALL = 300, de = e - at;
+    if (de < 0) continue;
+    if (de < FALL) { const k = de / FALL; flying = { x: hX(g, col), y: y0 + (y1 - y0) * k * k, p, face: 'scared' }; }
+    else {
+      const b = de - FALL, sq = b < 120 ? Math.sin(b / 120 * Math.PI) * 0.22 : 0, hop = b < 220 ? Math.sin(b / 220 * Math.PI) * g.cs * 0.12 : 0;
+      chips.push({ x: hX(g, col), y: y1 - hop, p, face: 'happy', sx: 1 + sq, sy: 1 - sq, key: r * 5 + col });
+      placed.set(r * 5 + col, p);
+    }
+  }
+  for (const [r, c, p] of ch.cells) {
+    const k = r * 5 + c;
+    let face = 'normal', sx = 1, sy = 1, y = hY(g, r);
+    if (ch.winAt && e >= ch.winAt && winK.has(k)) { face = 'happy'; y -= Math.abs(Math.sin((e - ch.winAt) / 300 * Math.PI + c * 0.6)) * g.cs * 0.18; }
+    else if (ch.threat && p === Y_ && e < ch.threatUntil) { face = 'happy'; sx = sy = 1 + 0.07 * hb; }
+    else if (ch.block && p === Y_ && e >= ch.block[2]) { face = 'scared'; }
+    chips.push({ x: hX(g, c), y, p, face, sx, sy, ph: k });
+  }
+  for (const q of chips) if (q.key != null && ch.winAt && e >= ch.winAt && winK.has(q.key)) { q.face = 'happy'; q.y -= Math.abs(Math.sin((e - ch.winAt) / 300 * Math.PI + 1.8)) * g.cs * 0.18; q.sx = q.sy = 1; }
+  if (flying) chips.push(flying);
+  drawMini(g, chips, e, t, () => {
+    for (const [col, at] of ch.taps) drawFinger(hX(g, col), g.y - g.cs * 0.6, e - at + 300);
+    for (const [col, p, at] of ch.drops) if (e >= at - 600 && e < at) chipAt(hX(g, col), g.y - g.cs * 0.6 + Math.sin(t * 6) * 5, R, p, t, 0, 'happy');   // 떨어지기 전 대기
+    if (ch.threat && e < ch.threatUntil) for (const [r, c] of ch.threat) {   // 위험한 자리: 하트
+      const s = 1 + 0.12 * hb;
+      ctx.strokeStyle = CHIP[Y_].accent; ctx.lineWidth = 6; ctx.setLineDash([10, 10]); ctx.lineDashOffset = -t * 30;
+      ctx.beginPath(); ctx.arc(hX(g, c), hY(g, r), (R - 6) * s, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+      drawHeart(hX(g, c), hY(g, r), 1.7 * s, CHIP[Y_].accent);
+    }
+    if (ch.block && e >= ch.block[2]) {   // 막기 방패
+      const be = e - ch.block[2], k = be < 160 ? easeOut(be / 160) * 1.2 : 1.2 - 0.2 * clamp01((be - 160) / 140);
+      drawShield(hX(g, ch.block[1]) + R * 0.85, hY(g, ch.block[0]) - R * 0.2, 0.85 * k);
+    }
+    if (ch.winAt && e >= ch.winAt) {   // 이은 줄
+      const pulse = 0.5 + 0.5 * Math.sin(t * 8), [a, b] = [ch.win[0], ch.win[ch.win.length - 1]];
+      ctx.globalAlpha = clamp01((e - ch.winAt) / 200);
+      ctx.strokeStyle = `rgba(255,255,255,${0.55 + 0.35 * pulse})`; ctx.lineWidth = 14; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(hX(g, a[1]), hY(g, a[0])); ctx.lineTo(hX(g, b[1]), hY(g, b[0])); ctx.stroke();
+      ctx.globalAlpha = 1;
+      popText('사목 완성!!', g.x + 2.5 * g.cs, g.y - g.cs * 0.55, e - ch.winAt, 2500, 72, '#ffd23c', -0.05);
+    }
+  });
+  for (const [r, c, txt, at, hold] of ch.says) bubble(txt, hX(g, c), hY(g, r) - g.cs * 0.85, e - at, hold);
+  howCaption(g, e, ch.head, ch.lines);
+}
+
+function howIntro(e, t) {
+  const port = orient === 'port', cy = LH / 2;
+  const s = e < 300 ? easeOut(e / 300) * 1.15 : 1.15 - 0.15 * clamp01((e - 300) / 200);
+  ctx.save(); ctx.translate(LW / 2, cy - (port ? 330 : 280)); ctx.scale(s, s);
+  ctx.font = `900 140px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.lineWidth = 20; ctx.strokeStyle = '#000'; ctx.strokeText('게임방법', 0, 0);
+  ctx.fillStyle = '#ffd23c'; ctx.fillText('게임방법', 0, 0);
+  ctx.restore();
+  for (const [p, dx, ph] of [[R_, -220, 0], [Y_, 220, 1.5]]) {
+    const hop = Math.abs(Math.sin(t * 5 + ph)) * 30;
+    drawChip(LW / 2 + dx, cy - hop, 95 * easeOut((e - 200) / 400), p, t, ph, 'happy');
+  }
+  ctx.fillStyle = '#fff'; ctx.font = `900 70px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText('VS', LW / 2, cy);
+  bubble('같이 놀자!', LW / 2 - 220, cy - 175, e - 900, 1500);
+  bubble('좋아, 덤벼!', LW / 2 + 220, cy - 175, e - 1300, 1150);
+  ['빨강과 노랑이 번갈아 칩을 떨어뜨려', '같은 색 4개를 먼저 이으면 승리!'].forEach((txt, i) => {
+    ctx.globalAlpha = clamp01((e - 600 - i * 400) / 300);
+    ctx.fillStyle = '#fff'; ctx.font = `700 ${fitSize(txt, 60, LW - 80)}px ${FONT}`;
+    ctx.fillText(txt, LW / 2, cy + 260 + i * 95);
+  });
+  ctx.globalAlpha = 1;
+}
+
+function howSummary(d, t) {
+  const port = orient === 'port';
+  const y0 = port ? 640 : 300, step = port ? 190 : 150, x0 = port ? 60 : LW / 2 - 560;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.font = `900 110px ${FONT}`; ctx.lineWidth = 16; ctx.strokeStyle = '#000';
+  const hy = port ? 420 : 150;
+  ctx.strokeText('정리!', LW / 2, hy); ctx.fillStyle = '#ffd23c'; ctx.fillText('정리!', LW / 2, hy);
+  HOW_SUM.forEach(([tag, col, desc], i) => {
+    const k = easeOut((d - 300 - i * 350) / 300);
+    if (k <= 0) return;
+    const y = y0 + i * step, x = x0 - (1 - k) * 60;
+    ctx.globalAlpha = k;
+    ctx.fillStyle = col; rrect(x, y - 52, 230, 104, 52); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.font = `900 ${fitSize(tag, 52, 200)}px ${FONT}`; ctx.textAlign = 'center';
+    ctx.fillText(tag, x + 115, y + 3);
+    ctx.fillStyle = '#fff'; ctx.font = `700 ${fitSize(desc, port ? 48 : 54, LW - x - 290)}px ${FONT}`; ctx.textAlign = 'left';
+    ctx.fillText(desc, x + 265, y + 3);
+  });
+  ctx.globalAlpha = 1; ctx.textAlign = 'center';
+}
+
+function drawHowto(t, now) {
+  drawBg(t, now);
+  const e = now - howStart;
+  while (howFired < HOW_EV.length && e >= HOW_EV[howFired].t) HOW_EV[howFired++].f();
+  let ch = 0;
+  for (let i = 0; i < HOW.length; i++) if (e >= HOW[i]) ch = i;
+  const le = e - HOW[ch];
+  if (ch === 0) howIntro(le, t);
+  else if (ch === HOW.length - 1) howSummary(le, t);
+  else howChapter(howGeo(), HOW_CH[ch], le, t);
+  const py = orient === 'port' ? 110 : 70;   // 진행 점
+  for (let i = 0; i < HOW.length; i++) {
+    ctx.fillStyle = i === ch ? '#ffd23c' : i < ch ? 'rgba(255,255,255,.7)' : 'rgba(255,255,255,.25)';
+    ctx.beginPath(); ctx.arc(LW / 2 + (i - 2) * 50, py, i === ch ? 14 : 10, 0, TAU); ctx.fill();
+  }
+  const last = ch === HOW.length - 1;
+  if (!last || le > 1800) {
+    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 4);
+    ctx.fillStyle = '#fff'; ctx.font = `700 50px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(last ? '탭하여 돌아가기' : '탭하면 다음 ▶', LW / 2, LH - (orient === 'port' ? 130 : 60));
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ===== 개발용 단축키 (Mac 키보드, 내 차례에만) =====
+// 1 가로 승리(응원 파도) · 2 세로 승리(로켓) · 3 대각선↘ 승리(미끄럼 별) · 4 대각선↙ 승리 · 5 두 줄 동시(축제)
+// 6 무승부(으쓱) · 7 가로 5개 승리 · T 두근두근 · B 막았다! · S 칩 위에 쌓기(아래 칩 깜짝)
+function testSetup(cells, col) {
+  if (!canPlay()) return;
+  board = newBoard();
+  for (const [r, c, who] of cells) board[r][c] = who === 'me' ? turn : 3 - turn;
+  threat = { 1: findThreat(board, 1), 2: findThreat(board, 2) };
+  lastMove = null; bumps = {}; pops = [];
+  startDrop(col);
+}
+const DRAW_PAT = 'ommmomomoomomomommooooomomomommmoomomomomm';   // 4개가 하나도 없는 꽉 찬 판 (0행 3열만 비워 두고 마지막에 둠)
+const WIN_TESTS = {
+  1: [[[5, 0, 'me'], [5, 1, 'me'], [5, 2, 'me'], [4, 0, 'op'], [4, 1, 'op'], [4, 2, 'op']], 3],
+  2: [[[5, 3, 'me'], [4, 3, 'me'], [3, 3, 'me'], [5, 4, 'op'], [4, 4, 'op'], [5, 2, 'op']], 3],
+  3: [[[3, 1, 'me'], [4, 2, 'me'], [5, 3, 'me'], [5, 0, 'op'], [4, 0, 'op'], [3, 0, 'me'], [5, 1, 'op'], [4, 1, 'me'], [5, 2, 'op']], 0],
+  4: [[[3, 5, 'me'], [4, 4, 'me'], [5, 3, 'me'], [5, 6, 'op'], [4, 6, 'op'], [3, 6, 'me'], [5, 5, 'op'], [4, 5, 'me'], [5, 4, 'op']], 6],
+  5: [[[5, 3, 'me'], [4, 3, 'me'], [3, 3, 'me'], [2, 0, 'me'], [2, 1, 'me'], [2, 2, 'me'],
+       [5, 0, 'op'], [5, 1, 'me'], [5, 2, 'op'], [4, 0, 'me'], [4, 1, 'op'], [4, 2, 'op'], [3, 0, 'op'], [3, 1, 'op'], [3, 2, 'me']], 3],
+  6: [[...DRAW_PAT].map((v, i) => [i / COLS | 0, i % COLS, v === 'm' ? 'me' : 'op']).filter(([r, c]) => !(r === 0 && c === 3)), 3],
+  7: [[[5, 0, 'me'], [5, 1, 'me'], [5, 3, 'me'], [5, 4, 'me'], [4, 0, 'op'], [4, 1, 'op'], [4, 3, 'op']], 2]
+};
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (WIN_TESTS[k]) testSetup(...WIN_TESTS[k]);
+  else if (k === 't') testSetup([[5, 1, 'me'], [5, 2, 'me'], [5, 5, 'op'], [4, 5, 'op']], 3);           // 1·2·3 → 0열·4열이 승리 자리
+  else if (k === 'b') testSetup([[5, 0, 'op'], [5, 1, 'op'], [5, 2, 'op'], [5, 6, 'me'], [4, 6, 'me']], 3);   // 상대 3개를 막음
+  else if (k === 's') testSetup([[5, 3, 'op'], [4, 3, 'me'], [3, 3, 'op']], 3);                     // 쌓인 칩 위에 떨어짐
+});
+
+function frame(now) {
+  const t = now / 1000;
+  updateDrop(now);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0d0f14'; ctx.fillRect(0, 0, CW, CH);
+  if (orient === 'land') ctx.setTransform(0, 1, -1, 0, CW, 0);   // 가로모드: 오른쪽 90° (x,y) → (1170-y, x)
+  if (scene === 'title') drawTitle(t, now);
+  else if (scene === 'mode') drawMode(t, now);
+  else if (scene === 'diff') drawDiff(t, now);
+  else if (scene === 'howto') drawHowto(t, now);
+  else {
+    updateCpu(now);
+    const sh = winShake(now);
+    ctx.save(); ctx.translate(sh[0], sh[1]);
+    if (orient === 'land') { drawPanelV(RED, PANEL.a, t); drawPanelV(YEL, PANEL.b, t); }
+    else { drawPanelH(YEL, PANEL.a, t); drawPanelH(RED, PANEL.b, t); }   // 세로: 2P 위, 1P 아래
+    drawBoard(t, now);
+    ctx.restore();
+    drawToast(now);
+    if (winFx && winFx.cut && now - winFx.at < winFx.cut) drawWinCut(winFx, now - winFx.at, t);
+    drawResult(t, now);
+  }
+  drawVol();
+  drawHome();
+  if (confirmQuit) drawQuit(t, now);
+  requestAnimationFrame(frame);
+}
+
+applyLayout();
+reset();
+go('title');
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
