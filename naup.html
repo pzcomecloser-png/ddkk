@@ -268,6 +268,16 @@
       </div>
       <div class="card-arrow">▶</div>
     </a>
+
+    <!-- 23. 냠냠 틱택토 (NEW) -->
+    <a class="game-card" href="games/23/Nyamnyam.html">
+      <div class="icon-frame"><canvas id="iconNyamnyam" width="24" height="24"></canvas></div>
+      <div class="card-text">
+        <div class="card-title">냠냠 틱택토</div>
+        <div class="card-desc">셋을 이으면 승리!</div>
+      </div>
+      <div class="card-arrow">▶</div>
+    </a>
   </div>
 
   <div class="footer-box">
@@ -849,6 +859,43 @@ function drawTongtongIcon(id) {
   R(14, 9, 3, 1, '#4a2a10'); R(15, 10, 1, 1, '#e8506a');
 }
 
+// 23. 냠냠 틱택토 (왕관 쓴 파랑·주황 젤리 슬라임 + 3×3 격자)
+function drawNyamnyamIcon(id) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, 24, 24);
+  const R = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
+
+  // 배경 + 3×3 틱택토 격자 (#)
+  R(0, 0, 24, 24, '#0f0f1a');
+  [8, 15].forEach(p => { R(p, 2, 1, 20, '#252542'); R(2, p, 20, 1, '#252542'); });
+
+  // 주먹밥/슬라임 젤리 캐릭터 (x0,y0 기준 폭 10, 높이 9 + 왕관 3)
+  function slime(x0, y0, body, dark, hi) {
+    // 금왕관 (세 뿔 + 빨간 보석)
+    R(x0 + 2, y0, 1, 1, '#facc15'); R(x0 + 4, y0, 2, 1, '#facc15'); R(x0 + 7, y0, 1, 1, '#facc15');
+    R(x0 + 2, y0 + 1, 6, 2, '#eab308');
+    R(x0 + 4, y0 + 1, 2, 1, '#ef4444');
+    // 젤리 몸통 (위가 좁고 아래가 넓은 돔 모양)
+    R(x0 + 2, y0 + 3, 6, 1, dark);
+    R(x0 + 1, y0 + 4, 8, 2, body);
+    R(x0,     y0 + 6, 10, 4, body);
+    R(x0 + 1, y0 + 10, 8, 1, dark);
+    // 광택
+    R(x0 + 2, y0 + 4, 2, 1, hi); R(x0 + 1, y0 + 5, 1, 1, hi);
+    // 웃는 눈 + 볼터치 + 입
+    R(x0 + 2, y0 + 6, 2, 1, '#221a28'); R(x0 + 6, y0 + 6, 2, 1, '#221a28');
+    R(x0 + 1, y0 + 7, 1, 1, '#ff8aa0'); R(x0 + 8, y0 + 7, 1, 1, '#ff8aa0');
+    R(x0 + 4, y0 + 8, 2, 1, '#3a1420'); R(x0 + 4, y0 + 9, 2, 1, '#f4607a');
+  }
+
+  // 왼쪽 위 파란 슬라임, 오른쪽 아래 주황 슬라임
+  slime(1, 2, '#4f9cf9', '#2563eb', '#bae6fd');
+  slime(13, 11, '#df8a3b', '#9a5218', '#fde68a');
+}
+
 // 전체 렌더링
 drawCompanyLogo('logoCanvas');
 drawNaupIcon('iconNaup');
@@ -862,6 +909,7 @@ drawBreakoutIcon('iconBreakout');
 drawLadderIcon('iconLadder');
 drawReversiIcon('iconReversi');
 drawTongtongIcon('iconTongtong');
+drawNyamnyamIcon('iconNyamnyam');
 </script>
 </body>
 </html>
