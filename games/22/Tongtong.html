@@ -85,14 +85,15 @@ let board, turn, gameOver, endTime, winner, winLines, lastMove, drop, toast, toa
 let pressing = false, aim = null, hoverCol = null;
 // 4단계 연출: 연출 잠금 시각 / 아래 칩 깜짝 / 만화 글자 / 막기 연출 / 두근두근(바로 이길 수 있는 3개)
 let fxUntil = 0, bumps = {}, pops = [], blockFx = null, threat = { 1: null, 2: null };
-let winFx = null;   // 5단계: 승리 컷씬 + 승리 모션 / 무승부 으쓱   // 누르는 중 / 노리는 열 / 마우스 올린 열
+let winFx = null;   // 5단계: 승리 컷씬 + 승리 모션 / 무승부 으쓱
+let intro = null;   // 1P vs 2P 선공 정하기 대결   // 누르는 중 / 노리는 열 / 마우스 올린 열
 let scene = 'title', mode = 'pvp', sceneTime = 0, cpuAt = 0, confirmQuit = false, confirmAt = 0;
 let wins = { 1: 0, 2: 0 };
 let aiWorker = null, cpuReq = 0, cpuResult = null;   // 아주 어려움: 백그라운드 계산   // 이긴 판 수 (다시하기는 이어서, 새로 시작하면 0부터)
 function go(sc) { scene = sc; sceneTime = performance.now(); confirmQuit = false; }
 const pname = p => (mode === 'cpu' && p === YEL) ? 'CPU' : CHIP[p].name;
-const isCpuTurn = () => scene === 'game' && mode === 'cpu' && turn === YEL && !gameOver && !drop && performance.now() >= fxUntil;
-const canPlay = () => scene === 'game' && !gameOver && !drop && !confirmQuit && !isCpuTurn() && performance.now() >= fxUntil;
+const isCpuTurn = () => scene === 'game' && mode === 'cpu' && turn === YEL && !gameOver && !drop && !intro && performance.now() >= fxUntil;
+const canPlay = () => scene === 'game' && !gameOver && !drop && !confirmQuit && !intro && !isCpuTurn() && performance.now() >= fxUntil;
 
 // ===== 설정 저장 (화면 방향 · 음량 · 난이도) =====
 const load = (k, ok) => { try { const v = localStorage.getItem('tongtong_' + k); return ok(v) ? v : null; } catch (e) { return null; } };
@@ -126,12 +127,13 @@ const resultAt = () => winFx ? winFx.cut + winFx.dur : RESULT_DELAY;   // 컷씬
 
 function reset() {
   board = newBoard();
-  turn = RED;                 // 빨강 선공
+  turn = mode === 'pvp' ? (Math.random() < 0.5 ? RED : YEL) : RED;   // 1P vs 2P는 매 판 무작위 (대결로 정함) · CPU전은 빨강(플레이어) 선공
   gameOver = false; endTime = 0; winner = 0; winLines = null;
   lastMove = null; drop = null; toast = ''; toastTime = 0;
   pressing = false; aim = null; hoverCol = null; cpuAt = 0; confirmQuit = false;
   cpuReq++; cpuResult = null;   // 이전 판의 계산 결과는 버림
   fxUntil = 0; bumps = {}; pops = []; blockFx = null; winFx = null; threat = { 1: findThreat(board, 1), 2: findThreat(board, 2) };
+  intro = mode === 'pvp' ? { at: performance.now(), first: turn } : null;
 }
 function newMatch() { wins = { 1: 0, 2: 0 }; reset(); }   // 모드·난이도를 새로 골랐을 때
 function showToast(msg) { toast = msg; toastTime = performance.now(); }
@@ -440,7 +442,7 @@ function onDown(x, y) {
     if (hitBtn(HOW_BTN, x, y)) { SFX.click(); startHow(now); return; }
     const b = hitBtn(MODE_BTNS, x, y);
     if (b && b.id === 'cpu') { SFX.click(); go('diff'); }
-    else if (b) { mode = 'pvp'; newMatch(); go('game'); SFX.start(); }
+    else if (b) { mode = 'pvp'; newMatch(); go('game'); if (intro) introSfx(); else SFX.start(); }
     return;
   }
   if (scene === 'diff') {
@@ -454,10 +456,11 @@ function onDown(x, y) {
     if (now < ra) { if (now - endTime > 400) { endTime = now - resultAt(); cutSounds(); resultJingle(); } return; }   // 연출 중 탭 → 바로 결과
     if (now - ra < 300) return;
     const b = hitBtn(RESULT_BTNS, x, y);
-    if (b && b.id === 'retry') { reset(); SFX.start(); }
+    if (b && b.id === 'retry') { reset(); if (intro) introSfx(); else SFX.start(); }
     else if (b && b.id === 'title') { go('title'); SFX.click(); }
     return;
   }
+  if (intro) { if (now - intro.at > 300 && now - intro.at < INTRO_MS) { intro.at = now - INTRO_MS; cutSounds(); SFX.start(); } return; }   // 탭하면 선공 정하기 건너뛰기
   if (!canPlay() || !inPlayArea(x, y)) return;   // 연출 중 · CPU 차례에는 입력 잠금
   pressing = true; aim = colAt(x); SFX.pick();
 }
@@ -759,6 +762,7 @@ function drawBoard(t, now) {
 }
 
 function turnLabel(p, t) {
+  if (intro) return '준비!';
   if (gameOver) return winner === p ? '승리!' : winner ? '아쉬워요' : '무승부';
   if (turn !== p) return '대기 중';
   return (mode === 'cpu' && p === YEL) ? '생각 중' + '.'.repeat(1 + Math.floor(t * 3) % 3) : '내 차례!';
@@ -767,7 +771,7 @@ const winText = p => `🏆 ${wins[p]}승`;
 
 // 가로모드 패널 (세로로 긴 형태)
 function drawPanelV(p, cx, t) {
-  const k = CHIP[p], active = !gameOver && turn === p;
+  const k = CHIP[p], active = !gameOver && turn === p && !intro;
   const x = cx - 220, y = BY - CELL * 0.7, w = 440, h = ROWS * CELL + CELL * 0.7 - 90;
   ctx.fillStyle = active ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.03)';
   rrect(x, y, w, h, 32); ctx.fill();
@@ -786,7 +790,7 @@ function drawPanelV(p, cx, t) {
 
 // 세로모드 패널 (가로로 긴 형태)
 function drawPanelH(p, cy, t) {
-  const k = CHIP[p], active = !gameOver && turn === p;
+  const k = CHIP[p], active = !gameOver && turn === p && !intro;
   const x = BX - 22, w = COLS * CELL + 44, y = cy - 160, h = 320;
   ctx.fillStyle = active ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.03)';
   rrect(x, y, w, h, 32); ctx.fill();
@@ -1715,6 +1719,87 @@ addEventListener('keydown', e => {
   else if (k === 's') testSetup([[5, 3, 'op'], [4, 3, 'me'], [3, 3, 'op']], 3);                     // 쌓인 칩 위에 떨어짐
 });
 
+// ===== 1P vs 2P 선공 정하기: 빨강 · 노랑 칩의 옥신각신 박치기 대결 (2.7초, 탭하면 건너뛰기) =====
+// 세균전 · 리버시 · 냠냠과 같은 흐름: 노려봄 → '내가 먼저!' '아니야, 나야!' → 박치기 3번 '통!' → 진 칩은 데굴데굴 · 이긴 칩은 폴짝 '선공!'
+const INTRO_MS = 2700;
+const BUMPS = [950, 1300, 1650];   // 박치기 시각
+function introSfx() {
+  if (!live()) return;
+  tone(880, 0.07, 'sine', 0.12, 1320, 0.28); tone(880, 0.07, 'sine', 0.12, 1320, 0.58);   // 말풍선 뾱
+  BUMPS.forEach((b, i) => {   // 통! (칩끼리 부딪히는 소리)
+    const a = (b + 170) / 1000, big = i === BUMPS.length - 1;
+    tone(big ? 200 : 250, big ? 0.22 : 0.15, 'sine', 0.5, 90, a); noise(0.05, 0.3, 'bandpass', 1800, 0, a, 3);
+  });
+  const l = BUMPS[BUMPS.length - 1] / 1000;
+  tone(1000, 0.65, 'sine', 0.09, 300, l + 0.23);                                    // 데굴데굴~
+  notes([523, 659, 784, 1047], 0.08, 0.16, 'square', 0.12, l + 0.45);              // 팡파르
+}
+function updateIntro(now) {
+  if (intro && now - intro.at >= INTRO_MS) { showToast(`${pname(intro.first)}(${CHIP[intro.first].color}) 먼저!`); intro = null; }
+}
+function introRing(x, y, age, life, r1) {
+  if (age < 0 || age > life) return;
+  const k = age / life;
+  ctx.strokeStyle = `rgba(255,240,150,${0.75 * (1 - k)})`; ctx.lineWidth = 9 * (1 - k) + 2;
+  ctx.beginPath(); ctx.arc(x, y, 30 + (r1 - 30) * easeOut(k), 0, TAU); ctx.stroke();
+}
+function drawIntro(t, now) {
+  const e = now - intro.at, win = intro.first, lose = 3 - win;
+  const fade = clamp01(e / 200) * (1 - clamp01((e - INTRO_MS + 250) / 250));
+  ctx.fillStyle = `rgba(0,0,0,${0.62 * fade})`; ctx.fillRect(-80, -80, LW + 160, LH + 160);
+  ctx.save(); ctx.globalAlpha = fade;
+  const cx = LW / 2, cy = LH / 2 + 40, R = 130, base = R + 140, contact = R * 1.02;
+  const last = BUMPS[BUMPS.length - 1];
+  for (const p of [RED, YEL]) {
+    const sg = p === RED ? -1 : 1;
+    let x = cx + sg * base, y = cy, sx = 1, sy = 1, rot = 0, face = 'fierce';
+    if (e < 260) x = cx + sg * (base + (LW / 2 + R) * (1 - easeOut(e / 260)));   // 양쪽에서 들어옴
+    else if (e < BUMPS[0]) { const w = Math.sin(e * 0.02) * 0.06; sx = 1 + w; sy = 1 - w; y -= Math.abs(Math.sin(e * 0.012)) * 18; }   // 씩씩 · 통통
+    for (const b of BUMPS) {   // 박치기: 다가가 '통!' 하고 튕겨남
+      const be = e - b;
+      if (be < 0 || be >= 360 || (b === last && p === lose && be >= 230)) continue;
+      if (be < 170) x = cx + sg * (base - (base - contact) * easeIn(be / 170));
+      else if (be < 230) { x = cx + sg * contact; const q = Math.sin((be - 170) / 60 * Math.PI) * 0.2; sx = 1 - q; sy = 1 + q; }
+      else x = cx + sg * (contact + (base - contact) * easeOut((be - 230) / 130));
+    }
+    const fe = e - last - 230;
+    if (fe >= 0) {
+      if (p === lose) {   // 진 칩: 데굴데굴 굴러가 어지러움
+        const k = clamp01(fe / 650), far = Math.min(base + 260, LW / 2 - R * 1.15);
+        x = cx + sg * (contact + (far - contact) * easeOut(k)); y = cy - Math.sin(k * Math.PI) * 220;
+        rot = sg * k * TAU * 1.25; face = 'scared';
+        if (k >= 1) { rot = sg * 0.35; const q = Math.sin(clamp01((fe - 650) / 200) * Math.PI) * 0.2; sx = 1 + q; sy = 1 - q; }
+      } else {            // 이긴 칩: 신나서 폴짝
+        face = 'happy'; x = cx + sg * (contact + (base - contact) * easeOut(fe / 300));
+        y = cy - Math.abs(Math.sin(fe / 260 * Math.PI)) * 50 * (1 - clamp01((fe - 800) / 300));
+      }
+    }
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sx, sy);
+    drawChip(0, 0, R, p, t, p * 2, face);
+    ctx.restore();
+    if (fe >= 650 && p === lose) {   // 어지러운 별
+      for (let i = 0; i < 3; i++) { const a = t * 6 + i * TAU / 3; drawStar(x + Math.cos(a) * R * 0.7, y - R * 1.3 + Math.sin(a) * R * 0.18, 18, 8, '#ffe14d'); }
+    }
+    if (fe >= 100 && p === win) {   // '선공!' 배지
+      const k = easeOut((fe - 100) / 220), bw = 230, bh = 80, by = y - R * 1.6;
+      ctx.save(); ctx.translate(x, by); ctx.scale(k, k);
+      ctx.fillStyle = '#ffd23c'; rrect(-bw / 2, -bh / 2, bw, bh, bh / 2); ctx.fill();
+      ctx.strokeStyle = '#7a5a00'; ctx.lineWidth = 5; rrect(-bw / 2, -bh / 2, bw, bh, bh / 2); ctx.stroke();
+      ctx.fillStyle = '#111'; ctx.font = `900 50px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('선공!', 0, 3);
+      ctx.restore();
+    }
+  }
+  for (const b of BUMPS) {
+    const be = e - b - 170;
+    introRing(cx, cy, be, 300, R * 0.9);
+    popText(b === last ? '토옹!!' : '통!', cx, cy - R * 1.5, be, 320, b === last ? 80 : 62, '#ffffff', b === BUMPS[1] ? 0.1 : -0.1);
+  }
+  bubble('내가 먼저!', cx - base, cy - R * 1.75, e - 280, 600, 44);
+  bubble('아니야, 나야!', cx + base, cy - R * 1.75, e - 580, 520, 44);
+  popText(`${pname(win)}(${CHIP[win].color}) 먼저!`, cx, cy + R * 1.8, e - last - 450, INTRO_MS - last - 450, 90, CHIP[win].accent, 0);
+  ctx.restore();
+}
+
 function frame(now) {
   const t = now / 1000;
   updateDrop(now);
@@ -1726,6 +1811,7 @@ function frame(now) {
   else if (scene === 'diff') drawDiff(t, now);
   else if (scene === 'howto') drawHowto(t, now);
   else {
+    updateIntro(now);
     updateCpu(now);
     const sh = winShake(now);
     ctx.save(); ctx.translate(sh[0], sh[1]);
@@ -1733,6 +1819,7 @@ function frame(now) {
     else { drawPanelH(YEL, PANEL.a, t); drawPanelH(RED, PANEL.b, t); }   // 세로: 2P 위, 1P 아래
     drawBoard(t, now);
     ctx.restore();
+    if (intro) drawIntro(t, now);
     drawToast(now);
     if (winFx && winFx.cut && now - winFx.at < winFx.cut) drawWinCut(winFx, now - winFx.at, t);
     drawResult(t, now);
@@ -1744,7 +1831,7 @@ function frame(now) {
 }
 
 applyLayout();
-reset();
+reset(); intro = null;
 go('title');
 requestAnimationFrame(frame);
 </script>
