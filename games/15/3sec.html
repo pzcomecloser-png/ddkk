@@ -805,7 +805,7 @@
         <div class="copyright">&copy; 2026 DDKK GAMES.<br>ALL RIGHTS RESERVED</div>
       </div>
 
-      <div class="title-version">V 4.0</div>
+      <div class="title-version">V 4.2</div>
     </div>
 
     <div class="controls" id="controlsPanel" style="display:none;">
@@ -1564,7 +1564,19 @@
     let nextPowerScore = POWER_SCORE_STEP; // 다음 드롭 판정 점수
     let powerElapsed = 0;             // 게임 시작 후 경과 시간 (초)
     let nextBombItemScore = BOMB_ITEM_SCORE_STEP; // 다음 폭탄 아이템 등장 점수
-    let items = [];         // 아이템 목록 (power / bomb)
+    let items = [];         // 아이템 목록 (power / bomb / missile)
+    // ★ (V 4.1) 서브웨폰: 유도 미사일 (보기엔 화려하지만 실제 화력은 약하게)
+    //   MISSILE 아이템 1개당 1단계, 최대 3단계. 3만점마다 1개 등장 (3단계가 되면 더 나오지 않음)
+    //   (V 4.2) 1초마다 Lv1 2발 / Lv2 3발 / Lv3 4발, 1발 대미지 0.2 (메인 탄 1발 = 1)
+    const MISSILE_MAX = 3;
+    const MISSILE_DMG = 0.2;
+    const MISSILE_SIDES = [[], [-1, 1], [-1, 0, 1], [-1, -0.5, 0.5, 1]];
+    const MISSILE_INTERVAL = 60;          // 프레임
+    const MISSILE_ITEM_STEP = 30000;
+    let missileLv = 0;
+    let missileTimer = 0;
+    let nextMissileItemScore = MISSILE_ITEM_STEP;
+    let pickupMsg = null;                 // { text, t }
 
     // Power 아이템 생성: 좌우로 움직이며 화면 양쪽 벽에 튕기고 천천히 하강
     function spawnPowerItem(x, y) {
@@ -2815,6 +2827,10 @@
       lives = 2;
       bombs = 2;
       firePower = FIRE_POWER_MIN;
+      missileLv = 0;
+      missileTimer = 0;
+      nextMissileItemScore = MISSILE_ITEM_STEP;
+      pickupMsg = null;
       firstPowerDropped = false;
       nextPowerScore = POWER_SCORE_STEP;
       powerElapsed = 0;
@@ -3036,7 +3052,7 @@
 
     function updateRapidDisplay() {
       if (rapidDisplay) {
-        rapidDisplay.innerText = `POWER ${firePower}%`;
+        rapidDisplay.innerText = `POWER ${firePower}%` + (missileLv ? `\nMISSILE Lv${missileLv}` : '');
         rapidDisplay.style.color = firePower >= FIRE_POWER_MAX ? '#facc15' : '#38bdf8';
       }
     }
@@ -5858,7 +5874,8 @@
           }
           for (let si = 0; si < playerBullets.length; si++) {
             const b = playerBullets[si];
-            snap.pbullets.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, width: b.width, height: b.height, color: b.color, trail: b.trail });
+            snap.pbullets.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, width: b.width, height: b.height, color: b.color, trail: b.trail,
+                                 homing: b.homing, dmg: b.dmg, life: b.life });
           }
 
           historyData.push(snap);
@@ -5906,12 +5923,56 @@
           // 레이저 발사 효과음 출력
           playLaserSound();
         }
+        // (V 4.2) 유도 미사일: 1초마다 Lv1 2발(좌우) / Lv2 3발(+가운데) / Lv3 4발(좌우 2쌍)
+        if (missileLv > 0 && ++missileTimer >= MISSILE_INTERVAL) {
+          missileTimer = 0;
+          const sides = MISSILE_SIDES[missileLv];
+          for (const sd of sides) {
+            playerBullets.push({ x: playerX + sd * 24, y: playerY - 6, vx: sd * 3.2, vy: sd ? -3.5 : -5,
+                                 width: 6, height: 6, homing: true, dmg: MISSILE_DMG, life: 110 });
+          }
+        }
       }
 
       // 플레이어 총알 이동 & 렌더링
       // (V 3.5) 실시간 shadowBlur 제거 -> 색별로 구워둔 빛 번짐 스프라이트 사용
       for (let i = playerBullets.length - 1; i >= 0; i--) {
         const pb = playerBullets[i];
+        if (pb.homing) {
+          // (V 4.1) 유도 미사일: 가장 가까운 적 쪽으로 조금씩 방향을 튼다
+          let tg = null, best = 1e12;
+          for (let j = 0; j < enemies.length; j++) {
+            const e = enemies[j];
+            if (e.hidden || e.y < e.radius * 0.8 || e.y > HEIGHT) continue;
+            const d = (e.x - pb.x) * (e.x - pb.x) + (e.y - pb.y) * (e.y - pb.y);
+            if (d < best) { best = d; tg = e; }
+          }
+          const sp = Math.min(9, Math.hypot(pb.vx, pb.vy) + 0.25);
+          let ang = Math.atan2(pb.vy, pb.vx);
+          if (tg) {
+            let da = Math.atan2(tg.y - pb.y, tg.x - pb.x) - ang;
+            while (da > Math.PI) da -= Math.PI * 2;
+            while (da < -Math.PI) da += Math.PI * 2;
+            ang += Math.max(-0.12, Math.min(0.12, da));
+          } else {
+            let da = -Math.PI / 2 - ang;
+            while (da > Math.PI) da -= Math.PI * 2;
+            while (da < -Math.PI) da += Math.PI * 2;
+            ang += Math.max(-0.06, Math.min(0.06, da));
+          }
+          pb.vx = Math.cos(ang) * sp; pb.vy = Math.sin(ang) * sp;
+          pb.x += pb.vx; pb.y += pb.vy;
+          // 연기 꼬리 + 몸체 (흰 몸통, 빨간 탄두, 주황 불꽃)
+          const cx = Math.cos(ang), sy = Math.sin(ang);
+          ctx.strokeStyle = 'rgba(203, 213, 225, 0.35)'; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.moveTo(pb.x, pb.y); ctx.lineTo(pb.x - cx * 26, pb.y - sy * 26); ctx.stroke();
+          ctx.save(); ctx.translate(pb.x, pb.y); ctx.rotate(ang);
+          ctx.fillStyle = frameCount % 4 < 2 ? '#fb923c' : '#fde047';
+          ctx.beginPath(); ctx.moveTo(-7, -3); ctx.lineTo(-15, 0); ctx.lineTo(-7, 3); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = '#e2e8f0'; ctx.fillRect(-8, -3, 12, 6);
+          ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.moveTo(4, -3); ctx.lineTo(9, 0); ctx.lineTo(4, 3); ctx.closePath(); ctx.fill();
+          ctx.restore();
+        } else {
         pb.x += (pb.vx || 0);
         pb.y += pb.vy;
 
@@ -5922,6 +5983,7 @@
         if (glow) ctx.drawImage(glow.img, pb.x - pb.width / 2 - GLOW_PAD, pb.y - GLOW_PAD, glow.w, glow.h);
         ctx.fillStyle = bc;
         ctx.fillRect(pb.x - pb.width / 2, pb.y, pb.width, pb.height);
+        }
 
         // 적과의 충돌 검사 (HP 차감 및 격추 판정 - 요새 코어는 외곽 포탑이 남아있어도 타격 가능)
         let hit = false;
@@ -5955,7 +6017,7 @@
               let turretHit = false;
               for (let t of enemy.turrets) {
                 if (t.alive && Math.hypot(pb.x - (enemy.x + t.dx), pb.y - (enemy.y + t.dy)) < 22) {
-                  t.hp--;
+                  t.hp -= (pb.dmg || 1);
                   turretHit = true;
                   createExplosion(pb.x, pb.y, 22, '#fbbf24', 12);
                   if (t.hp <= 0) {
@@ -5970,11 +6032,11 @@
               }
               // 포탑을 빗맞췄거나 코어 중심부 타격 시 코어 HP 즉시 차감
               if (!turretHit) {
-                enemy.hp--;
+                enemy.hp -= (pb.dmg || 1);
                 createExplosion(pb.x, pb.y, 20, '#ef4444', 10);
               }
             } else {
-              enemy.hp--;
+              enemy.hp -= (pb.dmg || 1);
             }
 
             // 체력 0 이하 시 최종 격추
@@ -6039,7 +6101,7 @@
           }
         }
 
-        if (hit || pb.y < -30) {
+        if (hit || pb.y < -30 || (pb.homing && (--pb.life <= 0 || pb.y > HEIGHT + 40 || pb.x < -40 || pb.x > WIDTH + 40))) {
           playerBullets.splice(i, 1);
         }
       }
@@ -6207,6 +6269,14 @@
             angle: 0
           });
         }
+        // (V 4.1) 3만점마다 MISSILE 아이템 1개 (3단계가 되면 더 나오지 않음)
+        while (score >= nextMissileItemScore) {
+          nextMissileItemScore += MISSILE_ITEM_STEP;
+          if (missileLv < MISSILE_MAX) {
+            items.push({ x: 100 + Math.random() * (WIDTH - 200), y: -30, vx: (Math.random() < 0.5 ? -1 : 1) * 1.6, vy: 1.3,
+                         kind: 'missile', radius: 24, angle: 0 });
+          }
+        }
       }
 
       for (let i = items.length - 1; i >= 0; i--) {
@@ -6225,7 +6295,21 @@
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        if (it.kind === 'bomb') {
+        if (it.kind === 'missile') {
+          // ── (V 4.1) MISSILE 아이템: 하늘색 캡슐 + 미사일 그림 + 라벨 ──
+          const blink = 0.5 + 0.5 * Math.sin(it.angle * 6);
+          ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(3, 3, 24, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#0e7490'; ctx.strokeStyle = blink > 0.5 ? '#67e8f9' : '#22d3ee'; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.arc(0, 0, 24, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.save(); ctx.rotate(-Math.PI / 4);
+          ctx.fillStyle = '#fb923c'; ctx.beginPath(); ctx.moveTo(-10, -4); ctx.lineTo(-18, 0); ctx.lineTo(-10, 4); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = '#f1f5f9'; ctx.fillRect(-11, -4, 18, 8);
+          ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.moveTo(7, -4); ctx.lineTo(14, 0); ctx.lineTo(7, 4); ctx.closePath(); ctx.fill();
+          ctx.restore();
+          ctx.font = 'bold 11px "Press Start 2P", "Courier New", monospace';
+          ctx.fillStyle = '#67e8f9';
+          ctx.fillText('MISSILE', 0, 38);
+        } else if (it.kind === 'bomb') {
           // ── 폭탄 아이템: HUD 폭탄 아이콘과 같은 모양 + 붉은 점멸 글로우 ──
           const blink = 0.5 + 0.5 * Math.sin(it.angle * 6);
           ctx.shadowColor = '#ef4444';
@@ -6306,7 +6390,13 @@
         // 플레이어 획득 검사
         if (gameStarted && !isGameOver && !isContinueState) {
           if (Math.hypot(playerX - it.x, playerY - it.y) < it.radius + 20) {
-            if (it.kind === 'bomb') {
+            if (it.kind === 'missile') {
+              if (missileLv < MISSILE_MAX) missileLv++;
+              updateRapidDisplay();
+              playPowerUpSound(missileLv >= MISSILE_MAX);
+              pickupMsg = { text: missileLv >= MISSILE_MAX ? 'MISSILE MAX!' : `MISSILE Lv${missileLv}!`, t: 0 };
+              createExplosion(it.x, it.y, 35, '#22d3ee', 25);
+            } else if (it.kind === 'bomb') {
               // 폭탄 +1 (HUD 슬롯이 2칸이므로 최대 2개. 가득 차 있으면 점수 보너스)
               if (bombs < 2) {
                 bombs++;
@@ -6662,6 +6752,14 @@
       updateBombFx();
       drawRoundBanners();
       drawFinalBossOverlay();
+      if (pickupMsg) {
+        pickupMsg.t++;
+        const a = Math.min(1, (60 - pickupMsg.t) / 15);
+        ctx.save(); ctx.globalAlpha = Math.max(0, a);
+        introText(pickupMsg.text, Math.max(150, Math.min(WIDTH - 150, playerX)), playerY - 90 - pickupMsg.t * 0.6, 34, '#67e8f9', 'center', '#0c4a6e');
+        ctx.restore();
+        if (pickupMsg.t >= 60) pickupMsg = null;
+      }
 
       // ★ 후처리: 비네팅 + CRT 스캔라인
       drawVignette();
