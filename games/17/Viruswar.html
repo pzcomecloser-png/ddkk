@@ -55,11 +55,12 @@ document.addEventListener('dblclick', e => e.preventDefault());
 let board, turn, sel, targets, gameOver, endTime, toast, toastTime, lastMove;
 let scene = 'title', mode = 'pvp', cpuAt = 0, sceneTime = 0;
 let orient = 'port';   // 'land' 가로모드: 오른쪽 90° 회전 / 'port' 세로모드: 회전 없음 (기본)
-let fx = null, pops = {}, parts = [];   // 감염 연출 / 감염 팝 / 파티클   // scene: title | mode | game
+let aiWorker = null, cpuReq = 0, cpuResult = null;   // 어려움 · 아주 어려움: 백그라운드 계산
+let fx = null, pops = {}, parts = [], intro = null, confirmQuit = false, confirmAt = 0;   // confirmQuit: 게임 포기 확인창   // intro: 1P vs 2P 선공 정하기 대결   // 감염 연출 / 감염 팝 / 파티클   // scene: title | mode | game
 
-function go(s) { scene = s; sceneTime = performance.now(); }
+function go(s) { scene = s; sceneTime = performance.now(); confirmQuit = false; }
 const pname = p => (mode === 'cpu' && p === P2) ? 'CPU' : COLORS[p].name;
-const isCpuTurn = () => scene === 'game' && mode === 'cpu' && turn === P2 && !gameOver && !fx;
+const isCpuTurn = () => scene === 'game' && mode === 'cpu' && turn === P2 && !gameOver && !fx && !intro && !confirmQuit;
 
 // ===== 버튼 =====
 const MODE_BTNS = [
@@ -74,13 +75,14 @@ const ORIENT_BTNS = [
   { id: 'land', x: LW - 360, y: LH / 2 - 190, w: 310, h: 140, label: '가로모드' },
   { id: 'port', x: LW - 360, y: LH / 2 - 10,  w: 310, h: 140, label: '세로모드' }
 ];
-const DIFFS = { easy: ['쉬움', '#5aff96'], normal: ['보통', '#ffd23c'], hard: ['어려움', '#ff5a6e'] };
+const DIFFS = { easy: ['쉬움', '#5aff96'], normal: ['보통', '#ffd23c'], hard: ['어려움', '#ff5a6e'], expert: ['아주 어려움', '#c49bff'] };
 let diff = 'normal';
 try { const d = localStorage.getItem('viruswar_diff'); if (DIFFS[d]) diff = d; } catch (e) {}
 const DIFF_BTNS = [
   { id: 'easy',   x: 0, y: 0, w: 680, h: 300, label: '쉬움',   sub: '살살 해줄게~', stars: 1 },
   { id: 'normal', x: 0, y: 0, w: 680, h: 300, label: '보통',   sub: '한판 붙어보자!', stars: 2 },
-  { id: 'hard',   x: 0, y: 0, w: 680, h: 300, label: '어려움', sub: '봐주는 거 없음', stars: 3 }
+  { id: 'hard',   x: 0, y: 0, w: 680, h: 300, label: '어려움', sub: '봐주는 거 없음', stars: 3 },
+  { id: 'expert', x: 0, y: 0, w: 680, h: 300, label: '아주 어려움', sub: '각오는 됐겠지?', stars: 4 }
 ];
 const BACK_BTN = [{ id: 'back', x: 0, y: 0, w: 480, h: 130, label: '◀ 뒤로' }];
 const hitBtn = (btns, x, y) => btns.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
@@ -89,9 +91,12 @@ function reset() {
   board = Array.from({ length: N }, () => Array(N).fill(EMPTY));
   board[0][0] = board[N - 1][N - 1] = P1;
   board[0][N - 1] = board[N - 1][0] = P2;
-  turn = P1; sel = null; targets = [];
+  turn = mode === 'pvp' ? (Math.random() < 0.5 ? P1 : P2) : P1; sel = null; targets = [];
   gameOver = false; endTime = 0;
   toast = ''; toastTime = 0; lastMove = null; cpuAt = 0; fx = null; pops = {}; parts = [];
+  cpuReq++; cpuResult = null;   // 이전 판의 계산 결과는 버림
+  intro = mode === 'pvp' ? { at: performance.now(), first: turn } : null;
+  confirmQuit = false;
 }
 
 // ===== 룰 =====
@@ -295,7 +300,39 @@ function fxSound(type, tg) {
 }
 
 // ===== 음량 버튼 =====
-const VOLB = { x: LW - 50, y: LH - 44, r: 36 };
+const VOLB = { x: LW - 50, y: LH - 38, r: 34 }, HOMEB = { x: LW - 160, y: LH - 38, r: 34 };   // 아래 패널과 겹치지 않게 조금 아래 · 작게
+const QUIT_BTNS = [{ id: 'yes', x: 0, y: 0, w: 300, h: 140, label: 'Yes' }, { id: 'no', x: 0, y: 0, w: 300, h: 140, label: 'No' }];
+function drawHome() {   // 타이틀 화면에서는 숨김
+  if (scene === 'title') return;
+  const { x, y, r } = HOMEB;
+  ctx.fillStyle = 'rgba(255,255,255,.12)';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.moveTo(x, y - 19); ctx.lineTo(x + 19, y - 2); ctx.lineTo(x - 19, y - 2); ctx.closePath(); ctx.fill();   // 지붕
+  ctx.fillRect(x - 13, y - 3, 26, 19);                                                                                    // 벽
+  ctx.fillStyle = '#282c38'; ctx.fillRect(x - 4, y + 5, 8, 11);                                                          // 문
+}
+// 게임 포기 확인창
+function drawQuit(t, now) {
+  const k = easeOut((now - confirmAt) / 180), sc = 0.85 + 0.15 * k * (1 + 0.06 * Math.sin(clamp01((now - confirmAt) / 260) * Math.PI));
+  ctx.fillStyle = `rgba(0,0,0,${0.6 * k})`; ctx.fillRect(-80, -80, LW + 160, LH + 160);
+  const w = Math.min(LW - 80, 900), h = 560, cx = LW / 2, cy = LH / 2;
+  ctx.save(); ctx.globalAlpha = k;
+  ctx.translate(cx, cy); ctx.scale(sc, sc); ctx.translate(-cx, -cy);
+  ctx.fillStyle = '#1b1f2a'; rrect(cx - w / 2, cy - h / 2, w, h, 44); ctx.fill();
+  ctx.strokeStyle = '#ffd23c'; ctx.lineWidth = 6; rrect(cx - w / 2, cy - h / 2, w, h, 44); ctx.stroke();
+  drawGerm(cx, cy - 170, 72, turn, t, 0, false, 'scared');   // 걱정하는 세균
+  const TXT = '게임을 포기하시겠습니까?';
+  ctx.fillStyle = '#fff'; ctx.font = `900 64px ${FONT}`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(TXT, cx, cy - 30);
+  for (const b of QUIT_BTNS) {
+    const yes = b.id === 'yes';
+    ctx.fillStyle = yes ? '#ff5a6e' : '#2c3242'; rrect(b.x, b.y, b.w, b.h, 36); ctx.fill();
+    ctx.strokeStyle = yes ? '#ffc9d0' : 'rgba(255,255,255,.85)'; ctx.lineWidth = 6; rrect(b.x, b.y, b.w, b.h, 36); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = `900 76px ${FONT}`; ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 4);
+  }
+  ctx.restore();
+}
 function drawVol() {
   const { x, y, r } = VOLB;
   ctx.fillStyle = 'rgba(255,255,255,.12)';
@@ -322,7 +359,20 @@ canvas.addEventListener('pointerdown', e => {
 
 function onTap(x, y) {
   const now = performance.now();
-  if (Math.hypot(x - VOLB.x, y - VOLB.y) < 80) { setVol((vol + 2) % 3); SFX.click(); return; }   // 크게→작게→끔
+  if (Math.hypot(x - VOLB.x, y - VOLB.y) < 55) { setVol((vol + 2) % 3); SFX.click(); return; }   // 크게→작게→끔
+  if (confirmQuit) {   // 게임 포기 확인창: Yes / No 만 받음
+    if (now - confirmAt < 250) return;
+    const b = hitBtn(QUIT_BTNS, x, y);
+    if (b && b.id === 'yes') { SFX.click(); go('title'); }
+    else if (b) { confirmQuit = false; SFX.cancel(); }
+    return;
+  }
+  if (scene !== 'title' && Math.hypot(x - HOMEB.x, y - HOMEB.y) < 55) {   // 홈: 게임 중이면 확인창, 그 외에는 바로 타이틀
+    SFX.click();
+    if (scene === 'game' && !gameOver) { confirmQuit = true; confirmAt = now; sel = null; targets = []; }
+    else go('title');
+    return;
+  }
   if (scene === 'title') {
     const ob = hitBtn(ORIENT_BTNS, x, y);
     if (ob) { if (orient !== ob.id) { orient = ob.id; applyLayout(); SFX.select(); } return; }
@@ -342,7 +392,7 @@ function onTap(x, y) {
     if (hitBtn(HOW_BTN, x, y)) { SFX.click(); startHow(now); return; }
     const b = hitBtn(MODE_BTNS, x, y);
     if (b && b.id === 'cpu') { SFX.click(); go('diff'); }
-    else if (b) { mode = b.id; reset(); go('game'); SFX.start(); }
+    else if (b) { mode = b.id; reset(); go('game'); if (intro) introSfx(); else SFX.start(); }
     return;
   }
   if (scene === 'diff') {
@@ -358,10 +408,11 @@ function onTap(x, y) {
   if (gameOver) {
     if (now - endTime < 600) return;
     const b = hitBtn(RESULT_BTNS, x, y);
-    if (b && b.id === 'retry') { reset(); SFX.start(); }
+    if (b && b.id === 'retry') { reset(); if (intro) introSfx(); else SFX.start(); }
     else if (b && b.id === 'title') { go('title'); SFX.click(); }
     return;
   }
+  if (intro) { if (now - intro.at > 300 && now - intro.at < INTRO_MS) { intro.at = now - INTRO_MS; SFX.start(); } return; }   // 탭하면 선공 정하기 건너뛰기
   if (fx) return;            // 연출 중 입력 잠금
   if (isCpuTurn()) return;   // CPU 턴에는 입력 잠금
   const c = Math.floor((x - BX) / CELL), r = Math.floor((y - BY) / CELL);
@@ -386,7 +437,7 @@ function rrect(x, y, w, h, rad) {
   ctx.closePath();
 }
 
-function drawGerm(cx, cy, R, p, t, ph, selected) {
+function drawGerm(cx, cy, R, p, t, ph, selected, face = 'normal') {
   const col = COLORS[p];
   const by = selected ? -Math.abs(Math.sin(t * 7)) * 14 : 0;
   const sq = Math.sin(t * 2.6 + ph) * 0.05;
@@ -407,10 +458,16 @@ function drawGerm(cx, cy, R, p, t, ph, selected) {
   ctx.fillStyle = g; ctx.fill();
   ctx.lineWidth = 4; ctx.strokeStyle = col.dark; ctx.stroke();
   // 눈
-  const blink = ((t + ph) % 3.7) < 0.13;
+  const blink = face === 'normal' && ((t + ph) % 3.7) < 0.13;
   const ex = R * .32, ey = -R * .12, er = R * .2;
   for (const s of [-1, 1]) {
-    if (blink) {
+    if (face === 'happy') {   // ^^
+      ctx.strokeStyle = '#111'; ctx.lineWidth = Math.max(3, R * 0.09);
+      ctx.beginPath(); ctx.arc(s * ex, ey + er * 0.3, er * 0.8, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+    } else if (face === 'scared') {   // 커다란 눈 + 작은 눈동자 (덜덜)
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(s * ex, ey, er * 1.15, er * 1.3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(s * ex + Math.sin(t * 60 + s) * er * 0.12, ey, er * 0.28, 0, Math.PI * 2); ctx.fill();
+    } else if (blink) {
       ctx.strokeStyle = '#111'; ctx.lineWidth = 5;
       ctx.beginPath(); ctx.moveTo(s * ex - er, ey); ctx.lineTo(s * ex + er, ey); ctx.stroke();
     } else {
@@ -418,12 +475,23 @@ function drawGerm(cx, cy, R, p, t, ph, selected) {
       ctx.beginPath(); ctx.ellipse(s * ex, ey, er, er * 1.15, 0, 0, Math.PI * 2); ctx.fill();
       const lx = Math.sin(t * 0.9 + ph) * er * .35;
       ctx.fillStyle = '#111';
-      ctx.beginPath(); ctx.arc(s * ex + lx, ey + er * .15, er * .5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(s * ex + (face === 'angry' ? -s * er * 0.25 : lx), ey + er * .15, er * .5, 0, Math.PI * 2); ctx.fill();
+      if (face === 'angry') {   // 성난 눈썹
+        ctx.strokeStyle = '#111'; ctx.lineWidth = Math.max(4, R * 0.08);
+        ctx.beginPath(); ctx.moveTo(s * ex + s * er * 1.2, ey - er * 1.75); ctx.lineTo(s * ex - s * er * 0.9, ey - er * 1.15); ctx.stroke();
+      }
     }
   }
   // 입
   ctx.strokeStyle = '#111'; ctx.lineWidth = 4;
-  ctx.beginPath(); ctx.arc(0, R * .28, R * .18, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  if (face === 'angry') { ctx.beginPath(); ctx.moveTo(-R * 0.14, R * 0.32); ctx.lineTo(R * 0.14, R * 0.32); ctx.stroke(); }
+  else if (face === 'scared') {   // 지그재그 입
+    ctx.beginPath();
+    for (let i = 0; i <= 6; i++) { const x = -R * 0.18 + i * R * 0.06, y = R * 0.32 + (i % 2 ? -1 : 1) * R * 0.04; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+  } else if (face === 'happy') {
+    ctx.fillStyle = '#d2475e'; ctx.beginPath(); ctx.arc(0, R * .26, R * .18, 0, Math.PI); ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else { ctx.beginPath(); ctx.arc(0, R * .28, R * .18, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke(); }
   ctx.restore();
 }
 
@@ -475,7 +543,7 @@ function drawBoard(t) {
 }
 
 function drawPanel(p, cx, t) {
-  const col = COLORS[p], active = !gameOver && turn === p;
+  const col = COLORS[p], active = !gameOver && turn === p && !intro;
   if (orient === 'port') return drawPanelH(p, cx, t, col, active);
   ctx.fillStyle = active ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.03)';
   rrect(cx - 220, BY - 20, 440, N * CELL + 40, 32); ctx.fill();
@@ -494,7 +562,7 @@ function drawPanel(p, cx, t) {
   ctx.fillText(count(p), cx, BY + 620);
   ctx.font = `700 56px ${FONT}`;
   ctx.fillStyle = active ? '#fff' : 'rgba(255,255,255,.3)';
-  const label = !active ? '대기 중'
+  const label = intro ? '준비!' : !active ? '대기 중'
     : (mode === 'cpu' && p === P2) ? '생각 중' + '.'.repeat(1 + Math.floor(t * 3) % 3) : '내 차례!';
   ctx.fillText(label, cx, BY + 830);
 }
@@ -516,7 +584,7 @@ function drawPanelH(p, cy, t, col, active) {
   if (mode === 'cpu' && p === P2) { ctx.fillStyle = DIFFS[diff][1]; ctx.font = `800 44px ${FONT}`; ctx.fillText(DIFFS[diff][0], x + 450, cy + 8); }
   ctx.font = `700 56px ${FONT}`;
   ctx.fillStyle = active ? '#fff' : 'rgba(255,255,255,.3)';
-  const label = !active ? '대기 중'
+  const label = intro ? '준비!' : !active ? '대기 중'
     : (mode === 'cpu' && p === P2) ? '생각 중' + '.'.repeat(1 + Math.floor(t * 3) % 3) : '내 차례!';
   ctx.fillText(label, x + 450, cy + 80);
   ctx.fillStyle = '#fff'; ctx.font = `900 180px ${FONT}`;
@@ -551,6 +619,11 @@ function drawResult(t) {
 }
 
 // ===== 버튼 그리기 =====
+function fitSize(txt, size, maxW, weight = 900) {
+  ctx.font = `${weight} ${size}px ${FONT}`;
+  const w = ctx.measureText(txt).width * 1.06;
+  return w > maxW ? Math.floor(size * maxW / w) : size;
+}
 function drawBtns(btns, t) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const b of btns) {
@@ -560,8 +633,8 @@ function drawBtns(btns, t) {
     rrect(b.x, b.y, b.w, b.h, 36); ctx.stroke();
     ctx.fillStyle = '#fff';
     if (b.sub) {
-      ctx.font = `900 110px ${FONT}`; ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h * (b.ly || 0.66));
-      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = `700 52px ${FONT}`;
+      ctx.font = `900 ${fitSize(b.label, 110, b.w - 50, 900)}px ${FONT}`; ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h * (b.ly || 0.66));
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = `700 ${fitSize(b.sub, 52, b.w - 40, 700)}px ${FONT}`;
       ctx.fillText(b.sub, b.x + b.w / 2, b.y + b.h * (b.sy || 0.86));
     } else {
       ctx.font = `800 70px ${FONT}`; ctx.fillText(b.label, b.x + b.w / 2, b.y + b.h / 2 + 4);
@@ -656,8 +729,8 @@ function drawDiff(t, now) {
       ctx.strokeStyle = col; ctx.lineWidth = 8;
       rrect(b.x - 8, b.y - 8, b.w + 16, b.h + 16, 42); ctx.stroke();
     }
-    for (let i = 0; i < 3; i++) {
-      const sx = cx + (i - 1) * 80, bob = i < b.stars ? Math.sin(t * 4 + i) * 5 : 0;
+    for (let i = 0; i < 4; i++) {
+      const sx = cx + (i - 1.5) * 80, bob = i < b.stars ? Math.sin(t * 4 + i) * 5 : 0;
       drawStar(sx - 18, cy - bob, 34, 14, 5, i < b.stars ? col : 'rgba(255,255,255,.18)');
     }
   }
@@ -1214,7 +1287,7 @@ function fxBarb(e, t) {
 
 const FX_DRAW = { spit: fxSpit, ninja: fxNinja, kungfu: fxKungfu, rambo: fxRambo, tongki: fxTongki, vader: fxVader, marine: fxMarine, barb: fxBarb };
 
-// ===== CPU AI (2수 미니맥스) =====
+// ===== CPU AI =====
 const cloneB = b => b.map(row => row.slice());
 
 function listMoves(b, p) {
@@ -1267,9 +1340,118 @@ function holeRisk(nb, p, m) {
   return reach ? mine : 0;
 }
 
-// 쉬움: 눈앞의 이득만 보고 자주 실수 / 보통: 1수 탐욕 / 어려움: 2수 미니맥스
-function cpuPick(p) {
-  if (diff === 'hard') return cpuHard(p);
+// ===== 탐색 엔진 (어려움 · 아주 어려움): 판 49칸 · 알파베타 + 깊이를 늘려 가며 읽기 =====
+// 칸 i = r*7+c / 수 = from*64 + to (from 63 = 복제: 어느 세균에서 복제해도 결과가 같아 하나로 셈)
+const AX_BIG = 10000;
+const AX_NB1 = [], AX_NB2 = [];   // 칸마다 1칸 이웃 / 2칸(점프) 이웃
+for (let i = 0; i < 49; i++) {
+  const r = Math.floor(i / 7), c = i % 7, a = [], b = [];
+  for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) {
+    if (!dr && !dc) continue;
+    const nr = r + dr, nc = c + dc;
+    if (nr < 0 || nr > 6 || nc < 0 || nc > 6) continue;
+    (Math.max(Math.abs(dr), Math.abs(dc)) === 1 ? a : b).push(nr * 7 + nc);
+  }
+  AX_NB1.push(a); AX_NB2.push(b);
+}
+function axMoves(b, p) {
+  const out = [];
+  for (let i = 0; i < 49; i++) {
+    if (b[i]) continue;
+    for (const j of AX_NB1[i]) if (b[j] === p) { out.push(63 * 64 + i); break; }
+    for (const j of AX_NB2[i]) if (b[j] === p) out.push(j * 64 + i);
+  }
+  return out;
+}
+function axDo(b, m, p) {   // 새 판을 돌려줌
+  const f = m >> 6, t = m & 63, nb = b.slice(), o = 3 - p;
+  if (f !== 63) nb[f] = 0;
+  nb[t] = p;
+  for (const j of AX_NB1[t]) if (nb[j] === o) nb[j] = p;
+  return nb;
+}
+// 감염 수 + 복제 보너스 (탐색 순서 정하기용)
+function axGain(b, m, p) {
+  const t = m & 63, o = 3 - p;
+  let g = (m >> 6) === 63 ? 1 : 0;
+  for (const j of AX_NB1[t]) if (b[j] === o) g += 2;
+  if ((m >> 6) !== 63) for (const j of AX_NB1[m >> 6]) if (b[j] === p) g -= 0.5;   // 점프로 비운 자리 옆 내 세균은 위험
+  return g;
+}
+function axCount(b) { let a = 0, c = 0; for (let i = 0; i < 49; i++) { if (b[i] === 1) a++; else if (b[i] === 2) c++; } return [a, c]; }
+// 평가: 세균 수 차이 (끝난 판은 승패 보너스)
+function axEval(b, p) {
+  const [a, c] = axCount(b), d = p === 1 ? a - c : c - a;
+  if (!a || !c || a + c === 49) return d + (d > 0 ? AX_BIG : d < 0 ? -AX_BIG : 0);
+  return d;
+}
+function axSearch(b0, p, maxDepth, budget) {
+  const t0 = Date.now(), deadline = t0 + budget, TO = {};
+  let nodes = 0;
+  function nm(b, q, d, al, be, passed) {
+    if ((++nodes & 511) === 0 && Date.now() > deadline) throw TO;
+    const [a, c] = axCount(b);
+    if (!a || !c || a + c === 49 || d <= 0) return axEval(b, q);
+    const ms = axMoves(b, q);
+    if (!ms.length) {   // 둘 곳 없음: 상대도 없으면 끝, 있으면 PASS
+      if (passed) { const dd = q === 1 ? a - c : c - a; return dd + (dd > 0 ? AX_BIG : dd < 0 ? -AX_BIG : 0); }
+      return -nm(b, 3 - q, d - 1, -be, -al, true);
+    }
+    if (ms.length > 1) { const g = new Map(); for (const m of ms) g.set(m, axGain(b, m, q)); ms.sort((x, y) => g.get(y) - g.get(x)); }
+    let best = -1e9;
+    for (const m of ms) {
+      const v = -nm(axDo(b, m, q), 3 - q, d - 1, -be, -al, false);
+      if (v > best) best = v;
+      if (v > al) al = v;
+      if (al >= be) break;
+    }
+    return best;
+  }
+  const root = axMoves(b0, p);
+  if (!root.length) return { m: null, depth: 0, ms: 0 };
+  for (let k = root.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [root[k], root[j]] = [root[j], root[k]]; }   // 같은 점수면 매번 다른 수
+  const g = new Map(); for (const m of root) g.set(m, axGain(b0, m, p));
+  root.sort((x, y) => g.get(y) - g.get(x));
+  let best = root[0], done = 0;
+  for (let d = 1; d <= maxDepth; d++) {
+    try {
+      let al = -1e9, bm = null;
+      for (const m of [best, ...root.filter(x => x !== best)]) {
+        const v = -nm(axDo(b0, m, p), 3 - p, d - 1, -1e9, -al, false);
+        if (v > al || bm === null) { al = v; bm = m; }
+      }
+      best = bm; done = d;
+      if (Math.abs(al) >= AX_BIG - 60) break;   // 승패가 보이면 그만 읽음
+    } catch (e) { if (e !== TO) throw e; break; }
+  }
+  return { m: best, depth: done, ms: Date.now() - t0 };
+}
+const toAx = () => Int8Array.from(board.flat());
+// 엔진의 수 → 게임의 수 (복제는 이웃 세균 아무거나)
+function fromAx(m, p) {
+  if (m == null) return null;
+  const f = m >> 6, t = m & 63, r = Math.floor(t / 7), c = t % 7;
+  if (f === 63) { for (const j of AX_NB1[t]) { const fr = Math.floor(j / 7), fc = j % 7; if (board[fr][fc] === p) return { fr, fc, r, c, jump: false }; } return null; }
+  return { fr: Math.floor(f / 7), fc: f % 7, r, c, jump: true };
+}
+// 어려움: 2수 앞 (예전 어려움과 비슷한 세기 · 조금 더 강함) / 아주 어려움: 0.8초 안에서 최대한 깊이 (보통 4~5수 앞)
+const SEARCH = { hard: [2, 500], expert: [30, 800] };
+// ===== 탐색 엔진 끝 =====
+
+try {   // 어려움 · 아주 어려움 계산은 Web Worker에서 → 생각하는 동안에도 화면이 멈추지 않음
+  const src = [
+    `const AX_BIG=${AX_BIG},AX_NB1=${JSON.stringify(AX_NB1)},AX_NB2=${JSON.stringify(AX_NB2)};`,
+    ...[axMoves, axDo, axGain, axCount, axEval, axSearch].map(f => f.toString()),
+    'onmessage=e=>postMessage({id:e.data.id,r:axSearch(Int8Array.from(e.data.b),e.data.p,e.data.depth,e.data.budget)});'
+  ].join('\n');
+  aiWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  aiWorker.onmessage = e => { if (e.data.id === cpuReq) cpuResult = e.data.r; };
+  aiWorker.onerror = () => { aiWorker = null; };   // 실패하면 직접 계산
+} catch (e) { aiWorker = null; }
+
+// 쉬움: 눈앞의 이득만 보고 자주 실수 / 보통: 1수 탐욕 / 어려움 · 아주 어려움: 탐색 엔진
+function cpuPick(p, budget) {
+  if (SEARCH[diff]) { const [d, ms] = SEARCH[diff]; return fromAx(axSearch(toAx(), p, d, budget || ms).m, p); }
   const ms = listMoves(board, p), easy = diff === 'easy';
   if (easy && Math.random() < 0.35) return ms[Math.floor(Math.random() * ms.length)];
   let best = null, bestS = -Infinity;
@@ -1283,38 +1465,126 @@ function cpuPick(p) {
   return best;
 }
 
-function cpuHard(p) {
-  const o = 3 - p;
-  let best = null, bestS = -Infinity;
-  for (const m of listMoves(board, p)) {
-    const { nb, inf } = applyB(board, p, m);
-    // 2수째: 상대의 최선 응수를 가정 (최소값)
-    const replies = listMoves(nb, o);
-    let worst = Infinity;
-    if (!replies.length) worst = material(nb, p);
-    else for (const r of replies) {
-      const v = material(applyB(nb, o, r).nb, p);
-      if (v < worst) worst = v;
-    }
-    const s = worst
-      + inf * 0.3                    // 감염 수
-      + (m.jump ? 0 : 0.6)           // 복제 우선
-      - holeRisk(nb, p, m) * 0.4     // 점프 후 빈자리 위험도
-      + Math.random() * 0.1;         // 동점일 때 변화
-    if (s > bestS) { bestS = s; best = m; }
-  }
-  return best;
-}
 
 function updateCpu(now) {
   if (!isCpuTurn()) return;
-  if (!cpuAt) { cpuAt = now + 500 + Math.random() * 500; return; }   // 0.5~1초 생각
+  if (!cpuAt) {
+    cpuAt = now + 500 + Math.random() * 500;   // 0.5~1초 생각
+    if (SEARCH[diff]) {
+      cpuReq++; cpuResult = null;
+      const [depth, budget] = SEARCH[diff];
+      if (aiWorker) aiWorker.postMessage({ id: cpuReq, b: Array.from(toAx()), p: P2, depth, budget });
+    }
+    return;
+  }
   if (now < cpuAt) return;
-  cpuAt = 0;
-  const m = cpuPick(P2);
+  let m;
+  if (SEARCH[diff]) {
+    if (aiWorker && !cpuResult) return;   // 아직 계산 중 (계속 '생각 중...')
+    m = cpuResult ? fromAx(cpuResult.m, P2) : cpuPick(P2, 250);   // 백그라운드를 못 쓰면 0.25초만 직접
+  } else m = cpuPick(P2);
+  cpuAt = 0; cpuResult = null;
   if (m) doMove(m.fr, m.fc, m);
 }
 
+
+// ===== 1P vs 2P 선공 정하기: 두 세균의 옥신각신 몸통 박치기 대결 (2.7초, 탭하면 건너뛰기) =====
+// 양쪽에서 들어와 노려봄 → '내가 먼저!' '아니야, 나야!' → 몸통 박치기 3번 '퍽!' → 진 세균은 데굴데굴 · 이긴 세균은 폴짝 '선공!'
+const INTRO_MS = 2700;
+const BUMPS = [950, 1300, 1650];   // 박치기 시각
+const easeIn = v => Math.pow(clamp01(v), 2);
+function ring(x, y, age, life, r0, r1, col) {
+  if (age < 0 || age > life) return;
+  const k = age / life;
+  ctx.strokeStyle = col.replace('A', String(0.75 * (1 - k))); ctx.lineWidth = 9 * (1 - k) + 2;
+  ctx.beginPath(); ctx.arc(x, y, r0 + (r1 - r0) * easeOut(k), 0, TAU); ctx.stroke();
+}
+// 말풍선: 톡 튀어나왔다가 사라짐
+function bubble(txt, x, y, age, hold, size = 40) {
+  if (age < 0 || age > hold) return;
+  const k = age < 180 ? easeOut(age / 180) * (1 + 0.18 * Math.sin(age / 180 * Math.PI)) : 1;
+  ctx.save(); ctx.globalAlpha = clamp01((hold - age) / 160);
+  ctx.font = `800 ${size}px ${FONT}`;
+  const w = ctx.measureText(txt).width + size * 1.1, h = size * 1.7, bx = Math.max(w / 2 + 12, Math.min(LW - w / 2 - 12, x));
+  ctx.translate(bx, y + Math.sin(age * 0.008) * 3); ctx.scale(k, k);
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+  rrect(-w / 2, -h / 2, w, h, h / 2); ctx.fill(); ctx.stroke();
+  const tx = Math.max(-w / 2 + h / 2, Math.min(w / 2 - h / 2, x - bx));
+  ctx.beginPath(); ctx.moveTo(tx - 13, h / 2 - 3); ctx.lineTo(tx, h / 2 + 20); ctx.lineTo(tx + 13, h / 2 - 3); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(tx - 13, h / 2); ctx.lineTo(tx, h / 2 + 20); ctx.lineTo(tx + 13, h / 2); ctx.stroke();
+  ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, 0, 2);
+  ctx.restore();
+}
+function introSfx() {
+  if (!live()) return;
+  tone(880, 0.07, 'sine', 0.12, 1320, 0.28); tone(880, 0.07, 'sine', 0.12, 1320, 0.58);   // 말풍선 뾱
+  BUMPS.forEach((b, i) => {   // 퍽!
+    const a = (b + 170) / 1000, big = i === BUMPS.length - 1;
+    tone(big ? 150 : 190, big ? 0.28 : 0.18, 'sine', 0.55, 60, a); noise(0.07, 0.35, 'lowpass', 1600, 0, a);
+  });
+  const l = BUMPS[BUMPS.length - 1] / 1000;
+  tone(1000, 0.65, 'sine', 0.09, 300, l + 0.23);                                    // 데굴데굴~
+  notes([523, 659, 784, 1047], 0.08, 0.16, 'square', 0.12, l + 0.45);              // 팡파르
+}
+function updateIntro(now) {
+  if (intro && now - intro.at >= INTRO_MS) { showToast(`${pname(intro.first)} 먼저!`); intro = null; }
+}
+function drawIntro(t, now) {
+  const e = now - intro.at, win = intro.first, lose = 3 - win;
+  const fade = clamp01(e / 200) * (1 - clamp01((e - INTRO_MS + 250) / 250));
+  ctx.fillStyle = `rgba(0,0,0,${0.62 * fade})`; ctx.fillRect(-80, -80, LW + 160, LH + 160);
+  ctx.save(); ctx.globalAlpha = fade;
+  const cx = LW / 2, cy = LH / 2 + 40, R = 130, base = R + 140, contact = R * 1.02;
+  const last = BUMPS[BUMPS.length - 1];
+  for (const p of [P1, P2]) {
+    const sg = p === P1 ? -1 : 1;
+    let x = cx + sg * base, y = cy, sx = 1, sy = 1, rot = 0, face = 'angry';
+    if (e < 260) x = cx + sg * (base + (LW / 2 + R) * (1 - easeOut(e / 260)));   // 양쪽에서 들어옴
+    else if (e < BUMPS[0]) { const w = Math.sin(e * 0.02) * 0.07; sx = 1 + w; sy = 1 - w; x += -sg * Math.abs(Math.sin(e * 0.012)) * 18; }   // 씩씩 · 부르르
+    for (const b of BUMPS) {   // 몸통 박치기: 다가가 '퍽!' 하고 튕겨남
+      const be = e - b;
+      if (be < 0 || be >= 360 || (b === last && p === lose && be >= 230)) continue;
+      if (be < 170) x = cx + sg * (base - (base - contact) * easeIn(be / 170));
+      else if (be < 230) { x = cx + sg * contact; const q = Math.sin((be - 170) / 60 * Math.PI) * 0.22; sx = 1 - q; sy = 1 + q; }
+      else x = cx + sg * (contact + (base - contact) * easeOut((be - 230) / 130));
+    }
+    const fe = e - last - 230;
+    if (fe >= 0) {
+      if (p === lose) {   // 진 세균: 데굴데굴 굴러가 어지러움
+        const k = clamp01(fe / 650), far = Math.min(base + 260, LW / 2 - R * 1.15);   // 세로 화면에서도 화면 안에서 멈춤
+        x = cx + sg * (contact + (far - contact) * easeOut(k)); y = cy - Math.sin(k * Math.PI) * 220;
+        rot = sg * k * TAU * 1.25; face = 'scared';
+        if (k >= 1) { rot = sg * 0.35; const q = Math.sin(clamp01((fe - 650) / 200) * Math.PI) * 0.2; sx = 1 + q; sy = 1 - q; }
+      } else {            // 이긴 세균: 신나서 폴짝
+        face = 'happy'; x = cx + sg * (contact + (base - contact) * easeOut(fe / 300));
+        y = cy - Math.abs(Math.sin(fe / 260 * Math.PI)) * 50 * (1 - clamp01((fe - 800) / 300));
+      }
+    }
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sx, sy);
+    drawGerm(0, 0, R, p, t, p * 2, false, face);
+    ctx.restore();
+    if (fe >= 650 && p === lose) {   // 어지러운 별
+      for (let i = 0; i < 3; i++) { const a = t * 6 + i * TAU / 3; drawStar(x + Math.cos(a) * R * 0.7, y - R * 1.3 + Math.sin(a) * R * 0.18, 18, 8, 5, '#ffe14d'); }
+    }
+    if (fe >= 100 && p === win) {   // '선공!' 배지
+      const k = easeOut((fe - 100) / 220), bw = 230, bh = 80, by = y - R * 1.6;
+      ctx.save(); ctx.translate(x, by); ctx.scale(k, k);
+      ctx.fillStyle = '#ffd23c'; rrect(-bw / 2, -bh / 2, bw, bh, bh / 2); ctx.fill();
+      ctx.strokeStyle = '#7a5a00'; ctx.lineWidth = 5; rrect(-bw / 2, -bh / 2, bw, bh, bh / 2); ctx.stroke();
+      ctx.fillStyle = '#111'; ctx.font = `900 50px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('선공!', 0, 3);
+      ctx.restore();
+    }
+  }
+  for (const b of BUMPS) {
+    const be = e - b - 170;
+    ring(cx, cy, be, 300, 30, R * 0.9, 'rgba(255,240,150,A)');
+    popText(b === last ? '퍼억!!' : '퍽!', cx, cy - R * 1.5, be, 320, b === last ? 80 : 62, '#ffffff', b === BUMPS[1] ? 0.1 : -0.1);
+  }
+  bubble('내가 먼저!', cx - base, cy - R * 1.75, e - 280, 600, 44);
+  bubble('아니야, 나야!', cx + base, cy - R * 1.75, e - 580, 520, 44);
+  popText(`${pname(win)} 먼저!`, cx, cy + R * 1.8, e - last - 450, INTRO_MS - last - 450, 96, COLORS[win].body, 0);
+  ctx.restore();
+}
 
 function frame(now) {
   const t = now / 1000;
@@ -1327,6 +1597,7 @@ function frame(now) {
   else if (scene === 'howto') drawHowto(t, now);
   else if (scene === 'diff') drawDiff(t, now);
   else {
+    updateIntro(now);
     updateFx(now);
     updateCpu(now);
     if (orient === 'land') { drawPanel(P1, BX / 2, t); drawPanel(P2, LW - BX / 2, t); }
@@ -1334,10 +1605,13 @@ function frame(now) {
     drawBoard(t);
     drawFx(now, t);
     drawParts(now);
+    if (intro) drawIntro(t, now);
     drawToast(now);
     drawResult(t);
   }
   drawVol();
+  drawHome();
+  if (confirmQuit) drawQuit(t, now);
   requestAnimationFrame(frame);
 }
 
@@ -1598,21 +1872,23 @@ function applyLayout() {
   const port = orient === 'port';
   [LW, LH] = port ? [CW, CH] : [CH, CW];
   BX = (LW - N * CELL) / 2; BY = (LH - N * CELL) / 2;
-  VOLB.x = LW - 50; VOLB.y = LH - 44;
+  VOLB.x = LW - 50; VOLB.y = LH - 38;
+  HOMEB.x = VOLB.x - 110; HOMEB.y = VOLB.y;
+  place(QUIT_BTNS[0], LW / 2 - 330, LH / 2 + 70, 300, 140); place(QUIT_BTNS[1], LW / 2 + 30, LH / 2 + 70, 300, 140);
   const [m1, m2] = MODE_BTNS, [r1, r2] = RESULT_BTNS, [o1, o2] = ORIENT_BTNS;
   if (port) {
     place(m1, LW / 2 - 340, 480); place(m2, LW / 2 - 340, 1080);
     place(r1, LW / 2 - 240, 1300); place(r2, LW / 2 - 240, 1490);
     place(o1, LW - 360, 1350); place(o2, LW - 360, 1530);
     place(HOW_BTN[0], LW / 2 - 340, 1660, 680, 150);
-    DIFF_BTNS.forEach((b, i) => { place(b, LW / 2 - 340, 500 + i * 390, 680, 350); Object.assign(b, { st: 0.2, ly: 0.53, sy: 0.83 }); });
-    place(BACK_BTN[0], LW / 2 - 240, 1720);
+    DIFF_BTNS.forEach((b, i) => { place(b, LW / 2 - 340, 420 + i * 325, 680, 300); Object.assign(b, { st: 0.21, ly: 0.55, sy: 0.85 }); });
+    place(BACK_BTN[0], LW / 2 - 240, 1760);
   } else {
     place(m1, LW / 2 - 760, 400); place(m2, LW / 2 + 80, 400);
     place(r1, LW / 2 - 520, 800); place(r2, LW / 2 + 40, 800);
     place(o1, LW - 360, LH / 2 - 190); place(o2, LW - 360, LH / 2 - 10);
     place(HOW_BTN[0], LW / 2 - 340, 945, 680, 130);
-    DIFF_BTNS.forEach((b, i) => { place(b, LW / 2 - 900 + i * 620, 330, 560, 420); Object.assign(b, { st: 0, ly: 0, sy: 0 }); });
+    DIFF_BTNS.forEach((b, i) => { place(b, LW / 2 - 925 + i * 470, 330, 440, 420); Object.assign(b, { st: 0, ly: 0, sy: 0 }); });
     place(BACK_BTN[0], LW / 2 - 240, 900);
   }
 }
