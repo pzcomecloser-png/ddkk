@@ -1810,30 +1810,6 @@ function drawHowto(t, now) {
   const py = orient === 'port' ? 110 : 70;   // 진행 점
   for (let i = 0; i < HOW.length; i++) {
     ctx.fillStyle = i === ch ? '#ffd23c' : i < ch ? 'rgba(255,255,255,.7)' : 'rgba(255,255,255,.25)';
-    ctx.beginPath(); ctx.arc(LW / 2 + (i - 2) * 50, py, i === ch ? 14 : 10, 0, TAU); ctx.fill();
-  }
-  const last = ch === HOW.length - 1;
-  if (!last || le > 1800) {
-    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 4);
-    ctx.fillStyle = '#fff'; ctx.font = `700 50px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(last ? '탭하여 돌아가기' : '탭하면 다음 ▶', LW / 2, LH - (orient === 'port' ? 130 : 60));
-    ctx.globalAlpha = 1;
-  }
-}
-
-function drawHowto(t, now) {
-  drawBg(t, now);
-  const e = now - howStart;
-  while (howFired < HOW_EV.length && e >= HOW_EV[howFired].t) HOW_EV[howFired++].f();
-  let ch = 0;
-  for (let i = 0; i < HOW.length; i++) if (e >= HOW[i]) ch = i;
-  const le = e - HOW[ch];
-  if (ch === 0) howIntro(le, t);
-  else if (ch === HOW.length - 1) howSummary(le, t);
-  else howChapter(howGeo(), HOW_CH[ch], le, t);
-  const py = orient === 'port' ? 110 : 70;   // 진행 점
-  for (let i = 0; i < HOW.length; i++) {
-    ctx.fillStyle = i === ch ? '#ffd23c' : i < ch ? 'rgba(255,255,255,.7)' : 'rgba(255,255,255,.25)';
     ctx.beginPath(); ctx.arc(LW / 2 + (i - (HOW.length - 1) / 2) * 50, py, i === ch ? 14 : 10, 0, TAU); ctx.fill();
   }
   const last = ch === HOW.length - 1;
