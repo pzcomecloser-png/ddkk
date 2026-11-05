@@ -582,9 +582,9 @@
         }
 
         { const TF = testField(); if (TF) { moveField(TF, performance.now() / 1000); stepField(TF, HN, minX, maxX, minY, maxY, t); return; } }   // 렉 확인용 스테이지 B · C · D
-        if (galaxyActive()) { stepField(getGalaxy(), HN, minX, maxX, minY, maxY, t); return; }   // 2세션: 은하 점이 공에 밀림
-        if (blackholeActive()) { stepField(getBlackhole(), HN, minX, maxX, minY, maxY, t); return; }   // 3세션: 블랙홀 점이 공에 밀림
-        if (insideField()) { stepField(insideField(), HN, minX, maxX, minY, maxY, t); return; }       // 4세션: 보스3 몸속 (25~26 살의 통로, 27~28 눈의 방)
+        if (galaxyActive()) { stepField(liveStep(getGalaxy()), HN, minX, maxX, minY, maxY, t); return; }   // 2세션: 은하 (움직임 + 공에 밀림)
+        if (blackholeActive()) { stepField(liveStep(getBlackhole()), HN, minX, maxX, minY, maxY, t); return; }   // 3세션: 블랙홀 (움직임 + 공에 밀림)
+        if (insideField()) { stepField(liveStep(insideField()), HN, minX, maxX, minY, maxY, t); return; }       // 4세션: 보스3 몸속 (25~26 살의 통로, 27~28 눈의 방)
         for (let i = 0; i < DUST_COUNT; i++) {
             // 1) 원래 자리 - 공기 흐름으로 아주 천천히 표류, 화면 밖으로 나가면 반대편으로
             let nhx = hx[i] + bx[i] + Math.sin(t + ph[i]) * 0.06;
@@ -627,9 +627,10 @@
             if (V.sparkle === 'bh') drawSparkles(ctx, t, BH_SPARKS); else if (V.sparkle) drawSparkles(ctx, t);
             if (V.live) V.live(ctx, t);
             return; } }
-        if (galaxyActive()) { drawField(ctx, getGalaxy(), dustDotSize); drawSparkles(ctx, performance.now()); return; }
-        if (blackholeActive()) { drawField(ctx, getBlackhole(), dustDotSize); drawSparkles(ctx, performance.now(), BH_SPARKS); return; }
-        { const F = insideField(); if (F) { drawField(ctx, F, dustDotSize); (bgStage() <= IN_A_LAST ? drawFleshLive : drawIrisLive)(ctx, performance.now()); return; } }
+        if (galaxyActive()) { const F = getGalaxy(), t = performance.now(); drawField(ctx, F, dustDotSize); if (F.tw) drawTwinkle(ctx, F, dustDotSize, t / 1000); drawSparkles(ctx, t); return; }
+        if (blackholeActive()) { const F = getBlackhole(), t = performance.now(); drawField(ctx, F, dustDotSize); if (F.tw) drawTwinkle(ctx, F, dustDotSize, t / 1000); drawSparkles(ctx, t, BH_SPARKS); return; }
+        { const F = insideField(); if (F) { const t = performance.now(), k = bgLiveFx; drawField(ctx, F, dustDotSize); if (F.tw) drawTwinkle(ctx, F, dustDotSize, t / 1000);
+            bgLiveFx = !!F.mv; (bgStage() <= IN_A_LAST ? drawFleshLive : drawIrisLive)(ctx, t); bgLiveFx = k; return; } }   // 벽의 눈도 살 벽과 같이 숨 쉼 (미리보기 설정은 그대로 돌려놓음)
         const s = dustDotSize, half = s / 2;
         const { x, y } = dust;
         for (let b = 0; b < DUST_BUCKETS; b++) {
@@ -681,7 +682,7 @@
     //  SWAY  [크기, 위상]           점막 · 시신경: 옆으로 물결
     //  STAR                        흩어진 별: 흔들림 + 일부는 반짝임
     //  STILL                       움직이는 그림 (눈) 에 붙은 테두리: 아주 조금만
-    let bgLiveFx = false;                                                       // 미리보기에서 움직임 켬 (게임은 아직 꺼짐 · drawFleshLive 의 벽 눈도 같이 움직임)
+    let bgLiveFx = false;                                                       // drawFleshLive 의 벽 눈이 살 벽과 같이 움직일지 (미리보기 · 게임 V4.63.0 모두)
     // V4.58.1: 배경 2 · 3 이 너무 조용함 → 흔들림 크기 · 속도를 키우고, 은하는 팔 물결 · 블랙홀은 소용돌이 2배 · 바위 · 구름 · 빛무리를 더 크게
     const BG_LIVE_OPT = { galaxy: { amp: 1.6, frq: 2.2, wave: 7, bob: 1.6 }, blackhole: { amp: 1.5, frq: 2.0, orb: 2, bob: 1.6, pulse: 1.6 } };
     const liveWallDx = (y, w, side, T) => -side * w * 13 * (0.5 + 0.5 * Math.sin(T * 1.1 + y * 0.0045));   // 살 벽 숨 (drawFleshLive 의 숨과 같은 박자 1.1 rad/초)
@@ -883,9 +884,13 @@
     let bhCache = null;
     const makeBlackholeField = () => makeField(bhCache || (bhCache = buildBlackholePoints()), BH_LUM, false);
     let bhField = null;
-    const getBlackhole = () => bhField || (bhField = makeBlackholeField());   // 게임용 (한 번 만들어 계속 씀)
+    // V4.63.0: 움직이는 배경을 게임에 적용 (개발자 모드 10번 미리보기 · 렉 확인용 B~D 와 같은 움직임) · 그림 있는 배경만 (배경 1 모래 먼지는 원래 떠다님)
+    const BG_LIVE_GAME = true;
+    const liveGame = F => { if (BG_LIVE_GAME && F.meta) liveInit(F); return F; };               // 만들 때 한 번: 부분별 움직임 준비
+    const liveStep = F => { if (F.mv) moveField(F, performance.now() / 1000); return F; };     // 매 프레임: 원래 자리를 움직임 (공에 밀리는 건 stepField)
+    const getBlackhole = () => bhField || (bhField = liveGame(Object.assign(makeBlackholeField(), { lvOpt: BG_LIVE_OPT.blackhole })));   // 게임용 (한 번 만들어 계속 씀)
     let galaxyField = null;
-    const getGalaxy = () => galaxyField || (galaxyField = makeField(buildGalaxyPoints(), GAL_LUM, false));
+    const getGalaxy = () => galaxyField || (galaxyField = liveGame(Object.assign(makeField(buildGalaxyPoints(), GAL_LUM, false), { lvOpt: BG_LIVE_OPT.galaxy })));
     // ===== 배경 4 시안 2개 (25~28: 보스3 OPHANIM 의 몸속). 배경 2 · 3 과 같은 방식 (점 무리 + 공에 밀림) + 매 프레임 움직이는 부분 =====
     const IN_LUM = [26, 40, 58, 80, 106, 136, 172];
     const inNoise = (x, y, sd) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
@@ -985,7 +990,7 @@
     const insideField = () => {
         const st = bgStage();
         if (st < IN_FIRST || st > IN_LAST || gameState === 'START' || gameState === 'PROLOGUE') return null;
-        return st <= IN_A_LAST ? (fleshField || (fleshField = makeFleshField())) : (irisField || (irisField = makeIrisField()));
+        return st <= IN_A_LAST ? (fleshField || (fleshField = liveGame(makeFleshField()))) : (irisField || (irisField = liveGame(makeIrisField())));
     };
     // 구멍 버퍼 (holeX / holeY / holeR / holeType, 개수 HN) 를 채운 뒤 부름
     function stepField(F, HN, minX, maxX, minY, maxY, t) {
@@ -2162,7 +2167,8 @@
                     gems.push({ x: hit.x + hit.w / 2 + (k - (gn - 1) / 2) * GEM_SIZE * 0.9, y: hit.y + hit.h / 2, phase: Math.random() * 1400 });
                 }
                 // 파편: 붙어 있는 모든 블럭 (대각선 포함 8칸) 에 데미지 1. 파편으로 깨진 블럭은 다시 파편을 일으키지 않음
-                if (!fromShard && cardLevel('shard') > 0) {
+                //  V4.63.1: 볼로 깼을 때만 (레이저 · 기타로 깨면 파편 없음 · 너무 셈)
+                if (!fromShard && src === 'ball' && cardLevel('shard') > 0) {
                     for (const n of bricks) {
                         if (n === hit || !n.alive || !isBreakable(n)) continue;
                         if (Math.abs(n.r - hit.r) <= 1 && Math.abs(n.c - hit.c) <= 1) damageBrick(n, 1, true);
@@ -4237,7 +4243,7 @@
                 else drawTitleEndless();
                 ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = font('28px');
-                ctx.fillText('V4.62.5', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
+                ctx.fillText('V4.63.1', LOGIC_WIDTH / 2, LOGIC_HEIGHT - 160);
             } else if (gameState === 'GAME_OVER' && endless && endless.result) {
                 drawElResult();                                                      // 무한 모드: 이번 기록 · 최고 기록 (6초 뒤 타이틀로 가지 않음 · 누르면 버튼대로)
             } else if (gameState === 'GAME_OVER') {
@@ -6032,7 +6038,7 @@
         { id: 'life',    name: '여분 패들', cat: '방어', max: 0, desc: ['목숨', '+1'] },
         { id: 'magnet',  name: '자석',      cat: '지원', max: 3, desc: ['돈이 패들로', '끌려온다'] },
         { id: 'interest',name: '이자',      cat: '지원', max: 1, desc: ['스테이지 종료 시', '보유 돈 +10%'] },
-        { id: 'shard',   name: '파편',      cat: '공격', max: 1, desc: ['깨질 때 좌우', '블럭에 데미지'] },
+        { id: 'shard',   name: '파편',      cat: '공격', max: 1, desc: ['볼로 깨면 주변', '블럭에 데미지'] },
         { id: 'aim',     name: '조준',      cat: '공격', max: 1, desc: ['블럭 7개 이하면', '남은 블럭 조준'] },
         { id: 'absorb',  name: '충격 흡수', cat: '방어', max: 3, desc: ['적 공격을 막아', '마비 방지'] },
         { id: 'save',    name: '저장',      cat: '지원', max: 99, repeat: true, desc: ['진행을 코드로 저장', '다음 스테이지부터'] },
